@@ -150,21 +150,14 @@ function getYtId(url) {
 
 /* ═══ STORAGE HOOK ═══ */
 function useS(key, init) {
-  const [d, setD] = useState(init);
-  const [ok, setOk] = useState(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await window.storage.get(key);
-        if (r && r.value) setD(JSON.parse(r.value));
-      } catch {}
-      setOk(true);
-    })();
-  }, [key]);
-  const save = useCallback(async (val) => {
+  const [d, setD] = useState(() => {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : init; } catch { return init; }
+  });
+  const [ok] = useState(true);
+  const save = useCallback((val) => {
     const v = typeof val === "function" ? val(d) : val;
     setD(v);
-    try { await window.storage.set(key, JSON.stringify(v)); } catch {}
+    try { localStorage.setItem(key, JSON.stringify(v)); } catch {}
     return v;
   }, [key, d]);
   return [d, save, ok];
@@ -352,11 +345,13 @@ export default function App() {
   const [chLog, setChLog, chLL] = useS("g4-chall", {});
   const [mNotes, setMNotes, mnL] = useS("g4-mindset", []);
   const [prs, setPrs, prRL] = useS("g4-prs", []);
+  const [lmRoutine, setLmRoutine, lmrL] = useS("g4-lmroutine", []);
+  const [lmRoutineLog, setLmRoutineLog, lmrlL] = useS("g4-lmrlog", {});
   const [xpPop, setXpPop] = useState(null);
   const [lvlPop, setLvlPop] = useState(null);
   const [sbOpen, setSbOpen] = useState(false);
 
-  const loaded = pL && cL && dtL && dlL && gL && vL && wL && woLL && goL && mL && waL && bL && bnL && paL && prL && fL && crLL && foL && chLL && mnL && prRL;
+  const loaded = pL && cL && dtL && dlL && gL && vL && wL && woLL && goL && mL && waL && bL && bnL && paL && prL && fL && crLL && foL && chLL && mnL && prRL && lmrL && lmrlL;
   const td = todayStr();
 
   // Streak
@@ -406,6 +401,7 @@ export default function App() {
     bibleLog, setBibleLog, bibleNotes, setBibleNotes, passLog, setPassLog,
     prayers, setPrayers, favs, setFavs, crLog, setCrLog, focLog, setFocLog,
     chLog, setChLog, mNotes, setMNotes, prs, setPrs,
+    lmRoutine, setLmRoutine, lmRoutineLog, setLmRoutineLog,
   };
 
   return (
@@ -476,8 +472,8 @@ export default function App() {
         <button onClick={() => { setUnlocked(false); setSbOpen(false); }} style={{ background: "none", border: "1px solid #1a1a2e", borderRadius: 8, color: "#ffffff33", fontSize: ".7rem", cursor: "pointer", padding: 8, fontFamily: "inherit", marginBottom: 4 }}>🔒 Lock</button>
         <button onClick={async () => {
           if (confirm("Reset ALL data?")) {
-            const ks = ["g4-profile","g4-check","g4-daily","g4-dlog","g4-guides","g4-videos","g4-workouts","g4-wolog","g4-goals","g4-mood","g4-water","g4-bible","g4-bnotes","g4-pass","g4-pray","g4-favs","g4-creatine","g4-focus","g4-chall","g4-mindset","g4-prs"];
-            for (const k of ks) { try { await window.storage.delete(k); } catch {} }
+            const ks = ["g4-profile","g4-check","g4-daily","g4-dlog","g4-guides","g4-videos","g4-workouts","g4-wolog","g4-goals","g4-mood","g4-water","g4-bible","g4-bnotes","g4-pass","g4-pray","g4-favs","g4-creatine","g4-focus","g4-chall","g4-mindset","g4-prs","g4-lmroutine","g4-lmrlog"];
+            for (const k of ks) { try { localStorage.removeItem(k); } catch {} }
             location.reload();
           }
         }} style={{ background: "none", border: "none", color: "#ff475722", fontSize: ".55rem", cursor: "pointer", padding: 4, fontFamily: "inherit" }}>Reset All Data</button>
@@ -674,8 +670,8 @@ function Dash({ checklist, setChecklist, dailyTasks, setDailyTasks, dailyLog, se
 }
 
 /* ═══ LOOKSMAXING ═══ */
-function Looksmax({ guides, setGuides, videos, setVideos, addXp }) {
-  const [tab, setTab] = useState("guides");
+function Looksmax({ guides, setGuides, videos, setVideos, addXp, lmRoutine, setLmRoutine, lmRoutineLog, setLmRoutineLog, td }) {
+  const [tab, setTab] = useState("routine");
   const [sf, setSf] = useState(false);
   const [form, setForm] = useState({ title: "", category: "skincare", content: "" });
   const [view, setView] = useState(null);
@@ -684,8 +680,29 @@ function Looksmax({ guides, setGuides, videos, setVideos, addXp }) {
   const [vt, setVt] = useState("");
   const [vc, setVc] = useState("skincare");
   const [playing, setPlaying] = useState(null);
+  const [newStep, setNewStep] = useState("");
+  const [showAddStep, setShowAddStep] = useState(false);
   const cats = ["skincare", "hair", "style", "grooming", "diet", "mewing", "teeth", "other"];
   const list = filter === "all" ? (tab === "guides" ? guides : videos) : (tab === "guides" ? guides : videos).filter(g => g.category === filter);
+  const todayRoutine = lmRoutineLog[td] || {};
+  const routineDone = lmRoutine.filter((_, i) => todayRoutine[i]).length;
+
+  const addStep = () => {
+    if (!newStep.trim()) return;
+    setLmRoutine(r => [...r, { id: uid(), text: newStep.trim() }]);
+    setNewStep("");
+    setShowAddStep(false);
+  };
+
+  const toggleStep = (i) => {
+    const was = !!todayRoutine[i];
+    if (!was) addXp(XP.exercise);
+    setLmRoutineLog(l => ({ ...l, [td]: { ...todayRoutine, [i]: !was } }));
+  };
+
+  const removeStep = (idx) => {
+    setLmRoutine(r => r.filter((_, i) => i !== idx));
+  };
 
   if (view) {
     const g = guides.find(x => x.id === view);
@@ -711,20 +728,67 @@ function Looksmax({ guides, setGuides, videos, setVideos, addXp }) {
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        {["guides", "videos"].map(t => (
+        {["routine", "guides", "videos"].map(t => (
           <button key={t} onClick={() => { setTab(t); setFilter("all"); }} className="b sm" style={{ background: tab === t ? "#00ffc815" : "#0f0f1a", color: tab === t ? "#00ffc8" : "#ffffff44", border: tab === t ? "1px solid #00ffc833" : "1px solid #1a1a2e" }}>
-            {t === "guides" ? "📖 Guides" : "🎬 Videos"}
+            {t === "routine" ? "🪞 Daily Routine" : t === "guides" ? "📖 Guides" : "🎬 Videos"}
           </button>
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 4, marginBottom: 12, flexWrap: "wrap" }}>
-        {["all", ...cats].map(c => (
-          <button key={c} onClick={() => setFilter(c)} className="b sm" style={{ background: filter === c ? "#00ffc815" : "transparent", color: filter === c ? "#00ffc8" : "#ffffff44", border: filter === c ? "1px solid #00ffc833" : "1px solid transparent", fontSize: ".65rem" }}>
-            {c === "all" ? "All" : c[0].toUpperCase() + c.slice(1)}
-          </button>
-        ))}
-      </div>
+      {/* DAILY ROUTINE TAB */}
+      {tab === "routine" && (
+        <div>
+          <div className="c" style={{ marginBottom: 14, background: "linear-gradient(135deg,#7b61ff08,#00ffc808)", borderColor: "#7b61ff22" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div>
+                <h2 style={{ fontSize: "1rem", fontWeight: 700 }}>Daily Glow-Up Routine</h2>
+                <p style={{ fontSize: ".55rem", color: "#ffffff33" }}>Resets every day — check off each step</p>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {lmRoutine.length > 0 && <span style={{ fontSize: ".65rem", color: routineDone === lmRoutine.length ? "#00ffc8" : "#ffffff44" }}>{routineDone}/{lmRoutine.length}</span>}
+                <button className="b sm bs" onClick={() => setShowAddStep(!showAddStep)}>+ Step</button>
+              </div>
+            </div>
+
+            {showAddStep && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <input className="inp" placeholder="e.g. Wash face, Apply moisturizer, Mew 10 min..." value={newStep} onChange={e => setNewStep(e.target.value)} onKeyDown={e => e.key === "Enter" && addStep()} />
+                <button className="b sm bp" onClick={addStep}>Add</button>
+              </div>
+            )}
+
+            {lmRoutine.length === 0 && <p style={{ color: "#ffffff22", fontSize: ".75rem", textAlign: "center", padding: 16 }}>Add your daily looksmaxing steps — skincare, mewing, grooming, etc.</p>}
+
+            {lmRoutine.length > 0 && (
+              <div style={{ width: "100%", height: 6, background: "#1a1a2e", borderRadius: 3, overflow: "hidden", marginBottom: 10 }}>
+                <div style={{ width: `${lmRoutine.length ? (routineDone / lmRoutine.length) * 100 : 0}%`, height: "100%", background: "linear-gradient(90deg,#7b61ff,#00ffc8)", borderRadius: 3, transition: "width .5s" }} />
+              </div>
+            )}
+
+            {lmRoutine.map((step, i) => {
+              const done = !!todayRoutine[i];
+              return (
+                <div key={step.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", marginBottom: 4, background: done ? "#00ffc808" : "#0a0a14", borderRadius: 8, border: `1px solid ${done ? "#00ffc822" : "#1a1a2e"}`, cursor: "pointer" }} onClick={() => toggleStep(i)}>
+                  <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${done ? "#00ffc8" : "#2a2a4e"}`, background: done ? "#00ffc8" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".5rem", color: "#080810", flexShrink: 0 }}>{done && "✓"}</div>
+                  <span style={{ flex: 1, fontSize: ".78rem", color: done ? "#ffffff44" : "#e0e0e8", textDecoration: done ? "line-through" : "none" }}>{step.text}</span>
+                  <button onClick={(e) => { e.stopPropagation(); removeStep(i); }} style={{ background: "none", border: "none", color: "#ff475722", cursor: "pointer", fontSize: ".55rem" }}>✕</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* FILTER (only for guides/videos) */}
+      {tab !== "routine" && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 12, flexWrap: "wrap" }}>
+          {["all", ...cats].map(c => (
+            <button key={c} onClick={() => setFilter(c)} className="b sm" style={{ background: filter === c ? "#00ffc815" : "transparent", color: filter === c ? "#00ffc8" : "#ffffff44", border: filter === c ? "1px solid #00ffc833" : "1px solid transparent", fontSize: ".65rem" }}>
+              {c === "all" ? "All" : c[0].toUpperCase() + c.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {sf && tab === "guides" && (
         <div className="c" style={{ marginBottom: 12 }}>
@@ -754,7 +818,7 @@ function Looksmax({ guides, setGuides, videos, setVideos, addXp }) {
         </div>
       )}
 
-      {tab === "guides" ? (
+      {tab === "guides" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 10 }}>
           {list.length === 0 && <p style={{ color: "#ffffff22", gridColumn: "1/-1", textAlign: "center", padding: 40 }}>No guides yet</p>}
           {list.map(g => (
@@ -765,7 +829,8 @@ function Looksmax({ guides, setGuides, videos, setVideos, addXp }) {
             </div>
           ))}
         </div>
-      ) : (
+      )}
+      {tab === "videos" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 10 }}>
           {list.length === 0 && <p style={{ color: "#ffffff22", gridColumn: "1/-1", textAlign: "center", padding: 40 }}>No videos yet</p>}
           {list.map(v => (
