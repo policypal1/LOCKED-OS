@@ -431,14 +431,31 @@ export default function App() {
     setSyncStatus("syncing");
     cloudSync.pull().then((pulled) => {
       if (pulled) {
-        // Check if cloud actually had meaningful data
-        try {
-          const cloudProfile = localStorage.getItem("g4-profile");
-          if (cloudProfile && JSON.parse(cloudProfile)?.xp > 0) {
-            location.reload();
-            return;
-          }
-        } catch {}
+        // Refresh all state from localStorage (which pull just updated)
+        const load = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
+        setProfile(load("g4-profile", { xp: 0, streakDays: 0, lastActiveDate: null, joinDate: todayStr() }));
+        setChecklist(load("g4-check", []));
+        setDailyTasks(load("g4-daily", []));
+        setDailyLog(load("g4-dlog", {}));
+        setGuides(load("g4-guides", []));
+        setVideos(load("g4-videos", []));
+        setWorkouts(load("g4-workouts", []));
+        setWoLog(load("g4-wolog", {}));
+        setGoals(load("g4-goals", []));
+        setMoodLog(load("g4-mood", {}));
+        setWaterLog(load("g4-water", {}));
+        setBibleLog(load("g4-bible", {}));
+        setBibleNotes(load("g4-bnotes", []));
+        setPassLog(load("g4-pass", {}));
+        setPrayers(load("g4-pray", []));
+        setFavs(load("g4-favs", []));
+        setCrLog(load("g4-creatine", {}));
+        setFocLog(load("g4-focus", {}));
+        setChLog(load("g4-chall", {}));
+        setMNotes(load("g4-mindset", []));
+        setPrs(load("g4-prs", []));
+        setLmRoutine(load("g4-lmroutine", []));
+        setLmRoutineLog(load("g4-lmrlog", {}));
       }
       setSyncStatus("synced");
       // Push current local data to cloud on first sync
