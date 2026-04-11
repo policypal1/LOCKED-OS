@@ -1,4 +1,74 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+
+/* ═══ SUPABASE CONFIG ═══ */
+const SUPABASE_URL = "https://zlaicyafgrwpznjvnzsn.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYWljeWFmZ3J3cHpuanZuenNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4NjA1MDYsImV4cCI6MjA5MTQzNjUwNn0.4xXVK4szJjT589kyEoAlhkrKqyNsWaFT5A4nPFOJUaA";
+
+const ALL_KEYS = ["g4-profile","g4-check","g4-daily","g4-dlog","g4-guides","g4-videos","g4-workouts","g4-wolog","g4-goals","g4-mood","g4-water","g4-bible","g4-bnotes","g4-pass","g4-pray","g4-favs","g4-creatine","g4-focus","g4-chall","g4-mindset","g4-prs","g4-lmroutine","g4-lmrlog"];
+
+/* Cloud sync engine — saves all keys as one JSON blob to Supabase */
+const cloudSync = {
+  _timer: null,
+  _dirty: false,
+
+  async pull() {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/grind_data?id=eq.default_user&select=data`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      });
+      const rows = await res.json();
+      if (rows?.[0]?.data && typeof rows[0].data === "object") {
+        const cloud = rows[0].data;
+        for (const key of ALL_KEYS) {
+          if (cloud[key] !== undefined) {
+            localStorage.setItem(key, JSON.stringify(cloud[key]));
+          }
+        }
+        return true;
+      }
+    } catch (e) { console.warn("Cloud pull failed:", e); }
+    return false;
+  },
+
+  push() {
+    this._dirty = true;
+    if (this._timer) return;
+    this._timer = setTimeout(() => {
+      this._timer = null;
+      if (!this._dirty) return;
+      this._dirty = false;
+      const blob = {};
+      for (const key of ALL_KEYS) {
+        try { const v = localStorage.getItem(key); if (v) blob[key] = JSON.parse(v); } catch {}
+      }
+      fetch(`${SUPABASE_URL}/rest/v1/grind_data?id=eq.default_user`, {
+        method: "PATCH",
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal"
+        },
+        body: JSON.stringify({ data: blob, updated_at: new Date().toISOString() })
+      }).catch(e => console.warn("Cloud push failed:", e));
+    }, 2000);
+  },
+
+  async reset() {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/grind_data?id=eq.default_user`, {
+        method: "PATCH",
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal"
+        },
+        body: JSON.stringify({ data: {}, updated_at: new Date().toISOString() })
+      });
+    } catch (e) { console.warn("Cloud reset failed:", e); }
+  }
+};
 
 /* ═══ DATA ═══ */
 const PASSCODE = "2009";
@@ -148,7 +218,7 @@ function getYtId(url) {
   return m ? m[1] : null;
 }
 
-/* ═══ STORAGE HOOK ═══ */
+/* ═══ STORAGE HOOK (localStorage + cloud sync) ═══ */
 function useS(key, init) {
   const [d, setD] = useState(() => {
     try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : init; } catch { return init; }
@@ -158,6 +228,7 @@ function useS(key, init) {
     const v = typeof val === "function" ? val(d) : val;
     setD(v);
     try { localStorage.setItem(key, JSON.stringify(v)); } catch {}
+    cloudSync.push();
     return v;
   }, [key, d]);
   return [d, save, ok];
@@ -350,6 +421,40 @@ export default function App() {
   const [xpPop, setXpPop] = useState(null);
   const [lvlPop, setLvlPop] = useState(null);
   const [sbOpen, setSbOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("syncing");
+  const hasSynced = useRef(false);
+
+  // Pull cloud data on first unlock
+  useEffect(() => {
+    if (!unlocked || hasSynced.current) return;
+    hasSynced.current = true;
+    setSyncStatus("syncing");
+    cloudSync.pull().then((pulled) => {
+      if (pulled) {
+        // Check if cloud actually had meaningful data
+        try {
+          const cloudProfile = localStorage.getItem("g4-profile");
+          if (cloudProfile && JSON.parse(cloudProfile)?.xp > 0) {
+            location.reload();
+            return;
+          }
+        } catch {}
+      }
+      setSyncStatus("synced");
+      // Push current local data to cloud on first sync
+      cloudSync.push();
+    }).catch(() => setSyncStatus("offline"));
+  }, [unlocked]);
+
+  // Periodic sync check every 30s
+  useEffect(() => {
+    if (!unlocked) return;
+    const interval = setInterval(() => {
+      setSyncStatus("syncing");
+      setTimeout(() => setSyncStatus("synced"), 1000);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [unlocked]);
 
   const loaded = pL && cL && dtL && dlL && gL && vL && wL && woLL && goL && mL && waL && bL && bnL && paL && prL && fL && crLL && foL && chLL && mnL && prRL && lmrL && lmrlL;
   const td = todayStr();
@@ -469,11 +574,16 @@ export default function App() {
         ))}
 
         <div style={{ flex: 1 }} />
+        {/* Sync indicator */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "6px 0", marginBottom: 4 }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncStatus === "synced" ? "#00ffc8" : syncStatus === "syncing" ? "#ffd700" : "#ff4757", transition: "background .3s" }} />
+          <span style={{ fontSize: ".55rem", color: "#ffffff33" }}>{syncStatus === "synced" ? "Synced" : syncStatus === "syncing" ? "Syncing..." : "Offline"}</span>
+        </div>
         <button onClick={() => { setUnlocked(false); setSbOpen(false); }} style={{ background: "none", border: "1px solid #1a1a2e", borderRadius: 8, color: "#ffffff33", fontSize: ".7rem", cursor: "pointer", padding: 8, fontFamily: "inherit", marginBottom: 4 }}>🔒 Lock</button>
         <button onClick={async () => {
-          if (confirm("Reset ALL data?")) {
-            const ks = ["g4-profile","g4-check","g4-daily","g4-dlog","g4-guides","g4-videos","g4-workouts","g4-wolog","g4-goals","g4-mood","g4-water","g4-bible","g4-bnotes","g4-pass","g4-pray","g4-favs","g4-creatine","g4-focus","g4-chall","g4-mindset","g4-prs","g4-lmroutine","g4-lmrlog"];
-            for (const k of ks) { try { localStorage.removeItem(k); } catch {} }
+          if (confirm("Reset ALL data? This clears all devices.")) {
+            for (const k of ALL_KEYS) { try { localStorage.removeItem(k); } catch {} }
+            await cloudSync.reset();
             location.reload();
           }
         }} style={{ background: "none", border: "none", color: "#ff475722", fontSize: ".55rem", cursor: "pointer", padding: 4, fontFamily: "inherit" }}>Reset All Data</button>
