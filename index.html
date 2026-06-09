@@ -1,414 +1,617 @@
-<!doctype html>
+from pathlib import Path
+import zipfile
+
+out_dir = Path("/mnt/data/simple-accountability-checklist")
+out_dir.mkdir(exist_ok=True)
+
+index_html = r'''<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Accountability OS</title>
-  <meta name="description" content="A strict daily accountability tracker with streaks, ranks, history, and optional Supabase sync." />
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Checklist</title>
+  <style>
+    :root {
+      --bg: #f7efe3;
+      --card: #fffaf1;
+      --card-2: #fdf4e6;
+      --text: #21180f;
+      --muted: #7a6b59;
+      --line: rgba(42, 30, 18, 0.12);
+      --accent: #9b6a2f;
+      --accent-dark: #6f4617;
+      --good: #2f8f56;
+      --shadow: 0 18px 50px rgba(55, 38, 18, 0.12);
+      --radius: 24px;
+    }
 
-  <!-- Optional Supabase support. The app still works with localStorage if this never loads. -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255, 226, 173, 0.85), transparent 28rem),
+        radial-gradient(circle at top right, rgba(203, 153, 77, 0.22), transparent 24rem),
+        linear-gradient(135deg, #fff8ec, var(--bg));
+      padding: 24px;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .app {
+      width: min(760px, 100%);
+      margin: 0 auto;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 6vw, 3.6rem);
+      line-height: 0.95;
+      letter-spacing: -0.08em;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .date-pill {
+      border: 1px solid var(--line);
+      background: rgba(255, 250, 241, 0.78);
+      border-radius: 999px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-weight: 800;
+      white-space: nowrap;
+      box-shadow: 0 10px 30px rgba(55, 38, 18, 0.08);
+    }
+
+    .card {
+      background: rgba(255, 250, 241, 0.82);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 22px;
+      align-items: center;
+      padding: 22px;
+      margin-bottom: 16px;
+    }
+
+    .circle {
+      width: 148px;
+      height: 148px;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent) 0deg, rgba(42, 30, 18, 0.09) 0deg);
+      display: grid;
+      place-items: center;
+    }
+
+    .circle-inner {
+      width: 112px;
+      height: 112px;
+      border-radius: 50%;
+      background: var(--card);
+      display: grid;
+      place-items: center;
+      align-content: center;
+      border: 1px solid var(--line);
+    }
+
+    .percent {
+      font-size: 2rem;
+      font-weight: 950;
+      letter-spacing: -0.08em;
+      line-height: 1;
+    }
+
+    .done-count {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 800;
+    }
+
+    .summary h2 {
+      margin: 0;
+      font-size: clamp(1.6rem, 4vw, 2.5rem);
+      line-height: 1;
+      letter-spacing: -0.07em;
+    }
+
+    .summary p {
+      margin: 9px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.48);
+      border-radius: 16px;
+      padding: 12px 14px;
+      min-width: 130px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 1.5rem;
+      letter-spacing: -0.06em;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 800;
+    }
+
+    .section {
+      margin-bottom: 16px;
+    }
+
+    .section-header {
+      padding: 17px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .section-header h3 {
+      margin: 0;
+      font-size: 1.15rem;
+      letter-spacing: -0.03em;
+    }
+
+    .section-header p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .checklist {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .task {
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.42);
+      border-radius: 18px;
+      cursor: pointer;
+      transition: background 0.15s ease, border 0.15s ease, transform 0.15s ease;
+    }
+
+    .task:hover {
+      background: rgba(255, 255, 255, 0.65);
+      border-color: rgba(42, 30, 18, 0.2);
+    }
+
+    .task:active {
+      transform: scale(0.995);
+    }
+
+    .box {
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(42, 30, 18, 0.2);
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.65);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-weight: 950;
+    }
+
+    .task.done {
+      border-color: rgba(47, 143, 86, 0.22);
+      background: rgba(47, 143, 86, 0.09);
+    }
+
+    .task.done .box {
+      background: var(--good);
+      border-color: var(--good);
+    }
+
+    .task-title {
+      font-weight: 850;
+      letter-spacing: -0.015em;
+    }
+
+    .task.done .task-title {
+      text-decoration: line-through;
+      color: rgba(33, 24, 15, 0.64);
+    }
+
+    .bottom-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      min-height: 44px;
+      padding: 0 16px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.12s ease;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .primary {
+      color: white;
+      background: linear-gradient(135deg, var(--accent-dark), var(--accent));
+      box-shadow: 0 12px 30px rgba(111, 70, 23, 0.18);
+    }
+
+    .secondary {
+      color: var(--text);
+      background: rgba(255, 250, 241, 0.82);
+      border: 1px solid var(--line);
+    }
+
+    .note {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 14px;
+      }
+
+      .top {
+        flex-direction: column;
+      }
+
+      .summary {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        text-align: center;
+      }
+
+      .stats-row {
+        justify-content: center;
+      }
+
+      .date-pill {
+        white-space: normal;
+      }
+    }
+  </style>
 </head>
 
 <body>
-  <div class="grain"></div>
+  <main class="app">
+    <header class="top">
+      <div>
+        <h1>Daily Checklist</h1>
+        <p class="subtitle">Simple accountability. Check off the plan every day and keep the streak alive.</p>
+      </div>
+      <div class="date-pill" id="dateText"></div>
+    </header>
 
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand-block">
-        <div class="brand-mark">AO</div>
-        <div>
-          <h1>Accountability OS</h1>
-          <p>Strict daily execution</p>
+    <section class="card summary">
+      <div class="circle" id="progressCircle">
+        <div class="circle-inner">
+          <div class="percent" id="percentText">0%</div>
+          <div class="done-count" id="countText">0 / 0</div>
         </div>
       </div>
 
-      <nav class="nav-list" aria-label="Main navigation">
-        <button class="nav-item active" data-page="today">
-          <span class="nav-icon">✓</span>
-          <span>
-            <strong>Today</strong>
-            <small>Daily checklist</small>
-          </span>
-        </button>
+      <div>
+        <h2 id="messageText">Start with the first task.</h2>
+        <p id="subMessageText">Everything is saved automatically for today.</p>
 
-        <button class="nav-item" data-page="planner">
-          <span class="nav-icon">↻</span>
-          <span>
-            <strong>Planner</strong>
-            <small>Rules & quick tasks</small>
-          </span>
-        </button>
-
-        <button class="nav-item" data-page="stats">
-          <span class="nav-icon">★</span>
-          <span>
-            <strong>Stats</strong>
-            <small>Streaks & rank</small>
-          </span>
-        </button>
-
-        <button class="nav-item" data-page="history">
-          <span class="nav-icon">◷</span>
-          <span>
-            <strong>History</strong>
-            <small>Past days</small>
-          </span>
-        </button>
-
-        <button class="nav-item" data-page="settings">
-          <span class="nav-icon">⚙</span>
-          <span>
-            <strong>Settings</strong>
-            <small>Backup & sync</small>
-          </span>
-        </button>
-      </nav>
-
-      <div class="sidebar-card">
-        <div class="sidebar-card-top">
-          <span class="status-dot"></span>
-          <strong>Strict mode</strong>
+        <div class="stats-row">
+          <div class="stat">
+            <strong id="streakText">0</strong>
+            <span>day streak</span>
+          </div>
+          <div class="stat">
+            <strong id="bestStreakText">0</strong>
+            <span>best streak</span>
+          </div>
         </div>
-        <p>Always on. Afternoon and night stay locked until every morning task is completed or failed.</p>
       </div>
+    </section>
 
-      <div class="sidebar-card muted-card">
-        <p class="tiny-label">Today’s score</p>
-        <div class="side-score">
-          <strong id="sideScoreText">0%</strong>
-          <span id="sideResolvedText">0 resolved</span>
-        </div>
-        <div class="mini-progress"><span id="sideScoreBar"></span></div>
+    <section class="card section">
+      <div class="section-header">
+        <h3>Morning</h3>
+        <p>Do these first, in order.</p>
       </div>
-    </aside>
+      <div class="checklist" id="morningList"></div>
+    </section>
 
-    <main class="main-content">
-      <header class="top-header">
-        <div>
-          <p class="eyebrow" id="pageEyebrow">Today</p>
-          <h2 id="pageTitle">Daily Accountability</h2>
-          <p id="pageSubtitle">Finish the morning gate, then move through the rest of the day.</p>
-        </div>
+    <section class="card section">
+      <div class="section-header">
+        <h3>Afternoon</h3>
+        <p>Training and daily supplement.</p>
+      </div>
+      <div class="checklist" id="afternoonList"></div>
+    </section>
 
-        <div class="date-switcher">
-          <button class="icon-button" id="prevDayBtn" aria-label="Previous day">←</button>
-          <button class="date-chip" id="dateChip">Today</button>
-          <button class="icon-button" id="nextDayBtn" aria-label="Next day">→</button>
-        </div>
-      </header>
+    <section class="card section">
+      <div class="section-header">
+        <h3>Night</h3>
+        <p>Finish the day clean.</p>
+      </div>
+      <div class="checklist" id="nightList"></div>
+    </section>
 
-      <section class="page active" id="page-today">
-        <div class="hero-grid">
-          <article class="hero-card big-card">
-            <div class="hero-topline">
-              <span id="dayBadge" class="soft-badge">Daily</span>
-              <span id="gateBadge" class="soft-badge warning">Morning locked</span>
-            </div>
+    <div class="bottom-actions">
+      <button class="primary" id="completeAllBtn">Complete all</button>
+      <button class="secondary" id="resetTodayBtn">Reset today</button>
+    </div>
 
-            <div class="score-ring-wrap">
-              <div class="score-ring" id="scoreRing">
-                <div class="score-ring-inner">
-                  <strong id="scorePercent">0%</strong>
-                  <span id="scoreFraction">0 / 0 done</span>
-                </div>
-              </div>
+    <p class="note">
+      Gym appears Monday, Wednesday, and Friday. Microneedling appears Wednesday and Saturday.
+    </p>
+  </main>
 
-              <div class="score-copy">
-                <h3 id="todayMainMessage">Start the day clean.</h3>
-                <p id="todaySubMessage">Your morning tasks are the gate. Resolve them before the rest of the day opens.</p>
-              </div>
-            </div>
+  <script>
+    const STORAGE_KEY = "simpleDailyChecklist.v1";
 
-            <div class="hero-actions">
-              <button class="primary-button" id="finishMorningBtn">Fail unfinished morning tasks</button>
-              <button class="secondary-button" id="completeAllVisibleBtn">Complete visible clean tasks</button>
-            </div>
-          </article>
+    const TASKS = [
+      { id: "wake_up", section: "morning", title: "Wake up at planned time", days: "daily" },
+      { id: "water", section: "morning", title: "Drink one glass of water", days: "daily" },
+      { id: "clean_room", section: "morning", title: "Clean room", days: "daily" },
+      { id: "pray_morning", section: "morning", title: "Pray", days: "daily" },
+      { id: "trw_good_morning", section: "morning", title: "The Real World daily good morning", days: "daily" },
+      { id: "trw_lesson", section: "morning", title: "The Real World daily lesson", days: "daily" },
+      { id: "trw_puzzle", section: "morning", title: "The Real World daily puzzle", days: "daily" },
+      { id: "get_ready", section: "morning", title: "Full get ready: dressed, hygiene, hairstyle", days: "daily" },
 
-          <article class="metric-card">
-            <p class="tiny-label">Current streak</p>
-            <strong id="currentStreak">0</strong>
-            <span>perfect days</span>
-          </article>
+      { id: "gym", section: "afternoon", title: "Go to the gym", days: [1, 3, 5] },
+      { id: "creatine", section: "afternoon", title: "Take 5 to 10 grams of creatine", days: "daily" },
 
-          <article class="metric-card">
-            <p class="tiny-label">Rank</p>
-            <strong id="currentRank">Rookie</strong>
-            <span id="rankProgressText">0 XP</span>
-          </article>
+      { id: "bedtime", section: "night", title: "Full bedtime routine at 8:00 PM", days: "daily" },
+      { id: "microneedle", section: "night", title: "Microneedle eyebrows", days: [3, 6] },
+      { id: "pray_night", section: "night", title: "Pray before bed", days: "daily" }
+    ];
 
-          <article class="metric-card">
-            <p class="tiny-label">Today XP</p>
-            <strong id="todayXp">0</strong>
-            <span id="todayXpLabel">earned today</span>
-          </article>
-        </div>
+    const state = loadState();
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
 
-        <div class="focus-banner" id="focusBanner">
-          <div>
-            <strong id="focusTitle">Morning gate active</strong>
-            <p id="focusText">Complete or fail all morning tasks to unlock the afternoon and night sections.</p>
-          </div>
-          <span id="focusCount">0 left</span>
-        </div>
+    function loadState() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { days: {}, bestStreak: 0 };
+      } catch {
+        return { days: {}, bestStreak: 0 };
+      }
+    }
 
-        <div class="task-board" id="taskBoard"></div>
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
 
-        <article class="notes-card glass-card">
-          <div class="section-title-row">
-            <div>
-              <p class="tiny-label">Daily review</p>
-              <h3>Notes</h3>
-            </div>
-            <button class="secondary-button compact" id="saveNotesBtn">Save</button>
-          </div>
-          <textarea id="dailyNotes" placeholder="What went right? What slipped? What is the correction for tomorrow?"></textarea>
-        </article>
-      </section>
+    function dateKey(date = today) {
+      return date.toISOString().slice(0, 10);
+    }
 
-      <section class="page" id="page-planner">
-        <div class="two-col">
-          <article class="glass-card">
-            <div class="section-title-row">
-              <div>
-                <p class="tiny-label">Default schedule</p>
-                <h3>Your non-negotiables</h3>
-              </div>
-              <span class="soft-badge">Auto-recurring</span>
-            </div>
+    function getDayData(key = dateKey()) {
+      if (!state.days[key]) {
+        state.days[key] = {};
+      }
 
-            <div class="rules-list" id="rulesList"></div>
-          </article>
+      return state.days[key];
+    }
 
-          <article class="glass-card">
-            <div class="section-title-row">
-              <div>
-                <p class="tiny-label">Add-on</p>
-                <h3>Quick task for selected day</h3>
-              </div>
-            </div>
+    function isTaskScheduled(task, date = today) {
+      if (task.days === "daily") return true;
+      return task.days.includes(date.getDay());
+    }
 
-            <div class="form-stack">
-              <label>
-                Task name
-                <input id="quickTaskName" placeholder="Example: edit client website, finish homework, dog poop pickup" />
-              </label>
+    function getTodayTasks() {
+      return TASKS.filter(task => isTaskScheduled(task));
+    }
 
-              <label>
-                Section
-                <select id="quickTaskSection">
-                  <option value="morning">Morning</option>
-                  <option value="afternoon">Afternoon</option>
-                  <option value="night">Night</option>
-                  <option value="extra" selected>Extra</option>
-                </select>
-              </label>
+    function isDone(task) {
+      return !!getDayData()[task.id];
+    }
 
-              <button class="primary-button" id="addQuickTaskBtn">Add to this day</button>
-            </div>
-          </article>
-        </div>
+    function toggleTask(task) {
+      const day = getDayData();
 
-        <article class="glass-card">
-          <div class="section-title-row">
-            <div>
-              <p class="tiny-label">Custom recurring</p>
-              <h3>Create your own repeating task</h3>
-            </div>
-            <span class="soft-badge">Optional</span>
-          </div>
+      if (day[task.id]) {
+        delete day[task.id];
+      } else {
+        day[task.id] = true;
+      }
 
-          <div class="custom-task-grid">
-            <label>
-              Task
-              <input id="customTaskName" placeholder="Example: stretch, read, clean car" />
-            </label>
+      updateBestStreak();
+      saveState();
+      render();
+    }
 
-            <label>
-              Section
-              <select id="customTaskSection">
-                <option value="morning">Morning</option>
-                <option value="afternoon">Afternoon</option>
-                <option value="night">Night</option>
-                <option value="extra">Extra</option>
-              </select>
-            </label>
+    function render() {
+      document.getElementById("dateText").textContent = today.toLocaleDateString(undefined, {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      });
 
-            <label>
-              Schedule
-              <select id="customTaskSchedule">
-                <option value="daily">Every day</option>
-                <option value="gym">Mon / Wed / Fri</option>
-                <option value="weekend">Weekend</option>
-                <option value="custom">Custom days</option>
-              </select>
-            </label>
+      const tasks = getTodayTasks();
+      renderList("morningList", tasks.filter(task => task.section === "morning"));
+      renderList("afternoonList", tasks.filter(task => task.section === "afternoon"));
+      renderList("nightList", tasks.filter(task => task.section === "night"));
 
-            <label>
-              XP
-              <input id="customTaskXp" type="number" min="1" max="100" value="10" />
-            </label>
-          </div>
+      const doneCount = tasks.filter(isDone).length;
+      const totalCount = tasks.length;
+      const percent = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
+      const degrees = Math.round((percent / 100) * 360);
 
-          <div class="day-picker" id="customDayPicker">
-            <label><input type="checkbox" value="0"> Sun</label>
-            <label><input type="checkbox" value="1"> Mon</label>
-            <label><input type="checkbox" value="2"> Tue</label>
-            <label><input type="checkbox" value="3"> Wed</label>
-            <label><input type="checkbox" value="4"> Thu</label>
-            <label><input type="checkbox" value="5"> Fri</label>
-            <label><input type="checkbox" value="6"> Sat</label>
-          </div>
+      document.getElementById("percentText").textContent = `${percent}%`;
+      document.getElementById("countText").textContent = `${doneCount} / ${totalCount}`;
+      document.getElementById("progressCircle").style.background =
+        `conic-gradient(var(--accent) ${degrees}deg, rgba(42, 30, 18, 0.09) ${degrees}deg)`;
 
-          <div class="button-row">
-            <button class="primary-button" id="addCustomTaskBtn">Create recurring task</button>
-          </div>
+      const streak = calculateStreak();
+      document.getElementById("streakText").textContent = streak;
+      document.getElementById("bestStreakText").textContent = Math.max(state.bestStreak || 0, streak);
 
-          <div class="custom-task-list" id="customTaskList"></div>
-        </article>
-      </section>
+      if (percent === 100) {
+        document.getElementById("messageText").textContent = "Checklist complete.";
+        document.getElementById("subMessageText").textContent = "Perfect day logged. Streak continues.";
+      } else if (percent >= 50) {
+        document.getElementById("messageText").textContent = "Keep going.";
+        document.getElementById("subMessageText").textContent = `${totalCount - doneCount} task${totalCount - doneCount === 1 ? "" : "s"} left today.`;
+      } else {
+        document.getElementById("messageText").textContent = "Start with the first task.";
+        document.getElementById("subMessageText").textContent = "Everything is saved automatically for today.";
+      }
+    }
 
-      <section class="page" id="page-stats">
-        <div class="stats-grid">
-          <article class="glass-card rank-panel">
-            <p class="tiny-label">Accountability rank</p>
-            <h3 id="statsRank">Rookie</h3>
-            <p id="statsRankCopy">Build XP by completing tasks. Perfect days protect your streak.</p>
-            <div class="rank-bar"><span id="rankBar"></span></div>
-            <p class="muted-line" id="statsRankProgress">0 / 150 XP to next rank</p>
-          </article>
+    function renderList(elementId, tasks) {
+      const list = document.getElementById(elementId);
+      list.innerHTML = "";
 
-          <article class="stat-tile">
-            <p class="tiny-label">Total XP</p>
-            <strong id="statsTotalXp">0</strong>
-            <span>lifetime</span>
-          </article>
+      tasks.forEach(task => {
+        const item = document.createElement("div");
+        item.className = `task ${isDone(task) ? "done" : ""}`;
+        item.innerHTML = `
+          <div class="box">${isDone(task) ? "✓" : ""}</div>
+          <div class="task-title">${task.title}</div>
+        `;
+        item.addEventListener("click", () => toggleTask(task));
+        list.appendChild(item);
+      });
+    }
 
-          <article class="stat-tile">
-            <p class="tiny-label">Perfect days</p>
-            <strong id="statsPerfectDays">0</strong>
-            <span>all time</span>
-          </article>
+    function calculateStreak() {
+      let streak = 0;
+      const cursor = new Date();
+      cursor.setHours(12, 0, 0, 0);
 
-          <article class="stat-tile">
-            <p class="tiny-label">Completion rate</p>
-            <strong id="statsCompletionRate">0%</strong>
-            <span>resolved tasks</span>
-          </article>
-        </div>
+      while (true) {
+        const key = dateKey(cursor);
+        const tasksForDay = TASKS.filter(task => isTaskScheduled(task, cursor));
+        const dayData = state.days[key] || {};
+        const complete = tasksForDay.length > 0 && tasksForDay.every(task => dayData[task.id]);
 
-        <article class="glass-card">
-          <div class="section-title-row">
-            <div>
-              <p class="tiny-label">Badges</p>
-              <h3>Achievements</h3>
-            </div>
-          </div>
-          <div class="achievement-grid" id="achievementGrid"></div>
-        </article>
-      </section>
+        if (!complete) break;
 
-      <section class="page" id="page-history">
-        <article class="glass-card">
-          <div class="section-title-row">
-            <div>
-              <p class="tiny-label">Last 21 days</p>
-              <h3>History</h3>
-            </div>
-            <button class="secondary-button compact" id="todayBtn">Jump to today</button>
-          </div>
+        streak++;
+        cursor.setDate(cursor.getDate() - 1);
+      }
 
-          <div class="history-grid" id="historyGrid"></div>
-        </article>
+      return streak;
+    }
 
-        <article class="glass-card">
-          <div class="section-title-row">
-            <div>
-              <p class="tiny-label">Selected day</p>
-              <h3 id="historySelectedTitle">Today</h3>
-            </div>
-          </div>
+    function updateBestStreak() {
+      const streak = calculateStreak();
+      if (streak > (state.bestStreak || 0)) {
+        state.bestStreak = streak;
+      }
+    }
 
-          <div class="history-detail" id="historyDetail"></div>
-        </article>
-      </section>
+    document.getElementById("completeAllBtn").addEventListener("click", () => {
+      const day = getDayData();
+      getTodayTasks().forEach(task => {
+        day[task.id] = true;
+      });
 
-      <section class="page" id="page-settings">
-        <div class="two-col">
-          <article class="glass-card">
-            <div class="section-title-row">
-              <div>
-                <p class="tiny-label">Backup</p>
-                <h3>Export / Import</h3>
-              </div>
-            </div>
+      updateBestStreak();
+      saveState();
+      render();
+    });
 
-            <div class="form-stack">
-              <button class="primary-button" id="exportBtn">Download backup JSON</button>
-              <label>
-                Import backup JSON
-                <input type="file" id="importInput" accept="application/json" />
-              </label>
-              <button class="danger-button" id="resetEverythingBtn">Reset everything</button>
-            </div>
-          </article>
+    document.getElementById("resetTodayBtn").addEventListener("click", () => {
+      if (!confirm("Reset today's checklist?")) return;
 
-          <article class="glass-card">
-            <div class="section-title-row">
-              <div>
-                <p class="tiny-label">Cloud sync</p>
-                <h3>Supabase</h3>
-              </div>
-              <span class="soft-badge" id="syncModeBadge">Local</span>
-            </div>
+      state.days[dateKey()] = {};
+      saveState();
+      render();
+    });
 
-            <p class="muted-line">
-              Paste your Supabase URL and anon key in <code>app.js</code>. Then use magic link login.
-            </p>
-
-            <div class="form-stack">
-              <label>
-                Email
-                <input type="email" id="emailInput" placeholder="you@example.com" />
-              </label>
-              <button class="primary-button" id="loginBtn">Send magic link</button>
-              <button class="secondary-button" id="manualSyncBtn">Sync now</button>
-              <p class="muted-line" id="syncStatus">Local mode active.</p>
-            </div>
-          </article>
-        </div>
-
-        <article class="glass-card">
-          <div class="section-title-row">
-            <div>
-              <p class="tiny-label">System rules</p>
-              <h3>How this version works</h3>
-            </div>
-          </div>
-
-          <div class="settings-rules">
-            <div>
-              <strong>Strict mode is permanent.</strong>
-              <p>There is no off switch. Morning must be resolved first.</p>
-            </div>
-            <div>
-              <strong>Failing is allowed.</strong>
-              <p>A failed task breaks perfect-day status, but it lets you keep tracking honestly.</p>
-            </div>
-            <div>
-              <strong>Perfect days drive streaks.</strong>
-              <p>A perfect day requires every scheduled task completed with no failures.</p>
-            </div>
-          </div>
-        </article>
-      </section>
-    </main>
-  </div>
-
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <script src="app.js"></script>
+    render();
+  </script>
 </body>
 </html>
+'''
+
+readme = r'''# Simple Daily Checklist
+
+This is the stripped-down version.
+
+## What it has
+- Simple ordered checklist
+- Completion percentage
+- Current streak
+- Best streak
+- Saves automatically in the browser
+- No Supabase
+- No ranks
+- No XP
+- No strict mode controls
+- No wake-time fields
+
+## GitHub Pages
+Upload `index.html` to your repository root.
+
+Then go:
+
+Settings → Pages → Deploy from branch → main → /root
+'''
+
+(out_dir / "index.html").write_text(index_html, encoding="utf-8")
+(out_dir / "README.md").write_text(readme, encoding="utf-8")
+
+zip_path = Path("/mnt/data/simple-accountability-checklist.zip")
+if zip_path.exists():
+    zip_path.unlink()
+
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+    for file in sorted(out_dir.iterdir()):
+        z.write(file, arcname=file.name)
+
+print(f"Created: {zip_path}")
+for file in sorted(out_dir.iterdir()):
+    print(f"- {file.name}")
