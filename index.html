@@ -1,7 +1,7 @@
 from pathlib import Path
 import zipfile
 
-out_dir = Path("/mnt/data/simple-accountability-checklist")
+out_dir = Path("/mnt/data/simple-checklist-gamified")
 out_dir.mkdir(exist_ok=True)
 
 index_html = r'''<!doctype html>
@@ -10,17 +10,23 @@ index_html = r'''<!doctype html>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Daily Checklist</title>
+
+  <!-- Random sword favicon -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M68 13 77 22 48 56 39 47 68 13Z' fill='%23f8d38a'/%3E%3Cpath d='M31 58 42 47 53 58 42 69 31 58Z' fill='%23b9852c'/%3E%3Cpath d='M21 77 36 62 44 70 29 85 21 77Z' fill='%23fff8ec'/%3E%3C/svg%3E" />
+
   <style>
     :root {
       --bg: #f7efe3;
       --card: #fffaf1;
-      --card-2: #fdf4e6;
       --text: #21180f;
       --muted: #7a6b59;
       --line: rgba(42, 30, 18, 0.12);
       --accent: #9b6a2f;
       --accent-dark: #6f4617;
       --good: #2f8f56;
+      --warn: #d4932f;
+      --soft-good: rgba(47, 143, 86, 0.1);
+      --soft-gold: rgba(155, 106, 47, 0.1);
       --shadow: 0 18px 50px rgba(55, 38, 18, 0.12);
       --radius: 24px;
     }
@@ -41,46 +47,33 @@ index_html = r'''<!doctype html>
       padding: 24px;
     }
 
-    button,
-    input {
+    button {
       font: inherit;
+      border: 0;
+      cursor: pointer;
     }
 
     .app {
-      width: min(760px, 100%);
+      width: min(1120px, 100%);
       margin: 0 auto;
     }
 
     .top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 16px;
       margin-bottom: 18px;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(2rem, 6vw, 3.6rem);
-      line-height: 0.95;
-      letter-spacing: -0.08em;
+      font-size: clamp(2.3rem, 6vw, 4.25rem);
+      line-height: 0.9;
+      letter-spacing: -0.09em;
     }
 
-    .subtitle {
-      margin: 10px 0 0;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    .date-pill {
-      border: 1px solid var(--line);
-      background: rgba(255, 250, 241, 0.78);
-      border-radius: 999px;
-      padding: 10px 14px;
-      color: var(--text);
-      font-weight: 800;
-      white-space: nowrap;
-      box-shadow: 0 10px 30px rgba(55, 38, 18, 0.08);
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 18px;
+      align-items: start;
     }
 
     .card {
@@ -135,46 +128,19 @@ index_html = r'''<!doctype html>
       font-weight: 800;
     }
 
-    .summary h2 {
+    .quote {
       margin: 0;
-      font-size: clamp(1.6rem, 4vw, 2.5rem);
+      font-size: clamp(1.45rem, 4vw, 2.35rem);
       line-height: 1;
       letter-spacing: -0.07em;
+      font-weight: 950;
     }
 
-    .summary p {
-      margin: 9px 0 0;
+    .tasks-left {
+      margin: 10px 0 0;
       color: var(--muted);
       line-height: 1.5;
-    }
-
-    .stats-row {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 16px;
-    }
-
-    .stat {
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.48);
-      border-radius: 16px;
-      padding: 12px 14px;
-      min-width: 130px;
-    }
-
-    .stat strong {
-      display: block;
-      font-size: 1.5rem;
-      letter-spacing: -0.06em;
-    }
-
-    .stat span {
-      display: block;
-      margin-top: 2px;
-      color: var(--muted);
-      font-size: 0.8rem;
-      font-weight: 800;
+      font-weight: 700;
     }
 
     .section {
@@ -191,12 +157,6 @@ index_html = r'''<!doctype html>
       margin: 0;
       font-size: 1.15rem;
       letter-spacing: -0.03em;
-    }
-
-    .section-header p {
-      margin: 4px 0 0;
-      color: var(--muted);
-      font-size: 0.9rem;
     }
 
     .checklist {
@@ -216,6 +176,7 @@ index_html = r'''<!doctype html>
       border-radius: 18px;
       cursor: pointer;
       transition: background 0.15s ease, border 0.15s ease, transform 0.15s ease;
+      user-select: none;
     }
 
     .task:hover {
@@ -259,53 +220,179 @@ index_html = r'''<!doctype html>
       color: rgba(33, 24, 15, 0.64);
     }
 
-    .bottom-actions {
+    .side-panel {
+      position: sticky;
+      top: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .panel-card {
+      padding: 18px;
+    }
+
+    .panel-title {
       display: flex;
-      gap: 10px;
-      margin-top: 16px;
-      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
     }
 
-    button {
-      border: 0;
+    .panel-title h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      letter-spacing: -0.035em;
+    }
+
+    .badge {
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
       border-radius: 999px;
-      min-height: 44px;
-      padding: 0 16px;
-      font-weight: 900;
-      cursor: pointer;
-      transition: transform 0.12s ease, opacity 0.12s ease;
+      background: var(--soft-gold);
+      color: var(--accent-dark);
+      font-size: 0.75rem;
+      font-weight: 950;
     }
 
-    button:active {
-      transform: scale(0.98);
+    .streak-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
     }
 
-    .primary {
-      color: white;
-      background: linear-gradient(135deg, var(--accent-dark), var(--accent));
-      box-shadow: 0 12px 30px rgba(111, 70, 23, 0.18);
-    }
-
-    .secondary {
-      color: var(--text);
-      background: rgba(255, 250, 241, 0.82);
+    .mini-stat {
       border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.48);
+      border-radius: 16px;
+      padding: 12px;
     }
 
-    .note {
-      margin-top: 14px;
+    .mini-stat strong {
+      display: block;
+      font-size: 1.75rem;
+      line-height: 1;
+      letter-spacing: -0.07em;
+    }
+
+    .mini-stat span {
+      display: block;
+      margin-top: 6px;
       color: var(--muted);
-      font-size: 0.9rem;
+      font-size: 0.78rem;
+      font-weight: 850;
+    }
+
+    .rank-name {
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: -0.07em;
+      line-height: 1;
+    }
+
+    .rank-copy {
+      margin: 8px 0 12px;
+      color: var(--muted);
       line-height: 1.45;
+      font-size: 0.92rem;
+    }
+
+    .bar {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(42, 30, 18, 0.09);
+      overflow: hidden;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-dark), var(--accent));
+      border-radius: inherit;
+      transition: width 0.2s ease;
+    }
+
+    .reward {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.48);
+      border-radius: 18px;
+      padding: 14px;
+    }
+
+    .reward strong {
+      display: block;
+      letter-spacing: -0.02em;
+    }
+
+    .reward p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 0.92rem;
+    }
+
+    .week {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 7px;
+    }
+
+    .day-dot {
+      display: grid;
+      gap: 7px;
+      justify-items: center;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 900;
+    }
+
+    .dot {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.5);
+      color: transparent;
+      font-size: 0.8rem;
+      font-weight: 950;
+    }
+
+    .dot.done {
+      background: var(--good);
+      color: white;
+      border-color: var(--good);
+    }
+
+    .dot.today {
+      box-shadow: 0 0 0 4px rgba(155, 106, 47, 0.12);
+      border-color: rgba(155, 106, 47, 0.35);
+    }
+
+    .small-muted {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 920px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .side-panel {
+        position: static;
+      }
     }
 
     @media (max-width: 640px) {
       body {
         padding: 14px;
-      }
-
-      .top {
-        flex-direction: column;
       }
 
       .summary {
@@ -314,12 +401,8 @@ index_html = r'''<!doctype html>
         text-align: center;
       }
 
-      .stats-row {
-        justify-content: center;
-      }
-
-      .date-pill {
-        white-space: normal;
+      .streak-grid {
+        grid-template-columns: 1fr 1fr;
       }
     }
   </style>
@@ -328,74 +411,105 @@ index_html = r'''<!doctype html>
 <body>
   <main class="app">
     <header class="top">
-      <div>
-        <h1>Daily Checklist</h1>
-        <p class="subtitle">Simple accountability. Check off the plan every day and keep the streak alive.</p>
-      </div>
-      <div class="date-pill" id="dateText"></div>
+      <h1>Daily Checklist</h1>
     </header>
 
-    <section class="card summary">
-      <div class="circle" id="progressCircle">
-        <div class="circle-inner">
-          <div class="percent" id="percentText">0%</div>
-          <div class="done-count" id="countText">0 / 0</div>
-        </div>
-      </div>
-
+    <div class="layout">
       <div>
-        <h2 id="messageText">Start with the first task.</h2>
-        <p id="subMessageText">Everything is saved automatically for today.</p>
-
-        <div class="stats-row">
-          <div class="stat">
-            <strong id="streakText">0</strong>
-            <span>day streak</span>
+        <section class="card summary">
+          <div class="circle" id="progressCircle">
+            <div class="circle-inner">
+              <div class="percent" id="percentText">0%</div>
+              <div class="done-count" id="countText">0 / 0</div>
+            </div>
           </div>
-          <div class="stat">
-            <strong id="bestStreakText">0</strong>
-            <span>best streak</span>
+
+          <div>
+            <p class="quote" id="quoteText">Win the morning.</p>
+            <p class="tasks-left" id="tasksLeftText">0 tasks left today.</p>
           </div>
-        </div>
-      </div>
-    </section>
+        </section>
 
-    <section class="card section">
-      <div class="section-header">
-        <h3>Morning</h3>
-        <p>Do these first, in order.</p>
-      </div>
-      <div class="checklist" id="morningList"></div>
-    </section>
+        <section class="card section">
+          <div class="section-header">
+            <h3>Morning</h3>
+          </div>
+          <div class="checklist" id="morningList"></div>
+        </section>
 
-    <section class="card section">
-      <div class="section-header">
-        <h3>Afternoon</h3>
-        <p>Training and daily supplement.</p>
-      </div>
-      <div class="checklist" id="afternoonList"></div>
-    </section>
+        <section class="card section" id="afternoonSection">
+          <div class="section-header">
+            <h3>Afternoon</h3>
+          </div>
+          <div class="checklist" id="afternoonList"></div>
+        </section>
 
-    <section class="card section">
-      <div class="section-header">
-        <h3>Night</h3>
-        <p>Finish the day clean.</p>
+        <section class="card section" id="nightSection">
+          <div class="section-header">
+            <h3>Night</h3>
+          </div>
+          <div class="checklist" id="nightList"></div>
+        </section>
       </div>
-      <div class="checklist" id="nightList"></div>
-    </section>
 
-    <div class="bottom-actions">
-      <button class="primary" id="completeAllBtn">Complete all</button>
-      <button class="secondary" id="resetTodayBtn">Reset today</button>
+      <aside class="side-panel">
+        <section class="card panel-card">
+          <div class="panel-title">
+            <h3>Streaks</h3>
+            <span class="badge">daily</span>
+          </div>
+
+          <div class="streak-grid">
+            <div class="mini-stat">
+              <strong id="currentStreakText">0</strong>
+              <span>current streak</span>
+            </div>
+            <div class="mini-stat">
+              <strong id="bestStreakText">0</strong>
+              <span>best streak</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card panel-card">
+          <div class="panel-title">
+            <h3>Rank</h3>
+            <span class="badge" id="rankBadge">Starter</span>
+          </div>
+
+          <h4 class="rank-name" id="rankName">Starter</h4>
+          <p class="rank-copy" id="rankCopy">Complete perfect days to rank up.</p>
+          <div class="bar"><span id="rankBar"></span></div>
+          <p class="small-muted" id="rankProgressText">0 / 3 days to Locked In</p>
+        </section>
+
+        <section class="card panel-card">
+          <div class="panel-title">
+            <h3>Next Reward</h3>
+            <span class="badge">unlock</span>
+          </div>
+
+          <div class="reward">
+            <strong id="rewardTitle">3-day streak reward</strong>
+            <p id="rewardText">Unlock 1 hour of guilt-free gaming.</p>
+          </div>
+        </section>
+
+        <section class="card panel-card">
+          <div class="panel-title">
+            <h3>This Week</h3>
+            <span class="badge" id="weeklyScoreText">0/7</span>
+          </div>
+
+          <div class="week" id="weekTracker"></div>
+          <p class="small-muted">A day counts when every task scheduled for that day is checked off.</p>
+        </section>
+      </aside>
     </div>
-
-    <p class="note">
-      Gym appears Monday, Wednesday, and Friday. Microneedling appears Wednesday and Saturday.
-    </p>
   </main>
 
   <script>
-    const STORAGE_KEY = "simpleDailyChecklist.v1";
+    const STORAGE_KEY = "simpleDailyChecklist.gamified.v1";
 
     const TASKS = [
       { id: "wake_up", section: "morning", title: "Wake up at planned time", days: "daily" },
@@ -415,9 +529,41 @@ index_html = r'''<!doctype html>
       { id: "pray_night", section: "night", title: "Pray before bed", days: "daily" }
     ];
 
-    const state = loadState();
+    const QUOTES = [
+      "Win the morning.",
+      "Do the first thing.",
+      "No zero days.",
+      "Discipline before comfort.",
+      "You only need to win today.",
+      "Small promises build real confidence.",
+      "Start clean. Finish clean.",
+      "Check the box.",
+      "One day at a time.",
+      "Do it before you feel like it."
+    ];
+
+    const RANKS = [
+      { name: "Starter", days: 0 },
+      { name: "Locked In", days: 3 },
+      { name: "Disciplined", days: 7 },
+      { name: "Machine", days: 14 },
+      { name: "Elite", days: 30 },
+      { name: "Unbreakable", days: 60 },
+      { name: "Legendary", days: 100 }
+    ];
+
+    const REWARDS = [
+      { days: 3, title: "3-day streak reward", text: "Unlock 1 hour of guilt-free gaming." },
+      { days: 7, title: "7-day streak reward", text: "Unlock 2 hours of guilt-free gaming." },
+      { days: 14, title: "14-day streak reward", text: "Unlock 3 hours of guilt-free gaming." },
+      { days: 30, title: "30-day streak reward", text: "Unlock a full guilt-free gaming block." },
+      { days: 60, title: "60-day streak reward", text: "Unlock a major guilt-free gaming day." }
+    ];
+
     const today = new Date();
     today.setHours(12, 0, 0, 0);
+
+    const state = loadState();
 
     function loadState() {
       try {
@@ -432,7 +578,10 @@ index_html = r'''<!doctype html>
     }
 
     function dateKey(date = today) {
-      return date.toISOString().slice(0, 10);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
     }
 
     function getDayData(key = dateKey()) {
@@ -444,16 +593,25 @@ index_html = r'''<!doctype html>
     }
 
     function isTaskScheduled(task, date = today) {
-      if (task.days === "daily") return true;
-      return task.days.includes(date.getDay());
+      const weekday = date.getDay();
+
+      if (task.days === "daily") {
+        return true;
+      }
+
+      return Array.isArray(task.days) && task.days.includes(weekday);
+    }
+
+    function getTasksForDate(date = today) {
+      return TASKS.filter(task => isTaskScheduled(task, date));
     }
 
     function getTodayTasks() {
-      return TASKS.filter(task => isTaskScheduled(task));
+      return getTasksForDate(today);
     }
 
-    function isDone(task) {
-      return !!getDayData()[task.id];
+    function isDone(task, key = dateKey()) {
+      return !!getDayData(key)[task.id];
     }
 
     function toggleTask(task) {
@@ -465,26 +623,27 @@ index_html = r'''<!doctype html>
         day[task.id] = true;
       }
 
-      updateBestStreak();
       saveState();
       render();
     }
 
     function render() {
-      document.getElementById("dateText").textContent = today.toLocaleDateString(undefined, {
-        weekday: "long",
-        month: "short",
-        day: "numeric",
-        year: "numeric"
-      });
-
       const tasks = getTodayTasks();
-      renderList("morningList", tasks.filter(task => task.section === "morning"));
-      renderList("afternoonList", tasks.filter(task => task.section === "afternoon"));
-      renderList("nightList", tasks.filter(task => task.section === "night"));
 
-      const doneCount = tasks.filter(isDone).length;
+      const morningTasks = tasks.filter(task => task.section === "morning");
+      const afternoonTasks = tasks.filter(task => task.section === "afternoon");
+      const nightTasks = tasks.filter(task => task.section === "night");
+
+      renderList("morningList", morningTasks);
+      renderList("afternoonList", afternoonTasks);
+      renderList("nightList", nightTasks);
+
+      document.getElementById("afternoonSection").style.display = afternoonTasks.length ? "" : "none";
+      document.getElementById("nightSection").style.display = nightTasks.length ? "" : "none";
+
+      const doneCount = tasks.filter(task => isDone(task)).length;
       const totalCount = tasks.length;
+      const leftCount = totalCount - doneCount;
       const percent = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
       const degrees = Math.round((percent / 100) * 360);
 
@@ -493,20 +652,15 @@ index_html = r'''<!doctype html>
       document.getElementById("progressCircle").style.background =
         `conic-gradient(var(--accent) ${degrees}deg, rgba(42, 30, 18, 0.09) ${degrees}deg)`;
 
-      const streak = calculateStreak();
-      document.getElementById("streakText").textContent = streak;
-      document.getElementById("bestStreakText").textContent = Math.max(state.bestStreak || 0, streak);
+      document.getElementById("quoteText").textContent = getQuote(percent, doneCount);
+      document.getElementById("tasksLeftText").textContent = getTasksLeftText(leftCount, percent);
 
-      if (percent === 100) {
-        document.getElementById("messageText").textContent = "Checklist complete.";
-        document.getElementById("subMessageText").textContent = "Perfect day logged. Streak continues.";
-      } else if (percent >= 50) {
-        document.getElementById("messageText").textContent = "Keep going.";
-        document.getElementById("subMessageText").textContent = `${totalCount - doneCount} task${totalCount - doneCount === 1 ? "" : "s"} left today.`;
-      } else {
-        document.getElementById("messageText").textContent = "Start with the first task.";
-        document.getElementById("subMessageText").textContent = "Everything is saved automatically for today.";
-      }
+      const currentStreak = calculateStreak();
+      state.bestStreak = Math.max(state.bestStreak || 0, currentStreak);
+      saveState();
+
+      renderGamification(currentStreak);
+      renderWeek();
     }
 
     function renderList(elementId, tasks) {
@@ -525,6 +679,18 @@ index_html = r'''<!doctype html>
       });
     }
 
+    function getQuote(percent, doneCount) {
+      if (percent === 100) return "Checklist complete.";
+      const index = (doneCount + today.getDate()) % QUOTES.length;
+      return QUOTES[index];
+    }
+
+    function getTasksLeftText(leftCount, percent) {
+      if (percent === 100) return "Perfect day logged. Streak continues.";
+      if (leftCount === 1) return "1 task left today.";
+      return `${leftCount} tasks left today.`;
+    }
+
     function calculateStreak() {
       let streak = 0;
       const cursor = new Date();
@@ -532,11 +698,13 @@ index_html = r'''<!doctype html>
 
       while (true) {
         const key = dateKey(cursor);
-        const tasksForDay = TASKS.filter(task => isTaskScheduled(task, cursor));
+        const tasksForDay = getTasksForDate(cursor);
         const dayData = state.days[key] || {};
         const complete = tasksForDay.length > 0 && tasksForDay.every(task => dayData[task.id]);
 
-        if (!complete) break;
+        if (!complete) {
+          break;
+        }
 
         streak++;
         cursor.setDate(cursor.getDate() - 1);
@@ -545,31 +713,103 @@ index_html = r'''<!doctype html>
       return streak;
     }
 
-    function updateBestStreak() {
-      const streak = calculateStreak();
-      if (streak > (state.bestStreak || 0)) {
-        state.bestStreak = streak;
-      }
+    function isPerfectDay(date) {
+      const key = dateKey(date);
+      const tasksForDay = getTasksForDate(date);
+      const dayData = state.days[key] || {};
+
+      return tasksForDay.length > 0 && tasksForDay.every(task => dayData[task.id]);
     }
 
-    document.getElementById("completeAllBtn").addEventListener("click", () => {
-      const day = getDayData();
-      getTodayTasks().forEach(task => {
-        day[task.id] = true;
-      });
+    function renderGamification(currentStreak) {
+      document.getElementById("currentStreakText").textContent = currentStreak;
+      document.getElementById("bestStreakText").textContent = state.bestStreak || 0;
 
-      updateBestStreak();
-      saveState();
-      render();
-    });
+      const rankData = getRank(currentStreak);
+      document.getElementById("rankName").textContent = rankData.current.name;
+      document.getElementById("rankBadge").textContent = rankData.current.name;
 
-    document.getElementById("resetTodayBtn").addEventListener("click", () => {
-      if (!confirm("Reset today's checklist?")) return;
+      if (rankData.next) {
+        document.getElementById("rankCopy").textContent = `Next rank: ${rankData.next.name}.`;
+        document.getElementById("rankProgressText").textContent =
+          `${currentStreak} / ${rankData.next.days} days to ${rankData.next.name}`;
+        document.getElementById("rankBar").style.width = `${rankData.percent}%`;
+      } else {
+        document.getElementById("rankCopy").textContent = "Max rank reached.";
+        document.getElementById("rankProgressText").textContent = "Legendary streak.";
+        document.getElementById("rankBar").style.width = "100%";
+      }
 
-      state.days[dateKey()] = {};
-      saveState();
-      render();
-    });
+      const reward = getNextReward(currentStreak);
+      document.getElementById("rewardTitle").textContent = reward.title;
+      document.getElementById("rewardText").textContent = reward.text;
+    }
+
+    function getRank(streak) {
+      let current = RANKS[0];
+      let next = RANKS[1];
+
+      for (let i = 0; i < RANKS.length; i++) {
+        if (streak >= RANKS[i].days) {
+          current = RANKS[i];
+          next = RANKS[i + 1] || null;
+        }
+      }
+
+      const percent = next
+        ? Math.min(100, Math.round((streak / next.days) * 100))
+        : 100;
+
+      return { current, next, percent };
+    }
+
+    function getNextReward(streak) {
+      const next = REWARDS.find(reward => streak < reward.days);
+
+      if (next) {
+        return next;
+      }
+
+      return {
+        title: "Rewards cleared",
+        text: "You unlocked every listed reward. Keep the streak alive."
+      };
+    }
+
+    function renderWeek() {
+      const tracker = document.getElementById("weekTracker");
+      tracker.innerHTML = "";
+
+      const start = new Date(today);
+      const day = start.getDay();
+      const mondayOffset = day === 0 ? -6 : 1 - day;
+      start.setDate(start.getDate() + mondayOffset);
+      start.setHours(12, 0, 0, 0);
+
+      let completeCount = 0;
+      const labels = ["M", "T", "W", "T", "F", "S", "S"];
+
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
+        date.setHours(12, 0, 0, 0);
+
+        const perfect = isPerfectDay(date);
+        const isToday = dateKey(date) === dateKey(today);
+
+        if (perfect) completeCount++;
+
+        const item = document.createElement("div");
+        item.className = "day-dot";
+        item.innerHTML = `
+          <div class="dot ${perfect ? "done" : ""} ${isToday ? "today" : ""}">${perfect ? "✓" : ""}</div>
+          <span>${labels[i]}</span>
+        `;
+        tracker.appendChild(item);
+      }
+
+      document.getElementById("weeklyScoreText").textContent = `${completeCount}/7`;
+    }
 
     render();
   </script>
@@ -577,34 +817,26 @@ index_html = r'''<!doctype html>
 </html>
 '''
 
-readme = r'''# Simple Daily Checklist
+readme = """# Simple Checklist Gamified
 
-This is the stripped-down version.
+Upload `index.html` to GitHub Pages.
 
-## What it has
-- Simple ordered checklist
-- Completion percentage
-- Current streak
-- Best streak
-- Saves automatically in the browser
-- No Supabase
-- No ranks
-- No XP
-- No strict mode controls
-- No wake-time fields
-
-## GitHub Pages
-Upload `index.html` to your repository root.
-
-Then go:
-
-Settings → Pages → Deploy from branch → main → /root
-'''
+What changed:
+- Simple checklist stays on the left
+- Streaks/rewards/gamification are separated into a right-side panel
+- Added sword favicon
+- Removed subtitle and date
+- Removed complete all/reset buttons
+- Rotating motivational quote
+- No streak freeze
+- Gym only appears Monday/Wednesday/Friday
+- Microneedle eyebrows only appears Wednesday/Saturday
+"""
 
 (out_dir / "index.html").write_text(index_html, encoding="utf-8")
 (out_dir / "README.md").write_text(readme, encoding="utf-8")
 
-zip_path = Path("/mnt/data/simple-accountability-checklist.zip")
+zip_path = Path("/mnt/data/simple-checklist-gamified.zip")
 if zip_path.exists():
     zip_path.unlink()
 
