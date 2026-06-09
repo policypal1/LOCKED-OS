@@ -1,7 +1,7 @@
 from pathlib import Path
 import zipfile
 
-out_dir = Path("/mnt/data/checklist-gamification-tabs")
+out_dir = Path("/mnt/data/checklist-password-supabase")
 out_dir.mkdir(exist_ok=True)
 
 index_html = r'''<!doctype html>
@@ -13,7 +13,6 @@ index_html = r'''<!doctype html>
 
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M68 13 77 22 48 56 39 47 68 13Z' fill='%23f8d38a'/%3E%3Cpath d='M31 58 42 47 53 58 42 69 31 58Z' fill='%23b9852c'/%3E%3Cpath d='M21 77 36 62 44 70 29 85 21 77Z' fill='%23fff8ec'/%3E%3C/svg%3E" />
 
-  <!-- Optional Supabase support. App works with localStorage even if you do not set this up. -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -59,9 +58,79 @@ index_html = r'''<!doctype html>
       cursor: pointer;
     }
 
+    .hidden {
+      display: none !important;
+    }
+
     .app {
       width: min(1120px, 100%);
       margin: 0 auto;
+    }
+
+    .login-screen {
+      min-height: calc(100vh - 48px);
+      display: grid;
+      place-items: center;
+    }
+
+    .login-card {
+      width: min(440px, 100%);
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: rgba(255, 250, 241, 0.86);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .login-icon {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: var(--text);
+      color: var(--card);
+      font-size: 1.5rem;
+      margin-bottom: 18px;
+    }
+
+    .login-card h1 {
+      margin: 0;
+      font-size: 2.6rem;
+      letter-spacing: -0.09em;
+      line-height: 0.92;
+    }
+
+    .login-card p {
+      margin: 12px 0 18px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-weight: 700;
+    }
+
+    .login-row {
+      display: grid;
+      gap: 10px;
+    }
+
+    .login-row input {
+      min-height: 48px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.62);
+      padding: 0 15px;
+      outline: none;
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .error-text {
+      min-height: 20px;
+      margin-top: 10px;
+      color: var(--bad);
+      font-size: 0.9rem;
+      font-weight: 800;
     }
 
     .top {
@@ -566,25 +635,11 @@ index_html = r'''<!doctype html>
       grid-column: span 2;
     }
 
-    .full {
-      grid-column: 1 / -1;
-    }
-
     .cloud-row {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: 1fr 1fr;
       gap: 10px;
       margin-top: 12px;
-    }
-
-    input {
-      min-height: 42px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.6);
-      padding: 0 14px;
-      outline: none;
-      color: var(--text);
     }
 
     .button {
@@ -654,7 +709,22 @@ index_html = r'''<!doctype html>
 </head>
 
 <body>
-  <main class="app">
+  <section class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <div class="login-icon">⚔</div>
+      <h1>Daily Checklist</h1>
+      <p>Enter the password to open your tracker.</p>
+
+      <div class="login-row">
+        <input id="passwordInput" type="password" inputmode="numeric" placeholder="Password" autocomplete="current-password" />
+        <button class="button" id="unlockBtn">Unlock</button>
+      </div>
+
+      <div class="error-text" id="loginError"></div>
+    </div>
+  </section>
+
+  <main class="app hidden" id="app">
     <header class="top">
       <h1>Daily Checklist</h1>
 
@@ -793,12 +863,12 @@ index_html = r'''<!doctype html>
 
         <section class="card game-card">
           <h3>Cloud Sync</h3>
-          <p class="small-muted" id="syncStatus">Local mode active. Add Supabase keys in the code when ready.</p>
+          <p class="small-muted" id="syncStatus">Connecting to Supabase...</p>
           <div class="cloud-row">
-            <input id="emailInput" type="email" placeholder="Email for magic link" />
-            <button class="button" id="loginBtn">Login</button>
+            <button class="button" id="syncBtn">Sync now</button>
+            <button class="ghost-button" id="pullBtn">Pull cloud</button>
           </div>
-          <button class="ghost-button" id="syncBtn" style="width:100%; margin-top:10px;">Sync now</button>
+          <button class="ghost-button" id="logoutBtn" style="width:100%; margin-top:10px;">Lock app</button>
         </section>
       </div>
     </section>
@@ -806,23 +876,22 @@ index_html = r'''<!doctype html>
 
   <script>
     /************************************************************
-     * SUPABASE SETUP
-     * Optional. The app works without this.
-     * Paste your project URL and anon/public key below.
+     * PASSWORD + SUPABASE CONFIG
+     * This is a client-side password. It hides the app from casual access,
+     * but it is not real security because frontend code can be inspected.
      ************************************************************/
-    const SUPABASE_URL = "";
-    const SUPABASE_ANON_KEY = "";
+    const APP_PASSWORD = "2009";
 
-    let sb = null;
-    let currentUser = null;
-    let syncTimer = null;
+    const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
+    const SUPABASE_TABLE = "accountability_password_state";
+    const SUPABASE_ROW_ID = "main";
 
-    if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase) {
-      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const STORAGE_KEY = "dailyChecklist.tabs.v1";
+    const STORAGE_KEY = "dailyChecklist.passwordSupabase.v1";
     const OLD_KEYS = [
+      "dailyChecklist.tabs.v1",
       "simpleDailyChecklist.gamified.v1",
       "simpleDailyChecklist.v2",
       "simpleDailyChecklist.v1"
@@ -880,16 +949,17 @@ index_html = r'''<!doctype html>
     const today = new Date();
     today.setHours(12, 0, 0, 0);
 
-    const state = loadState();
+    let syncTimer = null;
+    let state = loadState();
 
     function loadState() {
       const raw = localStorage.getItem(STORAGE_KEY);
 
       if (raw) {
         try {
-          return JSON.parse(raw);
+          return normalizeState(JSON.parse(raw));
         } catch {
-          return { days: {}, bestStreak: 0, updatedAt: new Date().toISOString() };
+          return normalizeState({});
         }
       }
 
@@ -898,16 +968,19 @@ index_html = r'''<!doctype html>
         if (!oldRaw) continue;
 
         try {
-          const oldState = JSON.parse(oldRaw);
-          return {
-            days: oldState.days || {},
-            bestStreak: oldState.bestStreak || 0,
-            updatedAt: oldState.updatedAt || new Date().toISOString()
-          };
+          return normalizeState(JSON.parse(oldRaw));
         } catch {}
       }
 
-      return { days: {}, bestStreak: 0, updatedAt: new Date().toISOString() };
+      return normalizeState({});
+    }
+
+    function normalizeState(input) {
+      return {
+        days: input.days || {},
+        bestStreak: input.bestStreak || 0,
+        updatedAt: input.updatedAt || new Date().toISOString()
+      };
     }
 
     function saveState({ sync = true } = {}) {
@@ -1222,111 +1295,81 @@ index_html = r'''<!doctype html>
       document.getElementById("gamePage").classList.toggle("active", tab === "game");
     }
 
+    function unlockApp() {
+      const input = document.getElementById("passwordInput");
+      const error = document.getElementById("loginError");
+
+      if (input.value === APP_PASSWORD) {
+        sessionStorage.setItem("dailyChecklistUnlocked", "true");
+        document.getElementById("loginScreen").classList.add("hidden");
+        document.getElementById("app").classList.remove("hidden");
+        render();
+        pullFromSupabase();
+        return;
+      }
+
+      error.textContent = "Wrong password.";
+      input.value = "";
+      input.focus();
+    }
+
+    function lockApp() {
+      sessionStorage.removeItem("dailyChecklistUnlocked");
+      document.getElementById("app").classList.add("hidden");
+      document.getElementById("loginScreen").classList.remove("hidden");
+      document.getElementById("passwordInput").value = "";
+      document.getElementById("passwordInput").focus();
+    }
+
     function scheduleSync() {
       clearTimeout(syncTimer);
       syncTimer = setTimeout(syncToSupabase, 900);
     }
 
-    async function initSupabase() {
-      if (!sb) {
-        document.getElementById("syncStatus").textContent = "Local mode active. Add Supabase keys in the code when ready.";
-        return;
-      }
-
-      const { data } = await sb.auth.getSession();
-      currentUser = data.session?.user || null;
-
-      if (currentUser) {
-        document.getElementById("syncStatus").textContent = `Signed in as ${currentUser.email}.`;
-        await loadFromSupabase();
-      } else {
-        document.getElementById("syncStatus").textContent = "Supabase configured. Login to sync.";
-      }
-
-      sb.auth.onAuthStateChange(async (_event, session) => {
-        currentUser = session?.user || null;
-
-        if (currentUser) {
-          document.getElementById("syncStatus").textContent = `Signed in as ${currentUser.email}.`;
-          await loadFromSupabase();
-        } else {
-          document.getElementById("syncStatus").textContent = "Signed out. Local mode active.";
-        }
-      });
-    }
-
-    async function loginWithMagicLink() {
-      if (!sb) {
-        document.getElementById("syncStatus").textContent = "Add Supabase URL and anon key in the code first.";
-        return;
-      }
-
-      const email = document.getElementById("emailInput").value.trim();
-
-      if (!email) {
-        document.getElementById("syncStatus").textContent = "Enter your email first.";
-        return;
-      }
-
-      const { error } = await sb.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: window.location.href
-        }
-      });
-
-      if (error) {
-        document.getElementById("syncStatus").textContent = error.message;
-        return;
-      }
-
-      document.getElementById("syncStatus").textContent = "Magic link sent. Check your email.";
-    }
-
-    async function loadFromSupabase() {
-      if (!sb || !currentUser) return;
+    async function pullFromSupabase() {
+      document.getElementById("syncStatus").textContent = "Pulling cloud data...";
 
       const { data, error } = await sb
-        .from("accountability_state")
+        .from(SUPABASE_TABLE)
         .select("state, updated_at")
-        .eq("user_id", currentUser.id)
+        .eq("id", SUPABASE_ROW_ID)
         .maybeSingle();
 
       if (error) {
-        document.getElementById("syncStatus").textContent = `Load error: ${error.message}`;
+        document.getElementById("syncStatus").textContent = `Pull error: ${error.message}`;
         return;
       }
 
-      if (data?.state) {
-        const localUpdated = new Date(state.updatedAt || 0).getTime();
-        const remoteUpdated = new Date(data.state.updatedAt || data.updated_at || 0).getTime();
-
-        if (remoteUpdated > localUpdated) {
-          state.days = data.state.days || {};
-          state.bestStreak = data.state.bestStreak || 0;
-          state.updatedAt = data.state.updatedAt || data.updated_at || new Date().toISOString();
-          saveState({ sync: false });
-          render();
-          document.getElementById("syncStatus").textContent = "Cloud data loaded.";
-          return;
-        }
+      if (!data?.state) {
+        document.getElementById("syncStatus").textContent = "No cloud data yet. Creating cloud row...";
+        await syncToSupabase();
+        return;
       }
 
-      await syncToSupabase();
+      const localUpdated = new Date(state.updatedAt || 0).getTime();
+      const remoteUpdated = new Date(data.state.updatedAt || data.updated_at || 0).getTime();
+
+      if (remoteUpdated > localUpdated) {
+        state = normalizeState(data.state);
+        saveState({ sync: false });
+        render();
+        document.getElementById("syncStatus").textContent = "Cloud data loaded.";
+      } else {
+        document.getElementById("syncStatus").textContent = "Local data is already newest.";
+        await syncToSupabase();
+      }
     }
 
     async function syncToSupabase() {
-      if (!sb || !currentUser) return;
-
-      const payload = {
-        user_id: currentUser.id,
-        state,
-        updated_at: new Date().toISOString()
-      };
+      document.getElementById("syncStatus").textContent = "Syncing...";
 
       const { error } = await sb
-        .from("accountability_state")
-        .upsert(payload, { onConflict: "user_id" });
+        .from(SUPABASE_TABLE)
+        .upsert({
+          id: SUPABASE_ROW_ID,
+          state,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "id" });
 
       if (error) {
         document.getElementById("syncStatus").textContent = `Sync error: ${error.message}`;
@@ -1340,90 +1383,73 @@ index_html = r'''<!doctype html>
       button.addEventListener("click", () => switchTab(button.dataset.tab));
     });
 
-    document.getElementById("loginBtn").addEventListener("click", loginWithMagicLink);
-    document.getElementById("syncBtn").addEventListener("click", syncToSupabase);
+    document.getElementById("unlockBtn").addEventListener("click", unlockApp);
+    document.getElementById("passwordInput").addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        unlockApp();
+      }
+    });
 
-    render();
-    initSupabase();
+    document.getElementById("syncBtn").addEventListener("click", syncToSupabase);
+    document.getElementById("pullBtn").addEventListener("click", pullFromSupabase);
+    document.getElementById("logoutBtn").addEventListener("click", lockApp);
+
+    if (sessionStorage.getItem("dailyChecklistUnlocked") === "true") {
+      document.getElementById("loginScreen").classList.add("hidden");
+      document.getElementById("app").classList.remove("hidden");
+      render();
+      pullFromSupabase();
+    } else {
+      document.getElementById("passwordInput").focus();
+    }
   </script>
 </body>
 </html>
 '''
 
-schema_sql = r'''-- Optional Supabase schema for the Daily Checklist app.
--- Run this in Supabase SQL Editor when you are ready for cloud sync.
+schema_sql = r'''-- Password-mode Supabase schema.
+-- Use this because this version does NOT use email login.
+-- Run this in Supabase SQL Editor.
 
-create table if not exists public.accountability_state (
-  user_id uuid primary key references auth.users(id) on delete cascade,
+create table if not exists public.accountability_password_state (
+  id text primary key,
   state jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
-alter table public.accountability_state enable row level security;
+alter table public.accountability_password_state enable row level security;
 
-drop policy if exists "Users can read their own accountability state" on public.accountability_state;
-create policy "Users can read their own accountability state"
-on public.accountability_state
+drop policy if exists "Allow public read for password tracker" on public.accountability_password_state;
+create policy "Allow public read for password tracker"
+on public.accountability_password_state
 for select
-to authenticated
-using (auth.uid() = user_id);
+to anon, authenticated
+using (id = 'main');
 
-drop policy if exists "Users can insert their own accountability state" on public.accountability_state;
-create policy "Users can insert their own accountability state"
-on public.accountability_state
+drop policy if exists "Allow public insert for password tracker" on public.accountability_password_state;
+create policy "Allow public insert for password tracker"
+on public.accountability_password_state
 for insert
-to authenticated
-with check (auth.uid() = user_id);
+to anon, authenticated
+with check (id = 'main');
 
-drop policy if exists "Users can update their own accountability state" on public.accountability_state;
-create policy "Users can update their own accountability state"
-on public.accountability_state
+drop policy if exists "Allow public update for password tracker" on public.accountability_password_state;
+create policy "Allow public update for password tracker"
+on public.accountability_password_state
 for update
-to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+to anon, authenticated
+using (id = 'main')
+with check (id = 'main');
 '''
 
-readme = r'''# Daily Checklist with Gamification Tab
+readme = r'''# Daily Checklist Password + Supabase Version
 
 ## Files
-- `index.html` - the full app
-- `schema.sql` - optional Supabase schema
+- `index.html` - upload this to GitHub Pages
+- `schema.sql` - run this in Supabase SQL Editor
 
-## What changed
-- Added two tabs:
-  - Checklist
-  - Gamification
-- Checklist stays minimal
-- Checklist only keeps:
-  - completion percentage
-  - rotating quote
-  - tasks left
-  - current rank
-  - next reward
-- Moved streak info to Gamification tab:
-  - current streak
-  - best streak
-  - perfect days
-  - today score
-  - this week tracker
-  - rank ladder
-  - reward ladder
-- Added optional Supabase sync placeholders
+## Password
+The app password is:
 
-## GitHub Pages
-Upload `index.html` to the root of your GitHub repo.
-
-Then go:
-
-Settings → Pages → Deploy from branch → main → /root
-
-## Supabase setup later
-1. Create a Supabase project.
-2. Run `schema.sql` in Supabase SQL Editor.
-3. Open `index.html`.
-4. Find:
-
-```js
-const SUPABASE_URL = "";
-const SUPABASE_ANON_KEY = "";
+```text
+2009
