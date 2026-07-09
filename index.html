@@ -7,17 +7,16 @@
 
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M69 10 84 25 40 69 25 54 69 10Z' fill='%23f4d28b'/%3E%3Cpath d='M20 59 41 38 48 45 27 66 20 59Z' fill='%23fff8ec'/%3E%3Cpath d='M18 68 32 54 46 68 32 82 18 68Z' fill='%232f8f56'/%3E%3Cpath d='M14 83 25 72 32 79 21 90 14 83Z' fill='%239b6a2f'/%3E%3C/svg%3E" />
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
     :root {
       --bg: #f7efe3;
       --card: #fffaf1;
-      --card-2: #fff5e6;
       --text: #21180f;
       --muted: #7a6b59;
       --line: rgba(42, 30, 18, 0.12);
       --line-strong: rgba(42, 30, 18, 0.22);
-      --accent: #9b6a2f;
-      --accent-dark: #6f4617;
       --green: #2f8f56;
       --green-dark: #1f6f3f;
       --green-soft: rgba(47, 143, 86, 0.12);
@@ -29,10 +28,6 @@
 
     * {
       box-sizing: border-box;
-    }
-
-    html {
-      scroll-behavior: smooth;
     }
 
     body {
@@ -99,10 +94,18 @@
       margin-bottom: 18px;
     }
 
+    .login-card h1,
+    h1,
+    .quote,
+    .rank-name,
+    .game-title-card h2,
+    .review-card h2 {
+      letter-spacing: -0.035em;
+    }
+
     .login-card h1 {
       margin: 0;
       font-size: 2.45rem;
-      letter-spacing: -0.035em;
       line-height: 0.98;
     }
 
@@ -129,7 +132,8 @@
       font-weight: 800;
     }
 
-    .login-row input:focus {
+    .login-row input:focus,
+    .missed-box:focus {
       border-color: rgba(47, 143, 86, 0.65);
       box-shadow: 0 0 0 4px rgba(47, 143, 86, 0.12);
     }
@@ -149,7 +153,7 @@
       background: var(--text);
       color: var(--card);
       font-weight: 950;
-      transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+      transition: transform 0.15s ease, opacity 0.15s ease;
     }
 
     .btn:hover {
@@ -183,7 +187,6 @@
       margin: 0;
       font-size: clamp(2.25rem, 5.5vw, 4rem);
       line-height: 1;
-      letter-spacing: -0.035em;
     }
 
     .tabs {
@@ -298,7 +301,6 @@
       margin: 0;
       font-size: clamp(1.55rem, 4vw, 2.4rem);
       line-height: 1.08;
-      letter-spacing: -0.035em;
       font-weight: 950;
     }
 
@@ -307,6 +309,13 @@
       color: var(--muted);
       line-height: 1.5;
       font-weight: 700;
+    }
+
+    .sync-status {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 800;
     }
 
     .section {
@@ -332,55 +341,6 @@
       font-weight: 750;
       line-height: 1.45;
       font-size: 0.92rem;
-    }
-
-    .phone-lock {
-      margin: 12px 12px 0;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.46);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-    }
-
-    .phone-lock.locked {
-      border-color: rgba(182, 66, 66, 0.24);
-      background: var(--red-soft);
-    }
-
-    .phone-lock.unlocked {
-      border-color: rgba(47, 143, 86, 0.28);
-      background: var(--green-soft);
-    }
-
-    .phone-lock strong {
-      display: block;
-      letter-spacing: -0.015em;
-    }
-
-    .phone-lock span {
-      display: block;
-      margin-top: 3px;
-      color: var(--muted);
-      font-size: 0.9rem;
-      font-weight: 750;
-      line-height: 1.35;
-    }
-
-    .lock-badge {
-      min-height: 32px;
-      display: inline-flex;
-      align-items: center;
-      padding: 0 12px;
-      border-radius: 999px;
-      background: var(--text);
-      color: var(--card);
-      font-size: 0.78rem;
-      font-weight: 950;
-      white-space: nowrap;
     }
 
     .checklist {
@@ -448,6 +408,55 @@
       color: rgba(33, 24, 15, 0.64);
     }
 
+    .phone-lock {
+      margin: 0 12px 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.46);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .phone-lock.locked {
+      border-color: rgba(182, 66, 66, 0.24);
+      background: var(--red-soft);
+    }
+
+    .phone-lock.unlocked {
+      border-color: rgba(47, 143, 86, 0.28);
+      background: var(--green-soft);
+    }
+
+    .phone-lock strong {
+      display: block;
+      letter-spacing: -0.015em;
+    }
+
+    .phone-lock span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 750;
+      line-height: 1.35;
+    }
+
+    .lock-badge {
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: var(--text);
+      color: var(--card);
+      font-size: 0.78rem;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
     .mini-side {
       position: sticky;
       top: 18px;
@@ -489,7 +498,6 @@
     .rank-name {
       margin: 0;
       font-size: 2rem;
-      letter-spacing: -0.035em;
       line-height: 1.05;
     }
 
@@ -568,7 +576,6 @@
       margin: 0;
       font-size: clamp(2rem, 5vw, 4rem);
       line-height: 1;
-      letter-spacing: -0.035em;
     }
 
     .game-title-card p {
@@ -694,7 +701,6 @@
       margin: 0;
       font-size: clamp(1.6rem, 4vw, 2.6rem);
       line-height: 1.05;
-      letter-spacing: -0.035em;
     }
 
     .review-card p {
@@ -716,11 +722,6 @@
       outline: none;
       font-weight: 750;
       line-height: 1.45;
-    }
-
-    .missed-box:focus {
-      border-color: rgba(47, 143, 86, 0.65);
-      box-shadow: 0 0 0 4px rgba(47, 143, 86, 0.12);
     }
 
     .missed-list {
@@ -798,7 +799,10 @@
         flex: 1;
       }
 
-      .layout {
+      .layout,
+      .game-hero,
+      .game-grid,
+      .review-grid {
         grid-template-columns: 1fr;
       }
 
@@ -813,18 +817,6 @@
 
       .circle {
         margin: 0;
-      }
-
-      .game-hero {
-        grid-template-columns: 1fr;
-      }
-
-      .game-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .review-grid {
-        grid-template-columns: 1fr;
       }
 
       .phone-lock {
@@ -886,8 +878,9 @@
               </div>
 
               <div>
-                <p id="dailyQuote" class="quote">Win today. No drama.</p>
+                <p class="quote">Win today. No drama.</p>
                 <p id="tasksLeft" class="tasks-left">You have 14 tasks left today.</p>
+                <p id="syncStatus" class="sync-status">Supabase sync not connected yet.</p>
               </div>
             </section>
 
@@ -897,6 +890,8 @@
                 <p>No scrolling before all of these tasks are done. Phone unlocks after the morning list is complete.</p>
               </div>
 
+              <div id="morningList" class="checklist"></div>
+
               <div id="phoneLockCard" class="phone-lock locked">
                 <div>
                   <strong id="phoneLockTitle">Phone locked</strong>
@@ -904,14 +899,12 @@
                 </div>
                 <div id="phoneLockBadge" class="lock-badge">Locked</div>
               </div>
-
-              <div id="morningList" class="checklist"></div>
             </section>
 
             <section class="card section">
               <div class="section-header">
                 <h3>Afternoon</h3>
-                <p>Gym window: 5 PM to 10 PM. The goal is to show up every day.</p>
+                <p>The goal is to show up every day.</p>
               </div>
               <div id="afternoonList" class="checklist"></div>
             </section>
@@ -971,7 +964,7 @@
 
           <section class="card big-streak-card">
             <strong id="bigStreak">0</strong>
-            <span>day current streak</span>
+            <span>current day streak</span>
           </section>
         </div>
 
@@ -1031,80 +1024,36 @@
   <script>
     const PASSWORD = "2009";
 
-    const STORAGE_KEY = "locked_os_daily_checklist_v3";
-    const SESSION_KEY = "locked_os_unlocked";
+    const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL_HERE";
+    const SUPABASE_PUBLISHABLE_KEY = "PASTE_YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY_HERE";
+    const SUPABASE_ROW_ID = "samuel-main";
+
+    const STORAGE_KEY = "locked_os_daily_checklist_v4";
+
+    const hasSupabaseConfig =
+      SUPABASE_URL.startsWith("https://") &&
+      !SUPABASE_URL.includes("PASTE_") &&
+      !SUPABASE_PUBLISHABLE_KEY.includes("PASTE_");
+
+    const supabaseClient = hasSupabaseConfig
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+      : null;
 
     const TASKS = [
-      {
-        id: "wake-up",
-        section: "morning",
-        title: "Wake up at planned time"
-      },
-      {
-        id: "water",
-        section: "morning",
-        title: "Chug one glass of water immediately after waking up"
-      },
-      {
-        id: "clean-room",
-        section: "morning",
-        title: "Clean room"
-      },
-      {
-        id: "dressed",
-        section: "morning",
-        title: "Get fully dressed and ready for the day"
-      },
-      {
-        id: "real-world-good-morning",
-        section: "morning",
-        title: "Real World daily good morning"
-      },
-      {
-        id: "real-world-lesson",
-        section: "morning",
-        title: "Real World daily lesson"
-      },
-      {
-        id: "real-world-puzzle",
-        section: "morning",
-        title: "Real World daily puzzle"
-      },
-      {
-        id: "breakfast",
-        section: "morning",
-        title: "Eat breakfast"
-      },
-      {
-        id: "accutane",
-        section: "morning",
-        title: "Take Accutane"
-      },
-      {
-        id: "gym",
-        section: "afternoon",
-        title: "Go to gym between 5 PM and 10 PM"
-      },
-      {
-        id: "bed-ready",
-        section: "night",
-        title: "Get everything ready for bed at 9 PM"
-      },
-      {
-        id: "reading",
-        section: "night",
-        title: "Read for 20 minutes"
-      },
-      {
-        id: "bed-routine",
-        section: "night",
-        title: "Full bedtime routine"
-      },
-      {
-        id: "lights-out",
-        section: "night",
-        title: "Phone away and lights out on time"
-      }
+      { id: "wake-up", section: "morning", title: "Wake up at planned time" },
+      { id: "water", section: "morning", title: "Chug one glass of water immediately after waking up" },
+      { id: "clean-room", section: "morning", title: "Clean room" },
+      { id: "dressed", section: "morning", title: "Get fully dressed and ready for the day" },
+      { id: "real-world-good-morning", section: "morning", title: "Real World daily good morning" },
+      { id: "real-world-lesson", section: "morning", title: "Real World daily lesson" },
+      { id: "real-world-puzzle", section: "morning", title: "Real World daily puzzle" },
+      { id: "breakfast", section: "morning", title: "Eat breakfast" },
+      { id: "accutane", section: "morning", title: "Take Accutane" },
+      { id: "gym", section: "afternoon", title: "Go to gym" },
+      { id: "creatine", section: "afternoon", title: "Take creatine" },
+      { id: "bed-ready", section: "night", title: "Get everything ready for bed at 9 PM" },
+      { id: "reading", section: "night", title: "Read for 20 minutes" },
+      { id: "bed-routine", section: "night", title: "Full bedtime routine" }
     ];
 
     const MORNING_TASK_IDS = TASKS
@@ -1149,6 +1098,7 @@
     const percentEl = document.getElementById("percent");
     const doneCountEl = document.getElementById("doneCount");
     const tasksLeftEl = document.getElementById("tasksLeft");
+    const syncStatus = document.getElementById("syncStatus");
 
     const morningList = document.getElementById("morningList");
     const afternoonList = document.getElementById("afternoonList");
@@ -1177,7 +1127,8 @@
     const missedTasksList = document.getElementById("missedTasksList");
     const logoutBtn = document.getElementById("logoutBtn");
 
-    let state = loadState();
+    let state = loadLocalState();
+    let saveTimer = null;
 
     function getTodayKey(date = new Date()) {
       const year = date.getFullYear();
@@ -1192,10 +1143,8 @@
       return next;
     }
 
-    function loadState() {
-      const fallback = {
-        days: {}
-      };
+    function loadLocalState() {
+      const fallback = { days: {} };
 
       try {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -1207,8 +1156,76 @@
       }
     }
 
-    function saveState() {
+    function saveLocalState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    async function loadSupabaseState() {
+      if (!supabaseClient) {
+        syncStatus.textContent = "Supabase sync not connected yet.";
+        return;
+      }
+
+      syncStatus.textContent = "Loading from Supabase...";
+
+      const { data, error } = await supabaseClient
+        .from("locked_os_state")
+        .select("state")
+        .eq("id", SUPABASE_ROW_ID)
+        .single();
+
+      if (error) {
+        syncStatus.textContent = "Supabase load failed. Using local save.";
+        console.error(error);
+        return;
+      }
+
+      if (data?.state && typeof data.state === "object") {
+        state = data.state;
+        if (!state.days || typeof state.days !== "object") state.days = {};
+        saveLocalState();
+        render();
+      }
+
+      syncStatus.textContent = "Synced with Supabase.";
+    }
+
+    function queueSupabaseSave() {
+      clearTimeout(saveTimer);
+
+      saveTimer = setTimeout(() => {
+        saveSupabaseState();
+      }, 450);
+    }
+
+    async function saveSupabaseState() {
+      if (!supabaseClient) {
+        syncStatus.textContent = "Saved locally. Supabase not connected yet.";
+        return;
+      }
+
+      syncStatus.textContent = "Saving...";
+
+      const { error } = await supabaseClient
+        .from("locked_os_state")
+        .upsert({
+          id: SUPABASE_ROW_ID,
+          state,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        syncStatus.textContent = "Supabase save failed. Saved locally only.";
+        console.error(error);
+        return;
+      }
+
+      syncStatus.textContent = "Saved to Supabase.";
+    }
+
+    function saveState() {
+      saveLocalState();
+      queueSupabaseSave();
     }
 
     function ensureToday() {
@@ -1343,17 +1360,9 @@
           toggleTask(task.id);
         });
 
-        if (task.section === "morning") {
-          morningList.appendChild(taskEl);
-        }
-
-        if (task.section === "afternoon") {
-          afternoonList.appendChild(taskEl);
-        }
-
-        if (task.section === "night") {
-          nightList.appendChild(taskEl);
-        }
+        if (task.section === "morning") morningList.appendChild(taskEl);
+        if (task.section === "afternoon") afternoonList.appendChild(taskEl);
+        if (task.section === "night") nightList.appendChild(taskEl);
       }
     }
 
@@ -1465,11 +1474,12 @@
 
     function renderReview() {
       const today = ensureToday();
-      missedReasonBox.value = today.missedReason || "";
 
-      const usedDays = Object.keys(state.days)
-        .sort()
-        .slice(-7);
+      if (document.activeElement !== missedReasonBox) {
+        missedReasonBox.value = today.missedReason || "";
+      }
+
+      const usedDays = Object.keys(state.days).sort().slice(-7);
 
       const missedCounts = TASKS.map(task => {
         let missed = 0;
@@ -1533,14 +1543,14 @@
       renderReview();
     }
 
-    function unlock() {
+    async function unlock() {
       const value = passwordInput.value.trim();
 
       if (value === PASSWORD) {
-        localStorage.setItem(SESSION_KEY, "true");
         loginError.textContent = "";
         passwordInput.value = "";
         showApp();
+        await loadSupabaseState();
         return;
       }
 
@@ -1586,7 +1596,6 @@
     });
 
     logoutBtn.addEventListener("click", () => {
-      localStorage.removeItem(SESSION_KEY);
       showLogin();
     });
 
@@ -1603,12 +1612,7 @@
     });
 
     setupTabs();
-
-    if (localStorage.getItem(SESSION_KEY) === "true") {
-      showApp();
-    } else {
-      showLogin();
-    }
+    showLogin();
   </script>
 </body>
 </html>
