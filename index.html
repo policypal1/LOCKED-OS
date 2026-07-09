@@ -1,19 +1,11 @@
-from pathlib import Path
-import zipfile
-
-out_dir = Path("/mnt/data/checklist-password-supabase")
-out_dir.mkdir(exist_ok=True)
-
-index_html = r'''<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Daily Checklist</title>
 
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M68 13 77 22 48 56 39 47 68 13Z' fill='%23f8d38a'/%3E%3Cpath d='M31 58 42 47 53 58 42 69 31 58Z' fill='%23b9852c'/%3E%3Cpath d='M21 77 36 62 44 70 29 85 21 77Z' fill='%23fff8ec'/%3E%3C/svg%3E" />
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M68 13 77 22 48 56 39 47 68 13Z' fill='%232f8f56'/%3E%3Cpath d='M31 58 42 47 53 58 42 69 31 58Z' fill='%239b6a2f'/%3E%3Cpath d='M21 77 36 62 44 70 29 85 21 77Z' fill='%23fff8ec'/%3E%3C/svg%3E" />
 
   <style>
     :root {
@@ -23,10 +15,12 @@ index_html = r'''<!doctype html>
       --text: #21180f;
       --muted: #7a6b59;
       --line: rgba(42, 30, 18, 0.12);
-      --line-strong: rgba(42, 30, 18, 0.2);
+      --line-strong: rgba(42, 30, 18, 0.22);
       --accent: #9b6a2f;
       --accent-dark: #6f4617;
-      --good: #2f8f56;
+      --green: #2f8f56;
+      --green-dark: #1f6f3f;
+      --green-soft: rgba(47, 143, 86, 0.12);
       --bad: #b64242;
       --shadow: 0 18px 50px rgba(55, 38, 18, 0.12);
       --radius: 24px;
@@ -36,6 +30,10 @@ index_html = r'''<!doctype html>
       box-sizing: border-box;
     }
 
+    html {
+      scroll-behavior: smooth;
+    }
+
     body {
       margin: 0;
       min-height: 100vh;
@@ -43,7 +41,7 @@ index_html = r'''<!doctype html>
       color: var(--text);
       background:
         radial-gradient(circle at top left, rgba(255, 226, 173, 0.85), transparent 28rem),
-        radial-gradient(circle at top right, rgba(203, 153, 77, 0.22), transparent 24rem),
+        radial-gradient(circle at top right, rgba(47, 143, 86, 0.16), transparent 24rem),
         linear-gradient(135deg, #fff8ec, var(--bg));
       padding: 24px;
     }
@@ -78,7 +76,7 @@ index_html = r'''<!doctype html>
       padding: 28px;
       border: 1px solid var(--line);
       border-radius: 30px;
-      background: rgba(255, 250, 241, 0.86);
+      background: rgba(255, 250, 241, 0.88);
       box-shadow: var(--shadow);
       backdrop-filter: blur(16px);
     }
@@ -125,12 +123,46 @@ index_html = r'''<!doctype html>
       font-weight: 800;
     }
 
+    .login-row input:focus {
+      border-color: rgba(47, 143, 86, 0.65);
+      box-shadow: 0 0 0 4px rgba(47, 143, 86, 0.12);
+    }
+
     .error-text {
       min-height: 20px;
       margin-top: 10px;
       color: var(--bad);
       font-size: 0.9rem;
       font-weight: 800;
+    }
+
+    .btn {
+      min-height: 44px;
+      padding: 0 18px;
+      border-radius: 999px;
+      background: var(--text);
+      color: var(--card);
+      font-weight: 950;
+      transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+    }
+
+    .btn:hover {
+      opacity: 0.92;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn.secondary {
+      background: rgba(255, 255, 255, 0.55);
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
+    .btn.green {
+      background: var(--green);
+      color: #fff;
     }
 
     .top {
@@ -148,12 +180,19 @@ index_html = r'''<!doctype html>
       letter-spacing: -0.09em;
     }
 
+    .subhead {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
     .tabs {
       display: flex;
       gap: 8px;
       padding: 6px;
       border: 1px solid var(--line);
-      background: rgba(255, 250, 241, 0.62);
+      background: rgba(255, 250, 241, 0.68);
       border-radius: 999px;
       box-shadow: 0 10px 28px rgba(55, 38, 18, 0.08);
       backdrop-filter: blur(16px);
@@ -203,7 +242,7 @@ index_html = r'''<!doctype html>
     }
 
     .card {
-      background: rgba(255, 250, 241, 0.82);
+      background: rgba(255, 250, 241, 0.84);
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
@@ -224,9 +263,10 @@ index_html = r'''<!doctype html>
       width: 148px;
       height: 148px;
       border-radius: 50%;
-      background: conic-gradient(var(--accent) 0deg, rgba(42, 30, 18, 0.09) 0deg);
+      background: conic-gradient(var(--green) 0deg, rgba(42, 30, 18, 0.09) 0deg);
       display: grid;
       place-items: center;
+      transition: background 0.2s ease;
     }
 
     .circle-inner {
@@ -285,6 +325,14 @@ index_html = r'''<!doctype html>
       letter-spacing: -0.03em;
     }
 
+    .section-header p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-weight: 750;
+      line-height: 1.35;
+      font-size: 0.92rem;
+    }
+
     .checklist {
       display: grid;
       gap: 8px;
@@ -327,13 +375,13 @@ index_html = r'''<!doctype html>
     }
 
     .task.done {
-      border-color: rgba(47, 143, 86, 0.22);
+      border-color: rgba(47, 143, 86, 0.28);
       background: rgba(47, 143, 86, 0.09);
     }
 
     .task.done .box {
-      background: var(--good);
-      border-color: var(--good);
+      background: var(--green);
+      border-color: var(--green);
     }
 
     .task-title {
@@ -377,8 +425,8 @@ index_html = r'''<!doctype html>
       align-items: center;
       padding: 0 10px;
       border-radius: 999px;
-      background: rgba(155, 106, 47, 0.1);
-      color: var(--accent-dark);
+      background: rgba(47, 143, 86, 0.12);
+      color: var(--green-dark);
       font-size: 0.75rem;
       font-weight: 950;
     }
@@ -410,7 +458,7 @@ index_html = r'''<!doctype html>
       display: block;
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, var(--accent-dark), var(--accent));
+      background: linear-gradient(90deg, var(--green-dark), var(--green));
       border-radius: inherit;
       transition: width 0.2s ease;
     }
@@ -448,13 +496,13 @@ index_html = r'''<!doctype html>
       flex-direction: column;
       justify-content: center;
       background:
-        radial-gradient(circle at top right, rgba(155, 106, 47, 0.2), transparent 18rem),
+        radial-gradient(circle at top right, rgba(47, 143, 86, 0.18), transparent 18rem),
         rgba(255, 250, 241, 0.84);
     }
 
     .eyebrow {
       margin: 0 0 8px;
-      color: var(--accent-dark);
+      color: var(--green-dark);
       font-size: 0.74rem;
       font-weight: 950;
       letter-spacing: 0.14em;
@@ -499,192 +547,98 @@ index_html = r'''<!doctype html>
 
     .game-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 18px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
     }
 
-    .game-card {
+    .stat-card {
+      padding: 20px;
+    }
+
+    .stat-card small {
+      display: block;
+      color: var(--muted);
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.72rem;
+      margin-bottom: 8px;
+    }
+
+    .stat-card strong {
+      display: block;
+      font-size: 2.3rem;
+      letter-spacing: -0.08em;
+      line-height: 1;
+    }
+
+    .rank-ladder {
+      margin-top: 18px;
       padding: 18px;
     }
 
-    .game-card h3 {
-      margin: 0 0 12px;
-      font-size: 1.1rem;
-      letter-spacing: -0.035em;
-    }
-
-    .stat-grid {
+    .ladder-list {
       display: grid;
-      grid-template-columns: 1fr 1fr;
       gap: 10px;
-    }
-
-    .mini-stat {
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.48);
-      border-radius: 16px;
-      padding: 12px;
-    }
-
-    .mini-stat strong {
-      display: block;
-      font-size: 1.75rem;
-      line-height: 1;
-      letter-spacing: -0.07em;
-    }
-
-    .mini-stat span {
-      display: block;
-      margin-top: 6px;
-      color: var(--muted);
-      font-size: 0.78rem;
-      font-weight: 850;
-    }
-
-    .week {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 7px;
-    }
-
-    .day-dot {
-      display: grid;
-      gap: 7px;
-      justify-items: center;
-      color: var(--muted);
-      font-size: 0.72rem;
-      font-weight: 900;
-    }
-
-    .dot {
-      width: 31px;
-      height: 31px;
-      display: grid;
-      place-items: center;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.5);
-      color: transparent;
-      font-size: 0.8rem;
-      font-weight: 950;
-    }
-
-    .dot.done {
-      background: var(--good);
-      color: white;
-      border-color: var(--good);
-    }
-
-    .dot.today {
-      box-shadow: 0 0 0 4px rgba(155, 106, 47, 0.12);
-      border-color: rgba(155, 106, 47, 0.35);
-    }
-
-    .ladder {
-      display: grid;
-      gap: 9px;
+      margin-top: 14px;
     }
 
     .ladder-item {
       display: grid;
       grid-template-columns: 34px 1fr auto;
-      gap: 10px;
+      gap: 12px;
       align-items: center;
-      padding: 11px;
+      padding: 12px;
       border: 1px solid var(--line);
       border-radius: 16px;
-      background: rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.42);
     }
 
-    .ladder-item.unlocked {
-      background: rgba(47, 143, 86, 0.1);
-      border-color: rgba(47, 143, 86, 0.2);
+    .ladder-item.active {
+      border-color: rgba(47, 143, 86, 0.38);
+      background: var(--green-soft);
     }
 
-    .medal {
+    .ladder-dot {
       width: 34px;
       height: 34px;
+      border-radius: 12px;
+      background: rgba(42, 30, 18, 0.08);
       display: grid;
       place-items: center;
-      border-radius: 13px;
-      color: var(--accent-dark);
-      background: rgba(155, 106, 47, 0.1);
       font-weight: 950;
     }
 
-    .ladder-item.unlocked .medal {
-      color: white;
-      background: var(--good);
+    .ladder-item.active .ladder-dot {
+      background: var(--green);
+      color: #fff;
     }
 
-    .ladder-item strong {
-      display: block;
-      letter-spacing: -0.02em;
+    .ladder-name {
+      font-weight: 950;
     }
 
-    .ladder-item span {
-      display: block;
-      margin-top: 2px;
+    .ladder-days {
       color: var(--muted);
-      font-size: 0.8rem;
-      font-weight: 800;
+      font-weight: 850;
+      font-size: 0.88rem;
     }
 
-    .wide {
-      grid-column: span 2;
-    }
-
-    .cloud-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+    .actions {
+      display: flex;
       gap: 10px;
-      margin-top: 12px;
+      flex-wrap: wrap;
+      margin-top: 14px;
     }
 
-    .button {
-      min-height: 42px;
-      border-radius: 999px;
-      padding: 0 15px;
-      color: white;
-      background: linear-gradient(135deg, var(--accent-dark), var(--accent));
-      font-weight: 950;
-    }
-
-    .ghost-button {
-      min-height: 42px;
-      border-radius: 999px;
-      padding: 0 15px;
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.58);
-      border: 1px solid var(--line);
-      font-weight: 950;
-    }
-
-    @media (max-width: 940px) {
-      .top {
-        align-items: start;
-        flex-direction: column;
-      }
-
-      .layout,
-      .game-hero,
-      .game-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .mini-side {
-        position: static;
-      }
-
-      .wide {
-        grid-column: auto;
-      }
-    }
-
-    @media (max-width: 640px) {
+    @media (max-width: 860px) {
       body {
         padding: 14px;
+      }
+
+      .top {
+        align-items: stretch;
+        flex-direction: column;
       }
 
       .tabs {
@@ -695,13 +649,28 @@ index_html = r'''<!doctype html>
         flex: 1;
       }
 
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .mini-side {
+        position: static;
+      }
+
       .summary {
         grid-template-columns: 1fr;
-        justify-items: center;
         text-align: center;
       }
 
-      .cloud-row {
+      .circle {
+        margin: 0 auto;
+      }
+
+      .game-hero {
+        grid-template-columns: 1fr;
+      }
+
+      .game-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -709,747 +678,609 @@ index_html = r'''<!doctype html>
 </head>
 
 <body>
-  <section class="login-screen" id="loginScreen">
-    <div class="login-card">
-      <div class="login-icon">⚔</div>
-      <h1>Daily Checklist</h1>
-      <p>Enter the password to open your tracker.</p>
+  <main class="app">
+    <section id="loginScreen" class="login-screen">
+      <div class="login-card">
+        <div class="login-icon">✓</div>
+        <h1>Locked OS</h1>
+        <p>Enter the password to unlock your daily checklist.</p>
 
-      <div class="login-row">
-        <input id="passwordInput" type="password" inputmode="numeric" placeholder="Password" autocomplete="current-password" />
-        <button class="button" id="unlockBtn">Unlock</button>
-      </div>
-
-      <div class="error-text" id="loginError"></div>
-    </div>
-  </section>
-
-  <main class="app hidden" id="app">
-    <header class="top">
-      <h1>Daily Checklist</h1>
-
-      <nav class="tabs" aria-label="App tabs">
-        <button class="tab active" data-tab="checklist">Checklist</button>
-        <button class="tab" data-tab="game">Gamification</button>
-      </nav>
-    </header>
-
-    <section class="page active" id="checklistPage">
-      <div class="layout">
-        <div>
-          <section class="card summary">
-            <div class="circle" id="progressCircle">
-              <div class="circle-inner">
-                <div class="percent" id="percentText">0%</div>
-                <div class="done-count" id="countText">0 / 0</div>
-              </div>
-            </div>
-
-            <div>
-              <p class="quote" id="quoteText">Win the morning.</p>
-              <p class="tasks-left" id="tasksLeftText">0 tasks left today.</p>
-            </div>
-          </section>
-
-          <section class="card section">
-            <div class="section-header">
-              <h3>Morning</h3>
-            </div>
-            <div class="checklist" id="morningList"></div>
-          </section>
-
-          <section class="card section" id="afternoonSection">
-            <div class="section-header">
-              <h3>Afternoon</h3>
-            </div>
-            <div class="checklist" id="afternoonList"></div>
-          </section>
-
-          <section class="card section" id="nightSection">
-            <div class="section-header">
-              <h3>Night</h3>
-            </div>
-            <div class="checklist" id="nightList"></div>
-          </section>
+        <div class="login-row">
+          <input id="passwordInput" type="password" inputmode="numeric" placeholder="Password" autocomplete="off" />
+          <button id="unlockBtn" class="btn green">Unlock</button>
         </div>
 
-        <aside class="mini-side">
-          <section class="card panel-card">
-            <div class="panel-title">
-              <h3>Current Rank</h3>
-              <span class="badge" id="miniRankBadge">Starter</span>
-            </div>
-
-            <h4 class="rank-name" id="miniRankName">Starter</h4>
-            <p class="rank-copy" id="miniRankCopy">Complete perfect days to rank up.</p>
-            <div class="bar"><span id="miniRankBar"></span></div>
-          </section>
-
-          <section class="card panel-card">
-            <div class="panel-title">
-              <h3>Next Reward</h3>
-              <span class="badge">unlock</span>
-            </div>
-
-            <div class="reward">
-              <strong id="miniRewardTitle">3-day streak reward</strong>
-              <p id="miniRewardText">Unlock 1 hour of guilt-free gaming.</p>
-            </div>
-          </section>
-        </aside>
+        <div id="loginError" class="error-text"></div>
       </div>
     </section>
 
-    <section class="page" id="gamePage">
-      <div class="game-hero">
-        <section class="card game-title-card">
-          <p class="eyebrow">Gamification</p>
-          <h2>Streak System</h2>
-          <p>Perfect days build your streak. Your streak controls rank, rewards, and weekly progress. No streak freeze, no excuses, just the boxes.</p>
-        </section>
+    <section id="mainApp" class="hidden">
+      <header class="top">
+        <div>
+          <h1>Daily Checklist</h1>
+          <p class="subhead">One day at a time. 13 tasks. Finish the basics, then move.</p>
+        </div>
 
-        <section class="card big-streak-card">
-          <strong id="gameCurrentStreak">0</strong>
-          <span>current day streak</span>
-        </section>
-      </div>
+        <nav class="tabs" aria-label="App tabs">
+          <button class="tab active" data-tab="checklistPage">Checklist</button>
+          <button class="tab" data-tab="gamePage">Gamification</button>
+        </nav>
+      </header>
 
-      <div class="game-grid">
-        <section class="card game-card">
-          <h3>Streak Stats</h3>
-          <div class="stat-grid">
-            <div class="mini-stat">
-              <strong id="gameBestStreak">0</strong>
-              <span>best streak</span>
-            </div>
-            <div class="mini-stat">
-              <strong id="gamePerfectDays">0</strong>
-              <span>perfect days</span>
-            </div>
-            <div class="mini-stat">
-              <strong id="gameTodayPercent">0%</strong>
-              <span>today score</span>
-            </div>
-            <div class="mini-stat">
-              <strong id="gameWeekScore">0/7</strong>
-              <span>this week</span>
-            </div>
+      <section id="checklistPage" class="page active">
+        <div class="layout">
+          <div>
+            <section class="card summary">
+              <div id="progressCircle" class="circle">
+                <div class="circle-inner">
+                  <div id="percent" class="percent">0%</div>
+                  <div id="doneCount" class="done-count">0 / 13</div>
+                </div>
+              </div>
+
+              <div>
+                <p id="dailyQuote" class="quote">Win today. No drama.</p>
+                <p id="tasksLeft" class="tasks-left">You have 13 tasks left today.</p>
+
+                <div class="actions">
+                  <button id="resetTodayBtn" class="btn secondary">Reset today</button>
+                  <button id="logoutBtn" class="btn secondary">Lock app</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="card section">
+              <div class="section-header">
+                <h3>Morning</h3>
+                <p>Do these first. No scrolling, no wasting time, just start the day correctly.</p>
+              </div>
+              <div id="morningList" class="checklist"></div>
+            </section>
+
+            <section class="card section">
+              <div class="section-header">
+                <h3>Afternoon</h3>
+                <p>The non-negotiable movement task.</p>
+              </div>
+              <div id="afternoonList" class="checklist"></div>
+            </section>
+
+            <section class="card section">
+              <div class="section-header">
+                <h3>Night</h3>
+                <p>Start shutting the day down at 9 PM.</p>
+              </div>
+              <div id="nightList" class="checklist"></div>
+            </section>
+          </div>
+
+          <aside class="mini-side">
+            <section class="card panel-card">
+              <div class="panel-title">
+                <h3>Current rank</h3>
+                <span id="rankBadge" class="badge">Day 0</span>
+              </div>
+
+              <h2 id="rankName" class="rank-name">Starter</h2>
+              <p id="rankCopy" class="rank-copy">Build the first clean day. The streak starts when all 13 tasks are done.</p>
+
+              <div class="bar">
+                <span id="rankProgress"></span>
+              </div>
+            </section>
+
+            <section class="card panel-card">
+              <div class="panel-title">
+                <h3>7-day reward</h3>
+                <span id="rewardBadge" class="badge">Locked</span>
+              </div>
+
+              <div class="reward">
+                <strong>Guts Racing seat cover</strong>
+                <p id="rewardText">Complete 7 full days in a row to unlock it.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section id="gamePage" class="page">
+        <div class="game-hero">
+          <section class="card game-title-card">
+            <p class="eyebrow">Gamification</p>
+            <h2>Make the boring stuff automatic.</h2>
+            <p>
+              The point is not to make a massive routine. The point is to win the same simple day over and over until it becomes normal.
+            </p>
+          </section>
+
+          <section class="card big-streak-card">
+            <strong id="bigStreak">0</strong>
+            <span>day current streak</span>
+          </section>
+        </div>
+
+        <section class="game-grid">
+          <div class="card stat-card">
+            <small>Today</small>
+            <strong id="gameTodayPercent">0%</strong>
+          </div>
+
+          <div class="card stat-card">
+            <small>Full days completed</small>
+            <strong id="gameFullDays">0</strong>
+          </div>
+
+          <div class="card stat-card">
+            <small>Reward progress</small>
+            <strong id="gameRewardProgress">0 / 7</strong>
           </div>
         </section>
 
-        <section class="card game-card wide">
-          <h3>This Week</h3>
-          <div class="week" id="weekTracker"></div>
-          <p class="small-muted">Green means every task scheduled for that day was completed.</p>
-        </section>
-
-        <section class="card game-card wide">
-          <h3>Rank Ladder</h3>
-          <div class="ladder" id="rankLadder"></div>
-        </section>
-
-        <section class="card game-card">
-          <h3>Next Rank</h3>
-          <h4 class="rank-name" id="gameRankName">Starter</h4>
-          <p class="rank-copy" id="gameRankCopy">Complete perfect days to rank up.</p>
-          <div class="bar"><span id="gameRankBar"></span></div>
-          <p class="small-muted" id="gameRankProgress">0 / 3 days to Locked In</p>
-        </section>
-
-        <section class="card game-card wide">
-          <h3>Reward Ladder</h3>
-          <div class="ladder" id="rewardLadder"></div>
-        </section>
-
-        <section class="card game-card">
-          <h3>Cloud Sync</h3>
-          <p class="small-muted" id="syncStatus">Connecting to Supabase...</p>
-          <div class="cloud-row">
-            <button class="button" id="syncBtn">Sync now</button>
-            <button class="ghost-button" id="pullBtn">Pull cloud</button>
+        <section class="card rank-ladder">
+          <div class="panel-title">
+            <h3>Rank ladder</h3>
+            <span class="badge">Streak based</span>
           </div>
-          <button class="ghost-button" id="logoutBtn" style="width:100%; margin-top:10px;">Lock app</button>
+
+          <div id="rankLadder" class="ladder-list"></div>
         </section>
-      </div>
+      </section>
     </section>
   </main>
 
   <script>
-    /************************************************************
-     * PASSWORD + SUPABASE CONFIG
-     * This is a client-side password. It hides the app from casual access,
-     * but it is not real security because frontend code can be inspected.
-     ************************************************************/
-    const APP_PASSWORD = "2009";
+    const PASSWORD = "2009";
 
-    const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
-    const SUPABASE_TABLE = "accountability_password_state";
-    const SUPABASE_ROW_ID = "main";
-
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    const STORAGE_KEY = "dailyChecklist.passwordSupabase.v1";
-    const OLD_KEYS = [
-      "dailyChecklist.tabs.v1",
-      "simpleDailyChecklist.gamified.v1",
-      "simpleDailyChecklist.v2",
-      "simpleDailyChecklist.v1"
-    ];
+    const STORAGE_KEY = "locked_os_daily_checklist_v2";
+    const SESSION_KEY = "locked_os_unlocked";
 
     const TASKS = [
-      { id: "wake_up", section: "morning", title: "Wake up at planned time", days: "daily" },
-      { id: "water", section: "morning", title: "Drink one glass of water", days: "daily" },
-      { id: "clean_room", section: "morning", title: "Clean room", days: "daily" },
-      { id: "pray_morning", section: "morning", title: "Pray", days: "daily" },
-      { id: "trw_good_morning", section: "morning", title: "The Real World daily good morning", days: "daily" },
-      { id: "trw_lesson", section: "morning", title: "The Real World daily lesson", days: "daily" },
-      { id: "trw_puzzle", section: "morning", title: "The Real World daily puzzle", days: "daily" },
-      { id: "get_ready", section: "morning", title: "Full get ready: dressed, hygiene, hairstyle", days: "daily" },
-
-      { id: "gym", section: "afternoon", title: "Go to the gym", days: [1, 3, 5] },
-      { id: "creatine", section: "afternoon", title: "Take 5 to 10 grams of creatine", days: "daily" },
-
-      { id: "bedtime", section: "night", title: "Full bedtime routine at 8:00 PM", days: "daily" },
-      { id: "microneedle", section: "night", title: "Microneedle eyebrows", days: [3, 6] },
-      { id: "pray_night", section: "night", title: "Pray before bed", days: "daily" }
-    ];
-
-    const QUOTES = [
-      "Win the morning.",
-      "Do the first thing.",
-      "No zero days.",
-      "Discipline before comfort.",
-      "You only need to win today.",
-      "Small promises build real confidence.",
-      "Start clean. Finish clean.",
-      "Check the box.",
-      "One day at a time.",
-      "Do it before you feel like it."
+      {
+        id: "wake-up",
+        section: "morning",
+        title: "Wake up at planned time"
+      },
+      {
+        id: "water",
+        section: "morning",
+        title: "Chug one glass of water immediately after waking up"
+      },
+      {
+        id: "clean-room",
+        section: "morning",
+        title: "Clean room"
+      },
+      {
+        id: "dressed",
+        section: "morning",
+        title: "Get fully dressed"
+      },
+      {
+        id: "real-world-good-morning",
+        section: "morning",
+        title: "Real World daily good morning"
+      },
+      {
+        id: "real-world-lesson",
+        section: "morning",
+        title: "Real World daily lesson"
+      },
+      {
+        id: "real-world-puzzle",
+        section: "morning",
+        title: "Real World daily puzzle"
+      },
+      {
+        id: "eat",
+        section: "morning",
+        title: "Eat"
+      },
+      {
+        id: "accutane",
+        section: "morning",
+        title: "Take Accutane"
+      },
+      {
+        id: "gym",
+        section: "afternoon",
+        title: "Go to gym"
+      },
+      {
+        id: "bed-ready",
+        section: "night",
+        title: "Get everything ready for bed at 9 PM"
+      },
+      {
+        id: "bed-routine",
+        section: "night",
+        title: "Full bedtime routine"
+      },
+      {
+        id: "lights-out",
+        section: "night",
+        title: "Phone away and lights out on time"
+      }
     ];
 
     const RANKS = [
-      { name: "Starter", days: 0 },
-      { name: "Locked In", days: 3 },
-      { name: "Disciplined", days: 7 },
-      { name: "Machine", days: 14 },
-      { name: "Elite", days: 30 },
-      { name: "Unbreakable", days: 60 },
-      { name: "Legendary", days: 100 }
+      {
+        name: "Starter",
+        days: 0,
+        copy: "Build the first clean day. The streak starts when all 13 tasks are done."
+      },
+      {
+        name: "Locked In",
+        days: 3,
+        copy: "Three straight days means the system is starting to stick."
+      },
+      {
+        name: "Disciplined",
+        days: 7,
+        copy: "Seven days in a row. Reward unlocked."
+      },
+      {
+        name: "Machine",
+        days: 14,
+        copy: "Two weeks. This is no longer random motivation."
+      },
+      {
+        name: "Unbreakable",
+        days: 30,
+        copy: "Thirty days. This is identity-level discipline."
+      }
     ];
 
-    const REWARDS = [
-      { days: 3, title: "3-day streak reward", text: "Unlock 1 hour of guilt-free gaming." },
-      { days: 7, title: "7-day streak reward", text: "Unlock 2 hours of guilt-free gaming." },
-      { days: 14, title: "14-day streak reward", text: "Unlock 3 hours of guilt-free gaming." },
-      { days: 30, title: "30-day streak reward", text: "Unlock a full guilt-free gaming block." },
-      { days: 60, title: "60-day streak reward", text: "Unlock a major guilt-free gaming day." }
-    ];
+    const loginScreen = document.getElementById("loginScreen");
+    const mainApp = document.getElementById("mainApp");
+    const passwordInput = document.getElementById("passwordInput");
+    const unlockBtn = document.getElementById("unlockBtn");
+    const loginError = document.getElementById("loginError");
 
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
+    const progressCircle = document.getElementById("progressCircle");
+    const percentEl = document.getElementById("percent");
+    const doneCountEl = document.getElementById("doneCount");
+    const tasksLeftEl = document.getElementById("tasksLeft");
 
-    let syncTimer = null;
+    const morningList = document.getElementById("morningList");
+    const afternoonList = document.getElementById("afternoonList");
+    const nightList = document.getElementById("nightList");
+
+    const rankBadge = document.getElementById("rankBadge");
+    const rankName = document.getElementById("rankName");
+    const rankCopy = document.getElementById("rankCopy");
+    const rankProgress = document.getElementById("rankProgress");
+
+    const rewardBadge = document.getElementById("rewardBadge");
+    const rewardText = document.getElementById("rewardText");
+
+    const bigStreak = document.getElementById("bigStreak");
+    const gameTodayPercent = document.getElementById("gameTodayPercent");
+    const gameFullDays = document.getElementById("gameFullDays");
+    const gameRewardProgress = document.getElementById("gameRewardProgress");
+    const rankLadder = document.getElementById("rankLadder");
+
+    const resetTodayBtn = document.getElementById("resetTodayBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+
     let state = loadState();
 
-    function loadState() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-
-      if (raw) {
-        try {
-          return normalizeState(JSON.parse(raw));
-        } catch {
-          return normalizeState({});
-        }
-      }
-
-      for (const key of OLD_KEYS) {
-        const oldRaw = localStorage.getItem(key);
-        if (!oldRaw) continue;
-
-        try {
-          return normalizeState(JSON.parse(oldRaw));
-        } catch {}
-      }
-
-      return normalizeState({});
-    }
-
-    function normalizeState(input) {
-      return {
-        days: input.days || {},
-        bestStreak: input.bestStreak || 0,
-        updatedAt: input.updatedAt || new Date().toISOString()
-      };
-    }
-
-    function saveState({ sync = true } = {}) {
-      state.updatedAt = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-
-      if (sync) {
-        scheduleSync();
-      }
-    }
-
-    function dateKey(date = today) {
+    function getTodayKey(date = new Date()) {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     }
 
-    function getDayData(key = dateKey()) {
-      if (!state.days[key]) {
-        state.days[key] = {};
+    function addDays(date, days) {
+      const next = new Date(date);
+      next.setDate(next.getDate() + days);
+      return next;
+    }
+
+    function loadState() {
+      const fallback = {
+        days: {}
+      };
+
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (!saved || typeof saved !== "object") return fallback;
+        if (!saved.days || typeof saved.days !== "object") saved.days = {};
+        return saved;
+      } catch {
+        return fallback;
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function ensureToday() {
+      const today = getTodayKey();
+
+      if (!state.days[today]) {
+        state.days[today] = {
+          done: [],
+          completed: false
+        };
       }
 
-      return state.days[key];
-    }
-
-    function isTaskScheduled(task, date = today) {
-      const weekday = date.getDay();
-
-      if (task.days === "daily") {
-        return true;
+      if (!Array.isArray(state.days[today].done)) {
+        state.days[today].done = [];
       }
 
-      return Array.isArray(task.days) && task.days.includes(weekday);
+      return state.days[today];
     }
 
-    function getTasksForDate(date = today) {
-      return TASKS.filter(task => isTaskScheduled(task, date));
+    function getTodayDoneSet() {
+      const todayState = ensureToday();
+      return new Set(todayState.done);
     }
 
-    function getTodayTasks() {
-      return getTasksForDate(today);
-    }
+    function setTodayDoneSet(doneSet) {
+      const today = getTodayKey();
 
-    function isDone(task, key = dateKey()) {
-      return !!getDayData(key)[task.id];
-    }
-
-    function toggleTask(task) {
-      const day = getDayData();
-
-      if (day[task.id]) {
-        delete day[task.id];
-      } else {
-        day[task.id] = true;
-      }
+      state.days[today] = {
+        done: [...doneSet],
+        completed: doneSet.size === TASKS.length
+      };
 
       saveState();
-      render();
     }
 
-    function render() {
-      const tasks = getTodayTasks();
-
-      const morningTasks = tasks.filter(task => task.section === "morning");
-      const afternoonTasks = tasks.filter(task => task.section === "afternoon");
-      const nightTasks = tasks.filter(task => task.section === "night");
-
-      renderList("morningList", morningTasks);
-      renderList("afternoonList", afternoonTasks);
-      renderList("nightList", nightTasks);
-
-      document.getElementById("afternoonSection").style.display = afternoonTasks.length ? "" : "none";
-      document.getElementById("nightSection").style.display = nightTasks.length ? "" : "none";
-
-      const doneCount = tasks.filter(task => isDone(task)).length;
-      const totalCount = tasks.length;
-      const leftCount = totalCount - doneCount;
-      const percent = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
-      const degrees = Math.round((percent / 100) * 360);
-
-      document.getElementById("percentText").textContent = `${percent}%`;
-      document.getElementById("countText").textContent = `${doneCount} / ${totalCount}`;
-      document.getElementById("progressCircle").style.background =
-        `conic-gradient(var(--accent) ${degrees}deg, rgba(42, 30, 18, 0.09) ${degrees}deg)`;
-
-      document.getElementById("quoteText").textContent = getQuote(percent, doneCount);
-      document.getElementById("tasksLeftText").textContent = getTasksLeftText(leftCount, percent);
-
-      const currentStreak = calculateStreak();
-      state.bestStreak = Math.max(state.bestStreak || 0, currentStreak);
-      saveState({ sync: false });
-
-      const perfectDays = countPerfectDays();
-      const weekScore = renderWeek();
-
-      renderMiniPanel(currentStreak);
-      renderGamePage(currentStreak, perfectDays, percent, weekScore);
+    function countFullDays() {
+      return Object.values(state.days).filter(day => day && day.completed).length;
     }
 
-    function renderList(elementId, tasks) {
-      const list = document.getElementById(elementId);
-      list.innerHTML = "";
-
-      tasks.forEach(task => {
-        const item = document.createElement("div");
-        item.className = `task ${isDone(task) ? "done" : ""}`;
-        item.innerHTML = `
-          <div class="box">${isDone(task) ? "✓" : ""}</div>
-          <div class="task-title">${task.title}</div>
-        `;
-        item.addEventListener("click", () => toggleTask(task));
-        list.appendChild(item);
-      });
-    }
-
-    function getQuote(percent, doneCount) {
-      if (percent === 100) return "Checklist complete.";
-      const index = (doneCount + today.getDate()) % QUOTES.length;
-      return QUOTES[index];
-    }
-
-    function getTasksLeftText(leftCount, percent) {
-      if (percent === 100) return "Perfect day logged. Streak continues.";
-      if (leftCount === 1) return "1 task left today.";
-      return `${leftCount} tasks left today.`;
-    }
-
-    function calculateStreak() {
+    function calculateCurrentStreak() {
+      let date = new Date();
       let streak = 0;
-      const cursor = new Date();
-      cursor.setHours(12, 0, 0, 0);
+
+      const todayKey = getTodayKey(date);
+      const todayComplete = state.days[todayKey]?.completed === true;
+
+      if (!todayComplete) {
+        date = addDays(date, -1);
+      }
 
       while (true) {
-        const key = dateKey(cursor);
-        const tasksForDay = getTasksForDate(cursor);
-        const dayData = state.days[key] || {};
-        const complete = tasksForDay.length > 0 && tasksForDay.every(task => dayData[task.id]);
-
-        if (!complete) {
+        const key = getTodayKey(date);
+        if (state.days[key]?.completed === true) {
+          streak++;
+          date = addDays(date, -1);
+        } else {
           break;
         }
-
-        streak++;
-        cursor.setDate(cursor.getDate() - 1);
       }
 
       return streak;
     }
 
-    function isPerfectDay(date) {
-      const key = dateKey(date);
-      const tasksForDay = getTasksForDate(date);
-      const dayData = state.days[key] || {};
-
-      return tasksForDay.length > 0 && tasksForDay.every(task => dayData[task.id]);
-    }
-
-    function countPerfectDays() {
-      return Object.keys(state.days).filter(key => {
-        const date = new Date(`${key}T12:00:00`);
-        return isPerfectDay(date);
-      }).length;
-    }
-
-    function getRank(streak) {
+    function getCurrentRank(streak) {
       let current = RANKS[0];
-      let next = RANKS[1];
 
-      for (let i = 0; i < RANKS.length; i++) {
-        if (streak >= RANKS[i].days) {
-          current = RANKS[i];
-          next = RANKS[i + 1] || null;
+      for (const rank of RANKS) {
+        if (streak >= rank.days) {
+          current = rank;
         }
       }
 
-      const percent = next ? Math.min(100, Math.round((streak / next.days) * 100)) : 100;
-      return { current, next, percent };
+      return current;
     }
 
-    function getNextReward(streak) {
-      const next = REWARDS.find(reward => streak < reward.days);
-
-      if (next) {
-        return next;
-      }
-
-      return {
-        title: "Rewards cleared",
-        text: "You unlocked every listed reward. Keep the streak alive."
-      };
+    function getNextRank(streak) {
+      return RANKS.find(rank => rank.days > streak) || null;
     }
 
-    function renderMiniPanel(currentStreak) {
-      const rankData = getRank(currentStreak);
-      const reward = getNextReward(currentStreak);
+    function renderTaskLists() {
+      morningList.innerHTML = "";
+      afternoonList.innerHTML = "";
+      nightList.innerHTML = "";
 
-      document.getElementById("miniRankName").textContent = rankData.current.name;
-      document.getElementById("miniRankBadge").textContent = rankData.current.name;
-      document.getElementById("miniRankCopy").textContent = rankData.next
-        ? `${currentStreak} / ${rankData.next.days} days to ${rankData.next.name}.`
-        : "Max rank reached.";
-      document.getElementById("miniRankBar").style.width = `${rankData.percent}%`;
+      const doneSet = getTodayDoneSet();
 
-      document.getElementById("miniRewardTitle").textContent = reward.title;
-      document.getElementById("miniRewardText").textContent = reward.text;
-    }
+      for (const task of TASKS) {
+        const taskEl = document.createElement("button");
+        taskEl.type = "button";
+        taskEl.className = `task ${doneSet.has(task.id) ? "done" : ""}`;
+        taskEl.dataset.taskId = task.id;
 
-    function renderGamePage(currentStreak, perfectDays, todayPercent, weekScore) {
-      const rankData = getRank(currentStreak);
-
-      document.getElementById("gameCurrentStreak").textContent = currentStreak;
-      document.getElementById("gameBestStreak").textContent = state.bestStreak || 0;
-      document.getElementById("gamePerfectDays").textContent = perfectDays;
-      document.getElementById("gameTodayPercent").textContent = `${todayPercent}%`;
-      document.getElementById("gameWeekScore").textContent = `${weekScore}/7`;
-
-      document.getElementById("gameRankName").textContent = rankData.current.name;
-      document.getElementById("gameRankCopy").textContent = rankData.next
-        ? `Next rank: ${rankData.next.name}.`
-        : "Max rank reached.";
-      document.getElementById("gameRankBar").style.width = `${rankData.percent}%`;
-      document.getElementById("gameRankProgress").textContent = rankData.next
-        ? `${currentStreak} / ${rankData.next.days} days to ${rankData.next.name}`
-        : "Legendary streak.";
-
-      renderRankLadder(currentStreak);
-      renderRewardLadder(currentStreak);
-    }
-
-    function renderRankLadder(currentStreak) {
-      const ladder = document.getElementById("rankLadder");
-      ladder.innerHTML = "";
-
-      RANKS.forEach(rank => {
-        const unlocked = currentStreak >= rank.days;
-        const item = document.createElement("div");
-        item.className = `ladder-item ${unlocked ? "unlocked" : ""}`;
-        item.innerHTML = `
-          <div class="medal">${unlocked ? "✓" : rank.days}</div>
-          <div>
-            <strong>${rank.name}</strong>
-            <span>${rank.days} day streak</span>
-          </div>
-          <span class="badge">${unlocked ? "unlocked" : "locked"}</span>
+        taskEl.innerHTML = `
+          <div class="box">${doneSet.has(task.id) ? "✓" : ""}</div>
+          <div class="task-title">${task.title}</div>
         `;
-        ladder.appendChild(item);
-      });
-    }
 
-    function renderRewardLadder(currentStreak) {
-      const ladder = document.getElementById("rewardLadder");
-      ladder.innerHTML = "";
+        taskEl.addEventListener("click", () => {
+          toggleTask(task.id);
+        });
 
-      REWARDS.forEach(reward => {
-        const unlocked = currentStreak >= reward.days;
-        const item = document.createElement("div");
-        item.className = `ladder-item ${unlocked ? "unlocked" : ""}`;
-        item.innerHTML = `
-          <div class="medal">${unlocked ? "✓" : reward.days}</div>
-          <div>
-            <strong>${reward.title}</strong>
-            <span>${reward.text}</span>
-          </div>
-          <span class="badge">${unlocked ? "unlocked" : "locked"}</span>
-        `;
-        ladder.appendChild(item);
-      });
-    }
+        if (task.section === "morning") {
+          morningList.appendChild(taskEl);
+        }
 
-    function renderWeek() {
-      const tracker = document.getElementById("weekTracker");
-      tracker.innerHTML = "";
+        if (task.section === "afternoon") {
+          afternoonList.appendChild(taskEl);
+        }
 
-      const start = new Date(today);
-      const day = start.getDay();
-      const mondayOffset = day === 0 ? -6 : 1 - day;
-      start.setDate(start.getDate() + mondayOffset);
-      start.setHours(12, 0, 0, 0);
-
-      let completeCount = 0;
-      const labels = ["M", "T", "W", "T", "F", "S", "S"];
-
-      for (let i = 0; i < 7; i++) {
-        const date = new Date(start);
-        date.setDate(start.getDate() + i);
-        date.setHours(12, 0, 0, 0);
-
-        const perfect = isPerfectDay(date);
-        const isToday = dateKey(date) === dateKey(today);
-
-        if (perfect) completeCount++;
-
-        const item = document.createElement("div");
-        item.className = "day-dot";
-        item.innerHTML = `
-          <div class="dot ${perfect ? "done" : ""} ${isToday ? "today" : ""}">${perfect ? "✓" : ""}</div>
-          <span>${labels[i]}</span>
-        `;
-        tracker.appendChild(item);
+        if (task.section === "night") {
+          nightList.appendChild(taskEl);
+        }
       }
-
-      return completeCount;
     }
 
-    function switchTab(tab) {
-      document.querySelectorAll(".tab").forEach(button => {
-        button.classList.toggle("active", button.dataset.tab === tab);
-      });
+    function toggleTask(taskId) {
+      const doneSet = getTodayDoneSet();
 
-      document.getElementById("checklistPage").classList.toggle("active", tab === "checklist");
-      document.getElementById("gamePage").classList.toggle("active", tab === "game");
-    }
-
-    function unlockApp() {
-      const input = document.getElementById("passwordInput");
-      const error = document.getElementById("loginError");
-
-      if (input.value === APP_PASSWORD) {
-        sessionStorage.setItem("dailyChecklistUnlocked", "true");
-        document.getElementById("loginScreen").classList.add("hidden");
-        document.getElementById("app").classList.remove("hidden");
-        render();
-        pullFromSupabase();
-        return;
-      }
-
-      error.textContent = "Wrong password.";
-      input.value = "";
-      input.focus();
-    }
-
-    function lockApp() {
-      sessionStorage.removeItem("dailyChecklistUnlocked");
-      document.getElementById("app").classList.add("hidden");
-      document.getElementById("loginScreen").classList.remove("hidden");
-      document.getElementById("passwordInput").value = "";
-      document.getElementById("passwordInput").focus();
-    }
-
-    function scheduleSync() {
-      clearTimeout(syncTimer);
-      syncTimer = setTimeout(syncToSupabase, 900);
-    }
-
-    async function pullFromSupabase() {
-      document.getElementById("syncStatus").textContent = "Pulling cloud data...";
-
-      const { data, error } = await sb
-        .from(SUPABASE_TABLE)
-        .select("state, updated_at")
-        .eq("id", SUPABASE_ROW_ID)
-        .maybeSingle();
-
-      if (error) {
-        document.getElementById("syncStatus").textContent = `Pull error: ${error.message}`;
-        return;
-      }
-
-      if (!data?.state) {
-        document.getElementById("syncStatus").textContent = "No cloud data yet. Creating cloud row...";
-        await syncToSupabase();
-        return;
-      }
-
-      const localUpdated = new Date(state.updatedAt || 0).getTime();
-      const remoteUpdated = new Date(data.state.updatedAt || data.updated_at || 0).getTime();
-
-      if (remoteUpdated > localUpdated) {
-        state = normalizeState(data.state);
-        saveState({ sync: false });
-        render();
-        document.getElementById("syncStatus").textContent = "Cloud data loaded.";
+      if (doneSet.has(taskId)) {
+        doneSet.delete(taskId);
       } else {
-        document.getElementById("syncStatus").textContent = "Local data is already newest.";
-        await syncToSupabase();
+        doneSet.add(taskId);
+      }
+
+      setTodayDoneSet(doneSet);
+      render();
+    }
+
+    function renderProgress() {
+      const doneSet = getTodayDoneSet();
+      const done = doneSet.size;
+      const total = TASKS.length;
+      const percent = Math.round((done / total) * 100);
+      const degrees = Math.round((done / total) * 360);
+      const left = total - done;
+
+      percentEl.textContent = `${percent}%`;
+      doneCountEl.textContent = `${done} / ${total}`;
+      tasksLeftEl.textContent = left === 0
+        ? "Today is complete. Keep the streak alive tomorrow."
+        : `You have ${left} task${left === 1 ? "" : "s"} left today.`;
+
+      progressCircle.style.background = `conic-gradient(var(--green) ${degrees}deg, rgba(42, 30, 18, 0.09) ${degrees}deg)`;
+
+      gameTodayPercent.textContent = `${percent}%`;
+    }
+
+    function renderRankAndReward() {
+      const streak = calculateCurrentStreak();
+      const fullDays = countFullDays();
+      const currentRank = getCurrentRank(streak);
+      const nextRank = getNextRank(streak);
+
+      rankBadge.textContent = `Day ${streak}`;
+      rankName.textContent = currentRank.name;
+      rankCopy.textContent = currentRank.copy;
+
+      bigStreak.textContent = streak;
+      gameFullDays.textContent = fullDays;
+      gameRewardProgress.textContent = `${Math.min(streak, 7)} / 7`;
+
+      if (nextRank) {
+        const previousDays = currentRank.days;
+        const needed = nextRank.days - previousDays;
+        const currentProgress = streak - previousDays;
+        const progressPercent = Math.max(0, Math.min(100, (currentProgress / needed) * 100));
+        rankProgress.style.width = `${progressPercent}%`;
+      } else {
+        rankProgress.style.width = "100%";
+      }
+
+      if (streak >= 7) {
+        rewardBadge.textContent = "Unlocked";
+        rewardText.textContent = "You earned it. Guts Racing seat cover unlocked.";
+      } else {
+        const daysLeft = 7 - streak;
+        rewardBadge.textContent = `${daysLeft} left`;
+        rewardText.textContent = `Complete ${daysLeft} more full day${daysLeft === 1 ? "" : "s"} in a row to unlock it.`;
+      }
+
+      renderRankLadder(streak);
+    }
+
+    function renderRankLadder(streak) {
+      rankLadder.innerHTML = "";
+
+      for (const rank of RANKS) {
+        const item = document.createElement("div");
+        item.className = `ladder-item ${streak >= rank.days ? "active" : ""}`;
+
+        item.innerHTML = `
+          <div class="ladder-dot">${streak >= rank.days ? "✓" : rank.days}</div>
+          <div>
+            <div class="ladder-name">${rank.name}</div>
+            <div class="ladder-days">${rank.days} day${rank.days === 1 ? "" : "s"} required</div>
+          </div>
+          <div class="badge">${streak >= rank.days ? "Unlocked" : "Locked"}</div>
+        `;
+
+        rankLadder.appendChild(item);
       }
     }
 
-    async function syncToSupabase() {
-      document.getElementById("syncStatus").textContent = "Syncing...";
+    function render() {
+      ensureToday();
+      renderTaskLists();
+      renderProgress();
+      renderRankAndReward();
+    }
 
-      const { error } = await sb
-        .from(SUPABASE_TABLE)
-        .upsert({
-          id: SUPABASE_ROW_ID,
-          state,
-          updated_at: new Date().toISOString()
-        }, { onConflict: "id" });
+    function unlock() {
+      const value = passwordInput.value.trim();
 
-      if (error) {
-        document.getElementById("syncStatus").textContent = `Sync error: ${error.message}`;
+      if (value === PASSWORD) {
+        localStorage.setItem(SESSION_KEY, "true");
+        loginError.textContent = "";
+        passwordInput.value = "";
+        showApp();
         return;
       }
 
-      document.getElementById("syncStatus").textContent = `Synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`;
+      loginError.textContent = "Wrong password.";
+      passwordInput.select();
     }
 
-    document.querySelectorAll(".tab").forEach(button => {
-      button.addEventListener("click", () => switchTab(button.dataset.tab));
-    });
+    function showApp() {
+      loginScreen.classList.add("hidden");
+      mainApp.classList.remove("hidden");
+      render();
+    }
 
-    document.getElementById("unlockBtn").addEventListener("click", unlockApp);
-    document.getElementById("passwordInput").addEventListener("keydown", event => {
+    function showLogin() {
+      mainApp.classList.add("hidden");
+      loginScreen.classList.remove("hidden");
+      setTimeout(() => passwordInput.focus(), 50);
+    }
+
+    function setupTabs() {
+      const tabs = document.querySelectorAll(".tab");
+      const pages = document.querySelectorAll(".page");
+
+      tabs.forEach(tab => {
+        tab.addEventListener("click", () => {
+          const targetId = tab.dataset.tab;
+
+          tabs.forEach(item => item.classList.remove("active"));
+          pages.forEach(page => page.classList.remove("active"));
+
+          tab.classList.add("active");
+          document.getElementById(targetId).classList.add("active");
+        });
+      });
+    }
+
+    unlockBtn.addEventListener("click", unlock);
+
+    passwordInput.addEventListener("keydown", event => {
       if (event.key === "Enter") {
-        unlockApp();
+        unlock();
       }
     });
 
-    document.getElementById("syncBtn").addEventListener("click", syncToSupabase);
-    document.getElementById("pullBtn").addEventListener("click", pullFromSupabase);
-    document.getElementById("logoutBtn").addEventListener("click", lockApp);
+    resetTodayBtn.addEventListener("click", () => {
+      const today = getTodayKey();
 
-    if (sessionStorage.getItem("dailyChecklistUnlocked") === "true") {
-      document.getElementById("loginScreen").classList.add("hidden");
-      document.getElementById("app").classList.remove("hidden");
+      state.days[today] = {
+        done: [],
+        completed: false
+      };
+
+      saveState();
       render();
-      pullFromSupabase();
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      localStorage.removeItem(SESSION_KEY);
+      showLogin();
+    });
+
+    setupTabs();
+
+    if (localStorage.getItem(SESSION_KEY) === "true") {
+      showApp();
     } else {
-      document.getElementById("passwordInput").focus();
+      showLogin();
     }
   </script>
 </body>
 </html>
-'''
-
-schema_sql = r'''-- Password-mode Supabase schema.
--- Use this because this version does NOT use email login.
--- Run this in Supabase SQL Editor.
-
-create table if not exists public.accountability_password_state (
-  id text primary key,
-  state jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
-);
-
-alter table public.accountability_password_state enable row level security;
-
-drop policy if exists "Allow public read for password tracker" on public.accountability_password_state;
-create policy "Allow public read for password tracker"
-on public.accountability_password_state
-for select
-to anon, authenticated
-using (id = 'main');
-
-drop policy if exists "Allow public insert for password tracker" on public.accountability_password_state;
-create policy "Allow public insert for password tracker"
-on public.accountability_password_state
-for insert
-to anon, authenticated
-with check (id = 'main');
-
-drop policy if exists "Allow public update for password tracker" on public.accountability_password_state;
-create policy "Allow public update for password tracker"
-on public.accountability_password_state
-for update
-to anon, authenticated
-using (id = 'main')
-with check (id = 'main');
-'''
-
-readme = r'''# Daily Checklist Password + Supabase Version
-
-## Files
-- `index.html` - upload this to GitHub Pages
-- `schema.sql` - run this in Supabase SQL Editor
-
-## Password
-The app password is:
-
-```text
-2009
