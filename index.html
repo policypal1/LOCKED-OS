@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Daily Checklist</title>
 
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M68 13 77 22 48 56 39 47 68 13Z' fill='%232f8f56'/%3E%3Cpath d='M31 58 42 47 53 58 42 69 31 58Z' fill='%239b6a2f'/%3E%3Cpath d='M21 77 36 62 44 70 29 85 21 77Z' fill='%23fff8ec'/%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M69 10 84 25 40 69 25 54 69 10Z' fill='%23f4d28b'/%3E%3Cpath d='M20 59 41 38 48 45 27 66 20 59Z' fill='%23fff8ec'/%3E%3Cpath d='M18 68 32 54 46 68 32 82 18 68Z' fill='%232f8f56'/%3E%3Cpath d='M14 83 25 72 32 79 21 90 14 83Z' fill='%239b6a2f'/%3E%3C/svg%3E" />
 
   <style>
     :root {
@@ -21,7 +21,8 @@
       --green: #2f8f56;
       --green-dark: #1f6f3f;
       --green-soft: rgba(47, 143, 86, 0.12);
-      --bad: #b64242;
+      --red: #b64242;
+      --red-soft: rgba(182, 66, 66, 0.1);
       --shadow: 0 18px 50px rgba(55, 38, 18, 0.12);
       --radius: 24px;
     }
@@ -47,13 +48,18 @@
     }
 
     button,
-    input {
+    input,
+    textarea {
       font: inherit;
     }
 
     button {
       border: 0;
       cursor: pointer;
+    }
+
+    textarea {
+      resize: vertical;
     }
 
     .hidden {
@@ -95,9 +101,9 @@
 
     .login-card h1 {
       margin: 0;
-      font-size: 2.6rem;
-      letter-spacing: -0.09em;
-      line-height: 0.92;
+      font-size: 2.45rem;
+      letter-spacing: -0.035em;
+      line-height: 0.98;
     }
 
     .login-card p {
@@ -131,7 +137,7 @@
     .error-text {
       min-height: 20px;
       margin-top: 10px;
-      color: var(--bad);
+      color: var(--red);
       font-size: 0.9rem;
       font-weight: 800;
     }
@@ -175,16 +181,9 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(2.3rem, 6vw, 4.25rem);
-      line-height: 0.9;
-      letter-spacing: -0.09em;
-    }
-
-    .subhead {
-      margin: 10px 0 0;
-      color: var(--muted);
-      font-weight: 800;
-      line-height: 1.4;
+      font-size: clamp(2.25rem, 5.5vw, 4rem);
+      line-height: 1;
+      letter-spacing: -0.035em;
     }
 
     .tabs {
@@ -206,6 +205,7 @@
       color: var(--muted);
       font-weight: 950;
       transition: background .15s ease, color .15s ease;
+      white-space: nowrap;
     }
 
     .tab.active {
@@ -283,7 +283,7 @@
     .percent {
       font-size: 2rem;
       font-weight: 950;
-      letter-spacing: -0.08em;
+      letter-spacing: -0.04em;
       line-height: 1;
     }
 
@@ -296,9 +296,9 @@
 
     .quote {
       margin: 0;
-      font-size: clamp(1.45rem, 4vw, 2.35rem);
-      line-height: 1;
-      letter-spacing: -0.07em;
+      font-size: clamp(1.55rem, 4vw, 2.4rem);
+      line-height: 1.08;
+      letter-spacing: -0.035em;
       font-weight: 950;
     }
 
@@ -317,33 +317,86 @@
       padding: 17px 20px;
       border-bottom: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.35);
+      text-align: left;
     }
 
     .section-header h3 {
       margin: 0;
       font-size: 1.15rem;
-      letter-spacing: -0.03em;
+      letter-spacing: -0.015em;
     }
 
     .section-header p {
       margin: 5px 0 0;
       color: var(--muted);
       font-weight: 750;
-      line-height: 1.35;
+      line-height: 1.45;
       font-size: 0.92rem;
+    }
+
+    .phone-lock {
+      margin: 12px 12px 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.46);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .phone-lock.locked {
+      border-color: rgba(182, 66, 66, 0.24);
+      background: var(--red-soft);
+    }
+
+    .phone-lock.unlocked {
+      border-color: rgba(47, 143, 86, 0.28);
+      background: var(--green-soft);
+    }
+
+    .phone-lock strong {
+      display: block;
+      letter-spacing: -0.015em;
+    }
+
+    .phone-lock span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 750;
+      line-height: 1.35;
+    }
+
+    .lock-badge {
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: var(--text);
+      color: var(--card);
+      font-size: 0.78rem;
+      font-weight: 950;
+      white-space: nowrap;
     }
 
     .checklist {
       display: grid;
       gap: 8px;
       padding: 12px;
+      text-align: left;
     }
 
     .task {
+      width: 100%;
       display: grid;
       grid-template-columns: 30px 1fr;
       gap: 12px;
       align-items: center;
+      text-align: left;
       padding: 14px;
       border: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.42);
@@ -386,7 +439,8 @@
 
     .task-title {
       font-weight: 850;
-      letter-spacing: -0.015em;
+      letter-spacing: -0.005em;
+      line-height: 1.35;
     }
 
     .task.done .task-title {
@@ -416,7 +470,7 @@
     .panel-title h3 {
       margin: 0;
       font-size: 1.1rem;
-      letter-spacing: -0.035em;
+      letter-spacing: -0.02em;
     }
 
     .badge {
@@ -429,13 +483,14 @@
       color: var(--green-dark);
       font-size: 0.75rem;
       font-weight: 950;
+      white-space: nowrap;
     }
 
     .rank-name {
       margin: 0;
       font-size: 2rem;
-      letter-spacing: -0.07em;
-      line-height: 1;
+      letter-spacing: -0.035em;
+      line-height: 1.05;
     }
 
     .rank-copy,
@@ -472,7 +527,7 @@
 
     .reward strong {
       display: block;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.01em;
     }
 
     .reward p {
@@ -512,8 +567,8 @@
     .game-title-card h2 {
       margin: 0;
       font-size: clamp(2rem, 5vw, 4rem);
-      line-height: 0.9;
-      letter-spacing: -0.09em;
+      line-height: 1;
+      letter-spacing: -0.035em;
     }
 
     .game-title-card p {
@@ -534,8 +589,8 @@
     .big-streak-card strong {
       display: block;
       font-size: clamp(4rem, 10vw, 7rem);
-      line-height: 0.85;
-      letter-spacing: -0.12em;
+      line-height: 0.9;
+      letter-spacing: -0.06em;
     }
 
     .big-streak-card span {
@@ -568,7 +623,7 @@
     .stat-card strong {
       display: block;
       font-size: 2.3rem;
-      letter-spacing: -0.08em;
+      letter-spacing: -0.04em;
       line-height: 1;
     }
 
@@ -624,6 +679,98 @@
       font-size: 0.88rem;
     }
 
+    .review-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .review-card {
+      padding: 20px;
+    }
+
+    .review-card h2 {
+      margin: 0;
+      font-size: clamp(1.6rem, 4vw, 2.6rem);
+      line-height: 1.05;
+      letter-spacing: -0.035em;
+    }
+
+    .review-card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-weight: 750;
+    }
+
+    .missed-box {
+      width: 100%;
+      min-height: 150px;
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.58);
+      color: var(--text);
+      padding: 14px;
+      outline: none;
+      font-weight: 750;
+      line-height: 1.45;
+    }
+
+    .missed-box:focus {
+      border-color: rgba(47, 143, 86, 0.65);
+      box-shadow: 0 0 0 4px rgba(47, 143, 86, 0.12);
+    }
+
+    .missed-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .missed-item {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.44);
+    }
+
+    .missed-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .missed-name {
+      font-weight: 900;
+      line-height: 1.35;
+    }
+
+    .missed-count {
+      color: var(--red);
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .missed-bar {
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(42, 30, 18, 0.08);
+    }
+
+    .missed-bar span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: var(--red);
+    }
+
     .actions {
       display: flex;
       gap: 10px;
@@ -643,6 +790,8 @@
 
       .tabs {
         width: 100%;
+        overflow-x: auto;
+        border-radius: 18px;
       }
 
       .tab {
@@ -659,11 +808,11 @@
 
       .summary {
         grid-template-columns: 1fr;
-        text-align: center;
+        text-align: left;
       }
 
       .circle {
-        margin: 0 auto;
+        margin: 0;
       }
 
       .game-hero {
@@ -673,6 +822,24 @@
       .game-grid {
         grid-template-columns: 1fr;
       }
+
+      .review-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .phone-lock {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .ladder-item {
+        grid-template-columns: 34px 1fr;
+      }
+
+      .ladder-item .badge {
+        grid-column: 2;
+        width: max-content;
+      }
     }
   </style>
 </head>
@@ -681,7 +848,7 @@
   <main class="app">
     <section id="loginScreen" class="login-screen">
       <div class="login-card">
-        <div class="login-icon">✓</div>
+        <div class="login-icon">⚔</div>
         <h1>Locked OS</h1>
         <p>Enter the password to unlock your daily checklist.</p>
 
@@ -698,12 +865,12 @@
       <header class="top">
         <div>
           <h1>Daily Checklist</h1>
-          <p class="subhead">One day at a time. 13 tasks. Finish the basics, then move.</p>
         </div>
 
         <nav class="tabs" aria-label="App tabs">
           <button class="tab active" data-tab="checklistPage">Checklist</button>
           <button class="tab" data-tab="gamePage">Gamification</button>
+          <button class="tab" data-tab="reviewPage">Review</button>
         </nav>
       </header>
 
@@ -714,33 +881,37 @@
               <div id="progressCircle" class="circle">
                 <div class="circle-inner">
                   <div id="percent" class="percent">0%</div>
-                  <div id="doneCount" class="done-count">0 / 13</div>
+                  <div id="doneCount" class="done-count">0 / 14</div>
                 </div>
               </div>
 
               <div>
                 <p id="dailyQuote" class="quote">Win today. No drama.</p>
-                <p id="tasksLeft" class="tasks-left">You have 13 tasks left today.</p>
-
-                <div class="actions">
-                  <button id="resetTodayBtn" class="btn secondary">Reset today</button>
-                  <button id="logoutBtn" class="btn secondary">Lock app</button>
-                </div>
+                <p id="tasksLeft" class="tasks-left">You have 14 tasks left today.</p>
               </div>
             </section>
 
             <section class="card section">
               <div class="section-header">
                 <h3>Morning</h3>
-                <p>Do these first. No scrolling, no wasting time, just start the day correctly.</p>
+                <p>No scrolling before all of these tasks are done. Phone unlocks after the morning list is complete.</p>
               </div>
+
+              <div id="phoneLockCard" class="phone-lock locked">
+                <div>
+                  <strong id="phoneLockTitle">Phone locked</strong>
+                  <span id="phoneLockText">Finish every morning task before touching your phone.</span>
+                </div>
+                <div id="phoneLockBadge" class="lock-badge">Locked</div>
+              </div>
+
               <div id="morningList" class="checklist"></div>
             </section>
 
             <section class="card section">
               <div class="section-header">
                 <h3>Afternoon</h3>
-                <p>The non-negotiable movement task.</p>
+                <p>Gym window: 5 PM to 10 PM. The goal is to show up every day.</p>
               </div>
               <div id="afternoonList" class="checklist"></div>
             </section>
@@ -762,7 +933,7 @@
               </div>
 
               <h2 id="rankName" class="rank-name">Starter</h2>
-              <p id="rankCopy" class="rank-copy">Build the first clean day. The streak starts when all 13 tasks are done.</p>
+              <p id="rankCopy" class="rank-copy">Build the first clean day. The streak starts when all tasks are done.</p>
 
               <div class="bar">
                 <span id="rankProgress"></span>
@@ -790,8 +961,12 @@
             <p class="eyebrow">Gamification</p>
             <h2>Make the boring stuff automatic.</h2>
             <p>
-              The point is not to make a massive routine. The point is to win the same simple day over and over until it becomes normal.
+              The goal is not a massive routine. The goal is to win the same simple day over and over until discipline becomes normal.
             </p>
+
+            <div class="actions">
+              <button id="logoutBtn" class="btn secondary">Lock app</button>
+            </div>
           </section>
 
           <section class="card big-streak-card">
@@ -802,13 +977,13 @@
 
         <section class="game-grid">
           <div class="card stat-card">
-            <small>Today</small>
-            <strong id="gameTodayPercent">0%</strong>
+            <small>Checklist streak</small>
+            <strong id="gameChecklistStreak">0</strong>
           </div>
 
           <div class="card stat-card">
-            <small>Full days completed</small>
-            <strong id="gameFullDays">0</strong>
+            <small>Gym streak</small>
+            <strong id="gameGymStreak">0</strong>
           </div>
 
           <div class="card stat-card">
@@ -820,11 +995,35 @@
         <section class="card rank-ladder">
           <div class="panel-title">
             <h3>Rank ladder</h3>
-            <span class="badge">Streak based</span>
+            <span class="badge">No freezes</span>
           </div>
 
           <div id="rankLadder" class="ladder-list"></div>
         </section>
+      </section>
+
+      <section id="reviewPage" class="page">
+        <div class="review-grid">
+          <section class="card review-card">
+            <p class="eyebrow">Missed day reason</p>
+            <h2>No excuses, just the real reason.</h2>
+            <p>
+              If the day goes bad, write exactly why. This is not for guilt. It is so you can see the pattern and fix it.
+            </p>
+
+            <textarea id="missedReasonBox" class="missed-box" placeholder="Why did I miss today? What caused it? What needs to change tomorrow?"></textarea>
+          </section>
+
+          <section class="card review-card">
+            <p class="eyebrow">Weekly review</p>
+            <h2>Most missed tasks</h2>
+            <p>
+              This shows the tasks you missed most over the last 7 days you used the checklist.
+            </p>
+
+            <div id="missedTasksList" class="missed-list"></div>
+          </section>
+        </div>
       </section>
     </section>
   </main>
@@ -832,7 +1031,7 @@
   <script>
     const PASSWORD = "2009";
 
-    const STORAGE_KEY = "locked_os_daily_checklist_v2";
+    const STORAGE_KEY = "locked_os_daily_checklist_v3";
     const SESSION_KEY = "locked_os_unlocked";
 
     const TASKS = [
@@ -854,7 +1053,7 @@
       {
         id: "dressed",
         section: "morning",
-        title: "Get fully dressed"
+        title: "Get fully dressed and ready for the day"
       },
       {
         id: "real-world-good-morning",
@@ -872,9 +1071,9 @@
         title: "Real World daily puzzle"
       },
       {
-        id: "eat",
+        id: "breakfast",
         section: "morning",
-        title: "Eat"
+        title: "Eat breakfast"
       },
       {
         id: "accutane",
@@ -884,12 +1083,17 @@
       {
         id: "gym",
         section: "afternoon",
-        title: "Go to gym"
+        title: "Go to gym between 5 PM and 10 PM"
       },
       {
         id: "bed-ready",
         section: "night",
         title: "Get everything ready for bed at 9 PM"
+      },
+      {
+        id: "reading",
+        section: "night",
+        title: "Read for 20 minutes"
       },
       {
         id: "bed-routine",
@@ -903,11 +1107,15 @@
       }
     ];
 
+    const MORNING_TASK_IDS = TASKS
+      .filter(task => task.section === "morning")
+      .map(task => task.id);
+
     const RANKS = [
       {
         name: "Starter",
         days: 0,
-        copy: "Build the first clean day. The streak starts when all 13 tasks are done."
+        copy: "Build the first clean day. The streak starts when all tasks are done."
       },
       {
         name: "Locked In",
@@ -946,6 +1154,11 @@
     const afternoonList = document.getElementById("afternoonList");
     const nightList = document.getElementById("nightList");
 
+    const phoneLockCard = document.getElementById("phoneLockCard");
+    const phoneLockTitle = document.getElementById("phoneLockTitle");
+    const phoneLockText = document.getElementById("phoneLockText");
+    const phoneLockBadge = document.getElementById("phoneLockBadge");
+
     const rankBadge = document.getElementById("rankBadge");
     const rankName = document.getElementById("rankName");
     const rankCopy = document.getElementById("rankCopy");
@@ -955,12 +1168,13 @@
     const rewardText = document.getElementById("rewardText");
 
     const bigStreak = document.getElementById("bigStreak");
-    const gameTodayPercent = document.getElementById("gameTodayPercent");
-    const gameFullDays = document.getElementById("gameFullDays");
+    const gameChecklistStreak = document.getElementById("gameChecklistStreak");
+    const gameGymStreak = document.getElementById("gameGymStreak");
     const gameRewardProgress = document.getElementById("gameRewardProgress");
     const rankLadder = document.getElementById("rankLadder");
 
-    const resetTodayBtn = document.getElementById("resetTodayBtn");
+    const missedReasonBox = document.getElementById("missedReasonBox");
+    const missedTasksList = document.getElementById("missedTasksList");
     const logoutBtn = document.getElementById("logoutBtn");
 
     let state = loadState();
@@ -1003,12 +1217,17 @@
       if (!state.days[today]) {
         state.days[today] = {
           done: [],
-          completed: false
+          completed: false,
+          missedReason: ""
         };
       }
 
       if (!Array.isArray(state.days[today].done)) {
         state.days[today].done = [];
+      }
+
+      if (typeof state.days[today].missedReason !== "string") {
+        state.days[today].missedReason = "";
       }
 
       return state.days[today];
@@ -1021,17 +1240,15 @@
 
     function setTodayDoneSet(doneSet) {
       const today = getTodayKey();
+      const existing = ensureToday();
 
       state.days[today] = {
+        ...existing,
         done: [...doneSet],
         completed: doneSet.size === TASKS.length
       };
 
       saveState();
-    }
-
-    function countFullDays() {
-      return Object.values(state.days).filter(day => day && day.completed).length;
     }
 
     function calculateCurrentStreak() {
@@ -1047,7 +1264,33 @@
 
       while (true) {
         const key = getTodayKey(date);
+
         if (state.days[key]?.completed === true) {
+          streak++;
+          date = addDays(date, -1);
+        } else {
+          break;
+        }
+      }
+
+      return streak;
+    }
+
+    function calculateTaskStreak(taskId) {
+      let date = new Date();
+      let streak = 0;
+
+      const todayKey = getTodayKey(date);
+      const todayDone = state.days[todayKey]?.done?.includes(taskId) === true;
+
+      if (!todayDone) {
+        date = addDays(date, -1);
+      }
+
+      while (true) {
+        const key = getTodayKey(date);
+
+        if (state.days[key]?.done?.includes(taskId) === true) {
           streak++;
           date = addDays(date, -1);
         } else {
@@ -1072,6 +1315,10 @@
 
     function getNextRank(streak) {
       return RANKS.find(rank => rank.days > streak) || null;
+    }
+
+    function isMorningComplete(doneSet = getTodayDoneSet()) {
+      return MORNING_TASK_IDS.every(id => doneSet.has(id));
     }
 
     function renderTaskLists() {
@@ -1138,13 +1385,30 @@
         : `You have ${left} task${left === 1 ? "" : "s"} left today.`;
 
       progressCircle.style.background = `conic-gradient(var(--green) ${degrees}deg, rgba(42, 30, 18, 0.09) ${degrees}deg)`;
+    }
 
-      gameTodayPercent.textContent = `${percent}%`;
+    function renderPhoneLock() {
+      const doneSet = getTodayDoneSet();
+      const complete = isMorningComplete(doneSet);
+      const remaining = MORNING_TASK_IDS.filter(id => !doneSet.has(id)).length;
+
+      phoneLockCard.classList.toggle("locked", !complete);
+      phoneLockCard.classList.toggle("unlocked", complete);
+
+      if (complete) {
+        phoneLockTitle.textContent = "Phone unlocked";
+        phoneLockText.textContent = "Morning list is complete. You earned phone access.";
+        phoneLockBadge.textContent = "Unlocked";
+      } else {
+        phoneLockTitle.textContent = "Phone locked";
+        phoneLockText.textContent = `${remaining} morning task${remaining === 1 ? "" : "s"} left before phone access.`;
+        phoneLockBadge.textContent = "Locked";
+      }
     }
 
     function renderRankAndReward() {
       const streak = calculateCurrentStreak();
-      const fullDays = countFullDays();
+      const gymStreak = calculateTaskStreak("gym");
       const currentRank = getCurrentRank(streak);
       const nextRank = getNextRank(streak);
 
@@ -1153,7 +1417,8 @@
       rankCopy.textContent = currentRank.copy;
 
       bigStreak.textContent = streak;
-      gameFullDays.textContent = fullDays;
+      gameChecklistStreak.textContent = streak;
+      gameGymStreak.textContent = gymStreak;
       gameRewardProgress.textContent = `${Math.min(streak, 7)} / 7`;
 
       if (nextRank) {
@@ -1198,11 +1463,74 @@
       }
     }
 
+    function renderReview() {
+      const today = ensureToday();
+      missedReasonBox.value = today.missedReason || "";
+
+      const usedDays = Object.keys(state.days)
+        .sort()
+        .slice(-7);
+
+      const missedCounts = TASKS.map(task => {
+        let missed = 0;
+
+        for (const dayKey of usedDays) {
+          const day = state.days[dayKey];
+          const done = Array.isArray(day.done) ? day.done : [];
+
+          if (!done.includes(task.id)) {
+            missed++;
+          }
+        }
+
+        return {
+          ...task,
+          missed
+        };
+      })
+        .filter(task => task.missed > 0)
+        .sort((a, b) => b.missed - a.missed);
+
+      missedTasksList.innerHTML = "";
+
+      if (usedDays.length === 0 || missedCounts.length === 0) {
+        missedTasksList.innerHTML = `
+          <div class="missed-item">
+            <div class="missed-name">No missed-task data yet.</div>
+          </div>
+        `;
+        return;
+      }
+
+      const maxMissed = Math.max(...missedCounts.map(task => task.missed), 1);
+
+      for (const task of missedCounts.slice(0, 8)) {
+        const width = Math.round((task.missed / maxMissed) * 100);
+
+        const item = document.createElement("div");
+        item.className = "missed-item";
+
+        item.innerHTML = `
+          <div class="missed-top">
+            <div class="missed-name">${task.title}</div>
+            <div class="missed-count">${task.missed}x</div>
+          </div>
+          <div class="missed-bar">
+            <span style="width: ${width}%"></span>
+          </div>
+        `;
+
+        missedTasksList.appendChild(item);
+      }
+    }
+
     function render() {
       ensureToday();
       renderTaskLists();
       renderProgress();
+      renderPhoneLock();
       renderRankAndReward();
+      renderReview();
     }
 
     function unlock() {
@@ -1257,21 +1585,21 @@
       }
     });
 
-    resetTodayBtn.addEventListener("click", () => {
-      const today = getTodayKey();
-
-      state.days[today] = {
-        done: [],
-        completed: false
-      };
-
-      saveState();
-      render();
-    });
-
     logoutBtn.addEventListener("click", () => {
       localStorage.removeItem(SESSION_KEY);
       showLogin();
+    });
+
+    missedReasonBox.addEventListener("input", () => {
+      const today = getTodayKey();
+      const existing = ensureToday();
+
+      state.days[today] = {
+        ...existing,
+        missedReason: missedReasonBox.value
+      };
+
+      saveState();
     });
 
     setupTabs();
