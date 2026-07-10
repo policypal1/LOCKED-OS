@@ -6,7 +6,6 @@
   <title>Daily Checklist</title>
 
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M69 10 84 25 40 69 25 54 69 10Z' fill='%23f4d28b'/%3E%3Cpath d='M20 59 41 38 48 45 27 66 20 59Z' fill='%23fff8ec'/%3E%3Cpath d='M18 68 32 54 46 68 32 82 18 68Z' fill='%232f8f56'/%3E%3Cpath d='M14 83 25 72 32 79 21 90 14 83Z' fill='%239b6a2f'/%3E%3C/svg%3E" />
-
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -26,9 +25,7 @@
       --radius: 24px;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -42,35 +39,13 @@
       padding: 24px;
     }
 
-    button,
-    input,
-    textarea {
-      font: inherit;
-    }
+    button, input, textarea { font: inherit; }
+    button { border: 0; cursor: pointer; }
+    textarea { resize: vertical; }
+    .hidden { display: none !important; }
 
-    button {
-      border: 0;
-      cursor: pointer;
-    }
-
-    textarea {
-      resize: vertical;
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .app {
-      width: min(1120px, 100%);
-      margin: 0 auto;
-    }
-
-    .login-screen {
-      min-height: calc(100vh - 48px);
-      display: grid;
-      place-items: center;
-    }
+    .app { width: min(1120px, 100%); margin: 0 auto; }
+    .login-screen { min-height: calc(100vh - 48px); display: grid; place-items: center; }
 
     .login-card {
       width: min(440px, 100%);
@@ -99,15 +74,9 @@
     .quote,
     .rank-name,
     .game-title-card h2,
-    .review-card h2 {
-      letter-spacing: -0.035em;
-    }
+    .review-card h2 { letter-spacing: -0.035em; }
 
-    .login-card h1 {
-      margin: 0;
-      font-size: 2.45rem;
-      line-height: 0.98;
-    }
+    .login-card h1 { margin: 0; font-size: 2.45rem; line-height: 0.98; }
 
     .login-card p {
       margin: 12px 0 18px;
@@ -116,10 +85,7 @@
       font-weight: 700;
     }
 
-    .login-row {
-      display: grid;
-      gap: 10px;
-    }
+    .login-row { display: grid; gap: 10px; }
 
     .login-row input {
       min-height: 48px;
@@ -156,24 +122,10 @@
       transition: transform 0.15s ease, opacity 0.15s ease;
     }
 
-    .btn:hover {
-      opacity: 0.92;
-    }
-
-    .btn:active {
-      transform: scale(0.98);
-    }
-
-    .btn.secondary {
-      background: rgba(255, 255, 255, 0.55);
-      color: var(--text);
-      border: 1px solid var(--line);
-    }
-
-    .btn.green {
-      background: var(--green);
-      color: #fff;
-    }
+    .btn:hover { opacity: 0.92; }
+    .btn:active { transform: scale(0.98); }
+    .btn.secondary { background: rgba(255, 255, 255, 0.55); color: var(--text); border: 1px solid var(--line); }
+    .btn.green { background: var(--green); color: #fff; }
 
     .top {
       display: flex;
@@ -183,11 +135,7 @@
       margin-bottom: 18px;
     }
 
-    h1 {
-      margin: 0;
-      font-size: clamp(2.25rem, 5.5vw, 4rem);
-      line-height: 1;
-    }
+    h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 
     .tabs {
       display: flex;
@@ -211,30 +159,13 @@
       white-space: nowrap;
     }
 
-    .tab.active {
-      background: var(--text);
-      color: var(--card);
-    }
-
-    .page {
-      display: none;
-    }
-
-    .page.active {
-      display: block;
-      animation: pageIn .18s ease both;
-    }
+    .tab.active { background: var(--text); color: var(--card); }
+    .page { display: none; }
+    .page.active { display: block; animation: pageIn .18s ease both; }
 
     @keyframes pageIn {
-      from {
-        opacity: 0;
-        transform: translateY(6px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .layout {
@@ -283,44 +214,13 @@
       border: 1px solid var(--line);
     }
 
-    .percent {
-      font-size: 2rem;
-      font-weight: 950;
-      letter-spacing: -0.04em;
-      line-height: 1;
-    }
+    .percent { font-size: 2rem; font-weight: 950; letter-spacing: -0.04em; line-height: 1; }
+    .done-count { margin-top: 5px; color: var(--muted); font-size: 0.82rem; font-weight: 800; }
+    .quote { margin: 0; font-size: clamp(1.55rem, 4vw, 2.4rem); line-height: 1.08; font-weight: 950; }
+    .tasks-left, .sync-status { margin: 10px 0 0; color: var(--muted); line-height: 1.5; font-weight: 700; }
+    .sync-status { font-size: 0.86rem; font-weight: 800; }
 
-    .done-count {
-      margin-top: 5px;
-      color: var(--muted);
-      font-size: 0.82rem;
-      font-weight: 800;
-    }
-
-    .quote {
-      margin: 0;
-      font-size: clamp(1.55rem, 4vw, 2.4rem);
-      line-height: 1.08;
-      font-weight: 950;
-    }
-
-    .tasks-left {
-      margin: 10px 0 0;
-      color: var(--muted);
-      line-height: 1.5;
-      font-weight: 700;
-    }
-
-    .sync-status {
-      margin-top: 10px;
-      color: var(--muted);
-      font-size: 0.86rem;
-      font-weight: 800;
-    }
-
-    .section {
-      margin-bottom: 16px;
-    }
+    .section { margin-bottom: 16px; }
 
     .section-header {
       padding: 17px 20px;
@@ -329,26 +229,9 @@
       text-align: left;
     }
 
-    .section-header h3 {
-      margin: 0;
-      font-size: 1.15rem;
-      letter-spacing: -0.015em;
-    }
-
-    .section-header p {
-      margin: 5px 0 0;
-      color: var(--muted);
-      font-weight: 750;
-      line-height: 1.45;
-      font-size: 0.92rem;
-    }
-
-    .checklist {
-      display: grid;
-      gap: 8px;
-      padding: 12px;
-      text-align: left;
-    }
+    .section-header h3 { margin: 0; font-size: 1.15rem; letter-spacing: -0.015em; }
+    .section-header p { margin: 5px 0 0; color: var(--muted); font-weight: 750; line-height: 1.45; font-size: 0.92rem; }
+    .checklist { display: grid; gap: 8px; padding: 12px; text-align: left; }
 
     .task {
       width: 100%;
@@ -366,14 +249,8 @@
       user-select: none;
     }
 
-    .task:hover {
-      background: rgba(255, 255, 255, 0.65);
-      border-color: var(--line-strong);
-    }
-
-    .task:active {
-      transform: scale(0.995);
-    }
+    .task:hover { background: rgba(255, 255, 255, 0.65); border-color: var(--line-strong); }
+    .task:active { transform: scale(0.995); }
 
     .box {
       width: 28px;
@@ -387,26 +264,10 @@
       font-weight: 950;
     }
 
-    .task.done {
-      border-color: rgba(47, 143, 86, 0.28);
-      background: rgba(47, 143, 86, 0.09);
-    }
-
-    .task.done .box {
-      background: var(--green);
-      border-color: var(--green);
-    }
-
-    .task-title {
-      font-weight: 850;
-      letter-spacing: -0.005em;
-      line-height: 1.35;
-    }
-
-    .task.done .task-title {
-      text-decoration: line-through;
-      color: rgba(33, 24, 15, 0.64);
-    }
+    .task.done { border-color: rgba(47, 143, 86, 0.28); background: rgba(47, 143, 86, 0.09); }
+    .task.done .box { background: var(--green); border-color: var(--green); }
+    .task-title { font-weight: 850; letter-spacing: -0.005em; line-height: 1.35; }
+    .task.done .task-title { text-decoration: line-through; color: rgba(33, 24, 15, 0.64); }
 
     .phone-lock {
       margin: 0 12px 12px;
@@ -420,31 +281,13 @@
       gap: 14px;
     }
 
-    .phone-lock.locked {
-      border-color: rgba(182, 66, 66, 0.24);
-      background: var(--red-soft);
-    }
+    .phone-lock.locked { border-color: rgba(182, 66, 66, 0.24); background: var(--red-soft); }
+    .phone-lock.unlocked { border-color: rgba(47, 143, 86, 0.28); background: var(--green-soft); }
+    .phone-lock strong { display: block; letter-spacing: -0.015em; }
+    .phone-lock span { display: block; margin-top: 3px; color: var(--muted); font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
 
-    .phone-lock.unlocked {
-      border-color: rgba(47, 143, 86, 0.28);
-      background: var(--green-soft);
-    }
-
-    .phone-lock strong {
-      display: block;
-      letter-spacing: -0.015em;
-    }
-
-    .phone-lock span {
-      display: block;
-      margin-top: 3px;
-      color: var(--muted);
-      font-size: 0.9rem;
-      font-weight: 750;
-      line-height: 1.35;
-    }
-
-    .lock-badge {
+    .lock-badge,
+    .badge {
       min-height: 32px;
       display: inline-flex;
       align-items: center;
@@ -457,93 +300,21 @@
       white-space: nowrap;
     }
 
-    .mini-side {
-      position: sticky;
-      top: 18px;
-      display: grid;
-      gap: 14px;
-    }
+    .badge { min-height: 28px; background: rgba(47, 143, 86, 0.12); color: var(--green-dark); font-size: 0.75rem; }
+    .mini-side { position: sticky; top: 18px; display: grid; gap: 14px; }
+    .panel-card, .stat-card, .review-card { padding: 18px; }
 
-    .panel-card {
-      padding: 18px;
-    }
+    .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .panel-title h3 { margin: 0; font-size: 1.1rem; letter-spacing: -0.02em; }
+    .rank-name { margin: 0; font-size: 2rem; line-height: 1.05; }
+    .rank-copy, .small-muted { margin: 8px 0 0; color: var(--muted); line-height: 1.45; font-size: 0.92rem; }
 
-    .panel-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
+    .bar { height: 10px; border-radius: 999px; background: rgba(42, 30, 18, 0.09); overflow: hidden; margin-top: 12px; }
+    .bar span { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--green-dark), var(--green)); border-radius: inherit; transition: width 0.2s ease; }
 
-    .panel-title h3 {
-      margin: 0;
-      font-size: 1.1rem;
-      letter-spacing: -0.02em;
-    }
-
-    .badge {
-      min-height: 28px;
-      display: inline-flex;
-      align-items: center;
-      padding: 0 10px;
-      border-radius: 999px;
-      background: rgba(47, 143, 86, 0.12);
-      color: var(--green-dark);
-      font-size: 0.75rem;
-      font-weight: 950;
-      white-space: nowrap;
-    }
-
-    .rank-name {
-      margin: 0;
-      font-size: 2rem;
-      line-height: 1.05;
-    }
-
-    .rank-copy,
-    .small-muted {
-      margin: 8px 0 0;
-      color: var(--muted);
-      line-height: 1.45;
-      font-size: 0.92rem;
-    }
-
-    .bar {
-      height: 10px;
-      border-radius: 999px;
-      background: rgba(42, 30, 18, 0.09);
-      overflow: hidden;
-      margin-top: 12px;
-    }
-
-    .bar span {
-      display: block;
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, var(--green-dark), var(--green));
-      border-radius: inherit;
-      transition: width 0.2s ease;
-    }
-
-    .reward {
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.48);
-      border-radius: 18px;
-      padding: 14px;
-    }
-
-    .reward strong {
-      display: block;
-      letter-spacing: -0.01em;
-    }
-
-    .reward p {
-      margin: 6px 0 0;
-      color: var(--muted);
-      line-height: 1.45;
-      font-size: 0.92rem;
-    }
+    .reward { border: 1px solid var(--line); background: rgba(255, 255, 255, 0.48); border-radius: 18px; padding: 14px; }
+    .reward strong { display: block; letter-spacing: -0.01em; }
+    .reward p { margin: 6px 0 0; color: var(--muted); line-height: 1.45; font-size: 0.92rem; }
 
     .game-hero {
       display: grid;
@@ -558,280 +329,256 @@
       display: flex;
       flex-direction: column;
       justify-content: center;
-      background:
-        radial-gradient(circle at top right, rgba(47, 143, 86, 0.18), transparent 18rem),
-        rgba(255, 250, 241, 0.84);
+      background: radial-gradient(circle at top right, rgba(47, 143, 86, 0.18), transparent 18rem), rgba(255, 250, 241, 0.84);
     }
 
-    .eyebrow {
-      margin: 0 0 8px;
-      color: var(--green-dark);
-      font-size: 0.74rem;
-      font-weight: 950;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
+    .eyebrow { margin: 0 0 8px; color: var(--green-dark); font-size: 0.74rem; font-weight: 950; letter-spacing: 0.14em; text-transform: uppercase; }
+    .game-title-card h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 1; }
+    .game-title-card p { max-width: 580px; margin: 14px 0 0; color: var(--muted); line-height: 1.55; font-weight: 700; }
+
+    .big-streak-card { display: grid; align-content: center; padding: 24px; text-align: center; }
+    .big-streak-card strong { display: block; font-size: clamp(4rem, 10vw, 7rem); line-height: 0.9; letter-spacing: -0.06em; }
+    .big-streak-card span { display: block; margin-top: 12px; color: var(--muted); font-weight: 900; }
+
+    .game-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .stat-card small { display: block; color: var(--muted); font-weight: 950; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; margin-bottom: 8px; }
+    .stat-card strong { display: block; font-size: 2.3rem; letter-spacing: -0.04em; line-height: 1; }
+
+    .rank-ladder { margin-top: 18px; padding: 18px; }
+    .ladder-list { display: grid; gap: 10px; margin-top: 14px; }
+    .ladder-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.42); }
+    .ladder-item.active { border-color: rgba(47, 143, 86, 0.38); background: var(--green-soft); }
+    .ladder-dot { width: 34px; height: 34px; border-radius: 12px; background: rgba(42, 30, 18, 0.08); display: grid; place-items: center; font-weight: 950; }
+    .ladder-item.active .ladder-dot { background: var(--green); color: #fff; }
+    .ladder-name { font-weight: 950; }
+    .ladder-days { color: var(--muted); font-weight: 850; font-size: 0.88rem; }
+
+    .review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr); gap: 18px; align-items: start; }
+    .review-card h2 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.6rem); line-height: 1.05; }
+    .review-card p { margin: 10px 0 0; color: var(--muted); line-height: 1.5; font-weight: 750; }
+
+    .missed-box { width: 100%; min-height: 150px; margin-top: 14px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255, 255, 255, 0.58); color: var(--text); padding: 14px; outline: none; font-weight: 750; line-height: 1.45; }
+    .missed-list { display: grid; gap: 10px; margin-top: 14px; }
+    .missed-item { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.44); }
+    .missed-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .missed-name { font-weight: 900; line-height: 1.35; }
+    .missed-count { color: var(--red); font-weight: 950; white-space: nowrap; }
+    .missed-bar { height: 8px; border-radius: 999px; overflow: hidden; background: rgba(42, 30, 18, 0.08); }
+    .missed-bar span { display: block; height: 100%; width: 0%; border-radius: inherit; background: var(--red); }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+    .admin-tab {
+      border: 1px solid rgba(182, 66, 66, 0.22);
     }
 
-    .game-title-card h2 {
-      margin: 0;
-      font-size: clamp(2rem, 5vw, 4rem);
-      line-height: 1;
-    }
-
-    .game-title-card p {
-      max-width: 580px;
-      margin: 14px 0 0;
-      color: var(--muted);
-      line-height: 1.55;
-      font-weight: 700;
-    }
-
-    .big-streak-card {
+    .admin-grid {
       display: grid;
-      align-content: center;
-      padding: 24px;
-      text-align: center;
-    }
-
-    .big-streak-card strong {
-      display: block;
-      font-size: clamp(4rem, 10vw, 7rem);
-      line-height: 0.9;
-      letter-spacing: -0.06em;
-    }
-
-    .big-streak-card span {
-      display: block;
-      margin-top: 12px;
-      color: var(--muted);
-      font-weight: 900;
-    }
-
-    .game-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 18px;
-    }
-
-    .stat-card {
-      padding: 20px;
-    }
-
-    .stat-card small {
-      display: block;
-      color: var(--muted);
-      font-weight: 950;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.72rem;
-      margin-bottom: 8px;
-    }
-
-    .stat-card strong {
-      display: block;
-      font-size: 2.3rem;
-      letter-spacing: -0.04em;
-      line-height: 1;
-    }
-
-    .rank-ladder {
-      margin-top: 18px;
-      padding: 18px;
-    }
-
-    .ladder-list {
-      display: grid;
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .ladder-item {
-      display: grid;
-      grid-template-columns: 34px 1fr auto;
-      gap: 12px;
-      align-items: center;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.42);
-    }
-
-    .ladder-item.active {
-      border-color: rgba(47, 143, 86, 0.38);
-      background: var(--green-soft);
-    }
-
-    .ladder-dot {
-      width: 34px;
-      height: 34px;
-      border-radius: 12px;
-      background: rgba(42, 30, 18, 0.08);
-      display: grid;
-      place-items: center;
-      font-weight: 950;
-    }
-
-    .ladder-item.active .ladder-dot {
-      background: var(--green);
-      color: #fff;
-    }
-
-    .ladder-name {
-      font-weight: 950;
-    }
-
-    .ladder-days {
-      color: var(--muted);
-      font-weight: 850;
-      font-size: 0.88rem;
-    }
-
-    .review-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr);
       gap: 18px;
       align-items: start;
     }
 
-    .review-card {
+    .admin-card {
       padding: 20px;
     }
 
-    .review-card h2 {
+    .admin-card h2 {
       margin: 0;
-      font-size: clamp(1.6rem, 4vw, 2.6rem);
+      font-size: clamp(1.7rem, 4vw, 2.7rem);
       line-height: 1.05;
+      letter-spacing: -0.035em;
     }
 
-    .review-card p {
+    .admin-card p {
       margin: 10px 0 0;
       color: var(--muted);
       line-height: 1.5;
       font-weight: 750;
     }
 
-    .missed-box {
+    .admin-warning {
+      border-color: rgba(182, 66, 66, 0.28);
+      background: rgba(182, 66, 66, 0.07);
+    }
+
+    .field-grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .field-row {
+      display: grid;
+      gap: 7px;
+    }
+
+    .field-row label,
+    .admin-label {
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .field-row input,
+    .field-row textarea,
+    .field-row select,
+    .admin-input {
       width: 100%;
-      min-height: 150px;
-      margin-top: 14px;
+      min-height: 44px;
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 16px;
       background: rgba(255, 255, 255, 0.58);
       color: var(--text);
-      padding: 14px;
+      padding: 11px 12px;
       outline: none;
-      font-weight: 750;
-      line-height: 1.45;
+      font-weight: 800;
     }
 
-    .missed-list {
+    .field-row textarea,
+    .admin-json-box {
+      min-height: 130px;
+      resize: vertical;
+      line-height: 1.45;
+      font-family: inherit;
+      font-weight: 750;
+    }
+
+    .admin-task-list {
       display: grid;
-      gap: 10px;
+      gap: 8px;
       margin-top: 14px;
     }
 
-    .missed-item {
+    .admin-task-check {
       display: grid;
-      gap: 8px;
+      grid-template-columns: 28px 1fr;
+      gap: 12px;
+      align-items: center;
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: 16px;
       background: rgba(255, 255, 255, 0.44);
-    }
-
-    .missed-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .missed-name {
-      font-weight: 900;
+      font-weight: 850;
       line-height: 1.35;
     }
 
-    .missed-count {
-      color: var(--red);
-      font-weight: 950;
-      white-space: nowrap;
+    .admin-task-check input {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--green);
     }
 
-    .missed-bar {
-      height: 8px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: rgba(42, 30, 18, 0.08);
+    .admin-status {
+      min-height: 22px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-weight: 850;
+      line-height: 1.45;
     }
 
-    .missed-bar span {
-      display: block;
-      height: 100%;
-      width: 0%;
-      border-radius: inherit;
+    .admin-status.good { color: var(--green-dark); }
+    .admin-status.bad { color: var(--red); }
+
+    .admin-danger {
       background: var(--red);
+      color: #fff;
     }
 
-    .actions {
-      display: flex;
+    .confirm-panel {
+      display: none;
+      margin-top: 16px;
+      border: 1px solid rgba(182, 66, 66, 0.28);
+      border-radius: 20px;
+      background: rgba(182, 66, 66, 0.08);
+      padding: 16px;
+    }
+
+    .confirm-panel.active {
+      display: block;
+    }
+
+    .confirm-panel h3 {
+      margin: 0;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+    }
+
+    .confirm-step {
+      display: grid;
+      grid-template-columns: 28px 1fr;
       gap: 10px;
-      flex-wrap: wrap;
+      align-items: start;
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.45);
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
+    .confirm-step input[type="checkbox"] {
+      width: 19px;
+      height: 19px;
+      margin-top: 2px;
+      accent-color: var(--green);
+    }
+
+    .confirm-step input[type="text"] {
+      margin-top: 7px;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 0 10px;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .admin-history {
+      display: grid;
+      gap: 8px;
       margin-top: 14px;
+      max-height: 260px;
+      overflow: auto;
+    }
+
+    .admin-day-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.44);
+      font-weight: 850;
+    }
+
+    .admin-day-row button {
+      min-height: 32px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-weight: 900;
     }
 
     @media (max-width: 860px) {
-      body {
-        padding: 14px;
-      }
-
-      .top {
-        align-items: stretch;
-        flex-direction: column;
-      }
-
-      .tabs {
-        width: 100%;
-        overflow-x: auto;
-        border-radius: 18px;
-      }
-
-      .tab {
-        flex: 1;
-      }
-
-      .layout,
-      .game-hero,
-      .game-grid,
-      .review-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .mini-side {
-        position: static;
-      }
-
-      .summary {
-        grid-template-columns: 1fr;
-        text-align: left;
-      }
-
-      .circle {
-        margin: 0;
-      }
-
-      .phone-lock {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .ladder-item {
-        grid-template-columns: 34px 1fr;
-      }
-
-      .ladder-item .badge {
-        grid-column: 2;
-        width: max-content;
-      }
+      body { padding: 14px; }
+      .top { align-items: stretch; flex-direction: column; }
+      .tabs { width: 100%; overflow-x: auto; border-radius: 18px; }
+      .tab { flex: 1; }
+      .layout, .game-hero, .game-grid, .review-grid { grid-template-columns: 1fr; }
+      .mini-side { position: static; }
+      .summary { grid-template-columns: 1fr; text-align: left; }
+      .circle { margin: 0; }
+      .phone-lock { align-items: flex-start; flex-direction: column; }
+      .ladder-item { grid-template-columns: 34px 1fr; }
+      .ladder-item .badge { grid-column: 2; width: max-content; }
     }
   </style>
 </head>
@@ -843,26 +590,22 @@
         <div class="login-icon">⚔</div>
         <h1>Locked OS</h1>
         <p>Enter the password to unlock your daily checklist.</p>
-
         <div class="login-row">
           <input id="passwordInput" type="password" inputmode="numeric" placeholder="Password" autocomplete="off" />
           <button id="unlockBtn" class="btn green">Unlock</button>
         </div>
-
         <div id="loginError" class="error-text"></div>
       </div>
     </section>
 
     <section id="mainApp" class="hidden">
       <header class="top">
-        <div>
-          <h1>Daily Checklist</h1>
-        </div>
-
+        <div><h1>Daily Checklist</h1></div>
         <nav class="tabs" aria-label="App tabs">
           <button class="tab active" data-tab="checklistPage">Checklist</button>
           <button class="tab" data-tab="gamePage">Gamification</button>
           <button class="tab" data-tab="reviewPage">Review</button>
+          <button class="tab admin-tab" data-tab="adminPage">Admin</button>
         </nav>
       </header>
 
@@ -876,7 +619,6 @@
                   <div id="doneCount" class="done-count">0 / 14</div>
                 </div>
               </div>
-
               <div>
                 <p class="quote">Win today. No drama.</p>
                 <p id="tasksLeft" class="tasks-left">You have 14 tasks left today.</p>
@@ -889,9 +631,7 @@
                 <h3>Morning</h3>
                 <p>No scrolling before all of these tasks are done. Phone unlocks after the morning list is complete.</p>
               </div>
-
               <div id="morningList" class="checklist"></div>
-
               <div id="phoneLockCard" class="phone-lock locked">
                 <div>
                   <strong id="phoneLockTitle">Phone locked</strong>
@@ -912,7 +652,7 @@
             <section class="card section">
               <div class="section-header">
                 <h3>Night</h3>
-                <p>Start shutting the day down at 9 PM.</p>
+                <p>Start shutting the day down at 9 PM. The checklist rolls over at 4 AM, so late-night completions still count for the night before.</p>
               </div>
               <div id="nightList" class="checklist"></div>
             </section>
@@ -924,13 +664,9 @@
                 <h3>Current rank</h3>
                 <span id="rankBadge" class="badge">Day 0</span>
               </div>
-
               <h2 id="rankName" class="rank-name">Starter</h2>
               <p id="rankCopy" class="rank-copy">Build the first clean day. The streak starts when all tasks are done.</p>
-
-              <div class="bar">
-                <span id="rankProgress"></span>
-              </div>
+              <div class="bar"><span id="rankProgress"></span></div>
             </section>
 
             <section class="card panel-card">
@@ -938,7 +674,6 @@
                 <h3>7-day reward</h3>
                 <span id="rewardBadge" class="badge">Locked</span>
               </div>
-
               <div class="reward">
                 <strong>Guts Racing seat cover</strong>
                 <p id="rewardText">Complete 7 full days in a row to unlock it.</p>
@@ -953,15 +688,9 @@
           <section class="card game-title-card">
             <p class="eyebrow">Gamification</p>
             <h2>Make the boring stuff automatic.</h2>
-            <p>
-              The goal is not a massive routine. The goal is to win the same simple day over and over until discipline becomes normal.
-            </p>
-
-            <div class="actions">
-              <button id="logoutBtn" class="btn secondary">Lock app</button>
-            </div>
+            <p>The goal is not a massive routine. The goal is to win the same simple day over and over until discipline becomes normal.</p>
+            <div class="actions"><button id="logoutBtn" class="btn secondary">Lock app</button></div>
           </section>
-
           <section class="card big-streak-card">
             <strong id="bigStreak">0</strong>
             <span>current day streak</span>
@@ -969,28 +698,13 @@
         </div>
 
         <section class="game-grid">
-          <div class="card stat-card">
-            <small>Checklist streak</small>
-            <strong id="gameChecklistStreak">0</strong>
-          </div>
-
-          <div class="card stat-card">
-            <small>Gym streak</small>
-            <strong id="gameGymStreak">0</strong>
-          </div>
-
-          <div class="card stat-card">
-            <small>Reward progress</small>
-            <strong id="gameRewardProgress">0 / 7</strong>
-          </div>
+          <div class="card stat-card"><small>Checklist streak</small><strong id="gameChecklistStreak">0</strong></div>
+          <div class="card stat-card"><small>Gym streak</small><strong id="gameGymStreak">0</strong></div>
+          <div class="card stat-card"><small>Reward progress</small><strong id="gameRewardProgress">0 / 7</strong></div>
         </section>
 
         <section class="card rank-ladder">
-          <div class="panel-title">
-            <h3>Rank ladder</h3>
-            <span class="badge">No freezes</span>
-          </div>
-
+          <div class="panel-title"><h3>Rank ladder</h3><span class="badge">No freezes</span></div>
           <div id="rankLadder" class="ladder-list"></div>
         </section>
       </section>
@@ -1000,21 +714,150 @@
           <section class="card review-card">
             <p class="eyebrow">Missed day reason</p>
             <h2>No excuses, just the real reason.</h2>
-            <p>
-              If the day goes bad, write exactly why. This is not for guilt. It is so you can see the pattern and fix it.
-            </p>
-
+            <p>If the day goes bad, write exactly why. This is not for guilt. It is so you can see the pattern and fix it.</p>
             <textarea id="missedReasonBox" class="missed-box" placeholder="Why did I miss today? What caused it? What needs to change tomorrow?"></textarea>
           </section>
 
           <section class="card review-card">
             <p class="eyebrow">Weekly review</p>
             <h2>Most missed tasks</h2>
+            <p>This shows the tasks you missed most over the last 7 closed days you used the checklist. The active day is not counted against you.</p>
+            <div id="missedTasksList" class="missed-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="adminPage" class="page">
+        <div class="admin-grid">
+          <section class="card admin-card admin-warning">
+            <p class="eyebrow">Admin panel</p>
+            <h2>Only edit this if you are fixing real data.</h2>
             <p>
-              This shows the tasks you missed most over the last 7 days you used the checklist.
+              This can change streaks, completed days, missed-task stats, and saved history. It is okay to turn back.
+              Use it when the app messes up, not when you just do not like the result.
             </p>
 
-            <div id="missedTasksList" class="missed-list"></div>
+            <div class="field-grid">
+              <div class="field-row">
+                <label for="adminDateInput">Selected date</label>
+                <input id="adminDateInput" type="date" />
+              </div>
+
+              <div class="actions">
+                <button id="adminTodayBtn" class="btn secondary" type="button">Today</button>
+                <button id="adminYesterdayBtn" class="btn secondary" type="button">Yesterday</button>
+                <button id="adminLoadBtn" class="btn secondary" type="button">Load date</button>
+              </div>
+
+              <div class="field-row">
+                <label for="adminMissedReason">Missed reason / notes</label>
+                <textarea id="adminMissedReason" placeholder="Optional notes for this day"></textarea>
+              </div>
+
+              <div class="actions">
+                <button id="adminSaveDayBtn" class="btn green" type="button">Save selected day</button>
+                <button id="adminPerfectDayBtn" class="btn secondary" type="button">Mark perfect day</button>
+                <button id="adminClearDayBtn" class="btn secondary" type="button">Clear day tasks</button>
+                <button id="adminDeleteDayBtn" class="btn admin-danger" type="button">Delete day</button>
+              </div>
+
+              <div id="adminStatus" class="admin-status"></div>
+            </div>
+          </section>
+
+          <section class="card admin-card">
+            <p class="eyebrow">Task editor</p>
+            <h2>Edit the selected day.</h2>
+            <p id="adminDaySummary">Choose a date to see the saved tasks.</p>
+            <div id="adminTaskList" class="admin-task-list"></div>
+          </section>
+
+          <section class="card admin-card">
+            <p class="eyebrow">Saved history</p>
+            <h2>Recent days</h2>
+            <p>Click load to inspect a saved day. Complete days are the only days that count toward the streak.</p>
+            <div id="adminHistoryList" class="admin-history"></div>
+          </section>
+
+          <section class="card admin-card">
+            <p class="eyebrow">Repair tools</p>
+            <h2>Backup, restore, and clean up.</h2>
+            <p>Export a backup before using destructive tools. Restore only from a backup you copied from this app.</p>
+
+            <div class="field-grid">
+              <div class="field-row">
+                <label for="adminChecklistStreakInput">Set checklist streak</label>
+                <input id="adminChecklistStreakInput" type="number" min="0" max="365" inputmode="numeric" placeholder="Example: 7" />
+              </div>
+
+              <div class="actions">
+                <button id="adminSetChecklistStreakBtn" class="btn secondary" type="button">Set checklist streak</button>
+              </div>
+
+              <div class="field-row">
+                <label for="adminGymStreakInput">Set gym streak</label>
+                <input id="adminGymStreakInput" type="number" min="0" max="365" inputmode="numeric" placeholder="Example: 3" />
+              </div>
+
+              <div class="actions">
+                <button id="adminSetGymStreakBtn" class="btn secondary" type="button">Set gym streak</button>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button id="adminExportBtn" class="btn secondary" type="button">Export backup</button>
+              <button id="adminNormalizeBtn" class="btn secondary" type="button">Fix false missed / normalize</button>
+              <button id="adminResetBtn" class="btn admin-danger" type="button">Reset everything</button>
+            </div>
+
+            <div class="field-grid">
+              <div class="field-row">
+                <label for="adminImportBox">Paste backup JSON here</label>
+                <textarea id="adminImportBox" class="admin-json-box" placeholder='Paste backup JSON here, then click "Restore backup"'></textarea>
+              </div>
+
+              <div class="actions">
+                <button id="adminImportBtn" class="btn secondary" type="button">Restore backup</button>
+              </div>
+            </div>
+
+            <div id="adminConfirmPanel" class="confirm-panel">
+              <h3 id="adminConfirmTitle">Confirm admin change</h3>
+              <p id="adminConfirmText">This is a serious edit. Do all 5 checks before continuing.</p>
+
+              <label class="confirm-step">
+                <input class="admin-confirm-check" type="checkbox" />
+                <span>Step 1: I am only using this because the app data is wrong or needs a real correction.</span>
+              </label>
+
+              <label class="confirm-step">
+                <input class="admin-confirm-check" type="checkbox" />
+                <span>Step 2: I understand this can change my streak, missed tasks, and saved history.</span>
+              </label>
+
+              <label class="confirm-step">
+                <input class="admin-confirm-check" type="checkbox" />
+                <span>Step 3: I checked the selected date and the task list before continuing.</span>
+              </label>
+
+              <label class="confirm-step">
+                <input class="admin-confirm-check" type="checkbox" />
+                <span>Step 4: I know it is okay to cancel and turn back right now.</span>
+              </label>
+
+              <div class="confirm-step">
+                <input class="admin-confirm-check" type="checkbox" />
+                <span>
+                  Step 5: Type <strong>LOCKED IN</strong> below to confirm you actually mean it.
+                  <input id="adminConfirmPhrase" type="text" placeholder="Type LOCKED IN" autocomplete="off" />
+                </span>
+              </div>
+
+              <div class="actions">
+                <button id="adminFinalConfirmBtn" class="btn admin-danger" type="button" disabled>Confirm change</button>
+                <button id="adminCancelConfirmBtn" class="btn secondary" type="button">Cancel, turn back</button>
+              </div>
+            </div>
           </section>
         </div>
       </section>
@@ -1023,12 +866,12 @@
 
   <script>
     const PASSWORD = "2009";
-
     const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
     const SUPABASE_ROW_ID = "samuel-main";
-
-    const STORAGE_KEY = "locked_os_daily_checklist_v4";
+    const STORAGE_KEY = "locked_os_daily_checklist_v5";
+    const OLD_STORAGE_KEY = "locked_os_daily_checklist_v4";
+    const DAY_ROLLOVER_HOUR = 4;
 
     const hasSupabaseConfig =
       SUPABASE_URL.startsWith("https://") &&
@@ -1056,36 +899,16 @@
       { id: "bed-routine", section: "night", title: "Full bedtime routine" }
     ];
 
-    const MORNING_TASK_IDS = TASKS
-      .filter(task => task.section === "morning")
-      .map(task => task.id);
+    const TASK_IDS = TASKS.map(task => task.id);
+    const MORNING_TASK_IDS = TASKS.filter(task => task.section === "morning").map(task => task.id);
+    const NIGHT_TASK_IDS = TASKS.filter(task => task.section === "night").map(task => task.id);
 
     const RANKS = [
-      {
-        name: "Starter",
-        days: 0,
-        copy: "Build the first clean day. The streak starts when all tasks are done."
-      },
-      {
-        name: "Locked In",
-        days: 3,
-        copy: "Three straight days means the system is starting to stick."
-      },
-      {
-        name: "Disciplined",
-        days: 7,
-        copy: "Seven days in a row. Reward unlocked."
-      },
-      {
-        name: "Machine",
-        days: 14,
-        copy: "Two weeks. This is no longer random motivation."
-      },
-      {
-        name: "Unbreakable",
-        days: 30,
-        copy: "Thirty days. This is identity-level discipline."
-      }
+      { name: "Starter", days: 0, copy: "Build the first clean day. The streak starts when all tasks are done." },
+      { name: "Locked In", days: 3, copy: "Three straight days means the system is starting to stick." },
+      { name: "Disciplined", days: 7, copy: "Seven days in a row. Reward unlocked." },
+      { name: "Machine", days: 14, copy: "Two weeks. This is no longer random motivation." },
+      { name: "Unbreakable", days: 30, copy: "Thirty days. This is identity-level discipline." }
     ];
 
     const loginScreen = document.getElementById("loginScreen");
@@ -1093,48 +916,84 @@
     const passwordInput = document.getElementById("passwordInput");
     const unlockBtn = document.getElementById("unlockBtn");
     const loginError = document.getElementById("loginError");
-
     const progressCircle = document.getElementById("progressCircle");
     const percentEl = document.getElementById("percent");
     const doneCountEl = document.getElementById("doneCount");
     const tasksLeftEl = document.getElementById("tasksLeft");
     const syncStatus = document.getElementById("syncStatus");
-
     const morningList = document.getElementById("morningList");
     const afternoonList = document.getElementById("afternoonList");
     const nightList = document.getElementById("nightList");
-
     const phoneLockCard = document.getElementById("phoneLockCard");
     const phoneLockTitle = document.getElementById("phoneLockTitle");
     const phoneLockText = document.getElementById("phoneLockText");
     const phoneLockBadge = document.getElementById("phoneLockBadge");
-
     const rankBadge = document.getElementById("rankBadge");
     const rankName = document.getElementById("rankName");
     const rankCopy = document.getElementById("rankCopy");
     const rankProgress = document.getElementById("rankProgress");
-
     const rewardBadge = document.getElementById("rewardBadge");
     const rewardText = document.getElementById("rewardText");
-
     const bigStreak = document.getElementById("bigStreak");
     const gameChecklistStreak = document.getElementById("gameChecklistStreak");
     const gameGymStreak = document.getElementById("gameGymStreak");
     const gameRewardProgress = document.getElementById("gameRewardProgress");
     const rankLadder = document.getElementById("rankLadder");
-
     const missedReasonBox = document.getElementById("missedReasonBox");
     const missedTasksList = document.getElementById("missedTasksList");
     const logoutBtn = document.getElementById("logoutBtn");
+    const adminDateInput = document.getElementById("adminDateInput");
+    const adminTodayBtn = document.getElementById("adminTodayBtn");
+    const adminYesterdayBtn = document.getElementById("adminYesterdayBtn");
+    const adminLoadBtn = document.getElementById("adminLoadBtn");
+    const adminMissedReason = document.getElementById("adminMissedReason");
+    const adminSaveDayBtn = document.getElementById("adminSaveDayBtn");
+    const adminPerfectDayBtn = document.getElementById("adminPerfectDayBtn");
+    const adminClearDayBtn = document.getElementById("adminClearDayBtn");
+    const adminDeleteDayBtn = document.getElementById("adminDeleteDayBtn");
+    const adminStatus = document.getElementById("adminStatus");
+    const adminDaySummary = document.getElementById("adminDaySummary");
+    const adminTaskList = document.getElementById("adminTaskList");
+    const adminHistoryList = document.getElementById("adminHistoryList");
+    const adminChecklistStreakInput = document.getElementById("adminChecklistStreakInput");
+    const adminSetChecklistStreakBtn = document.getElementById("adminSetChecklistStreakBtn");
+    const adminGymStreakInput = document.getElementById("adminGymStreakInput");
+    const adminSetGymStreakBtn = document.getElementById("adminSetGymStreakBtn");
+    const adminExportBtn = document.getElementById("adminExportBtn");
+    const adminNormalizeBtn = document.getElementById("adminNormalizeBtn");
+    const adminResetBtn = document.getElementById("adminResetBtn");
+    const adminImportBox = document.getElementById("adminImportBox");
+    const adminImportBtn = document.getElementById("adminImportBtn");
+    const adminConfirmPanel = document.getElementById("adminConfirmPanel");
+    const adminConfirmTitle = document.getElementById("adminConfirmTitle");
+    const adminConfirmText = document.getElementById("adminConfirmText");
+    const adminConfirmChecks = [...document.querySelectorAll(".admin-confirm-check")];
+    const adminConfirmPhrase = document.getElementById("adminConfirmPhrase");
+    const adminFinalConfirmBtn = document.getElementById("adminFinalConfirmBtn");
+    const adminCancelConfirmBtn = document.getElementById("adminCancelConfirmBtn");
 
     let state = loadLocalState();
     let saveTimer = null;
+    let pendingAdminAction = null;
 
-    function getTodayKey(date = new Date()) {
+    function formatDateKey(date) {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
+    }
+
+    function getTodayKey(date = new Date()) {
+      const effectiveDate = new Date(date);
+      if (effectiveDate.getHours() < DAY_ROLLOVER_HOUR) {
+        effectiveDate.setDate(effectiveDate.getDate() - 1);
+      }
+      return formatDateKey(effectiveDate);
+    }
+
+    function keyToLocalDate(key) {
+      const [year, month, day] = key.split("-").map(Number);
+      return new Date(year, month - 1, day);
     }
 
     function addDays(date, days) {
@@ -1143,11 +1002,21 @@
       return next;
     }
 
+    function addDaysToKey(key, days) {
+      return formatDateKey(addDays(keyToLocalDate(key), days));
+    }
+
+    function arraysEqual(a, b) {
+      if (a.length !== b.length) return false;
+      const sortedA = [...a].sort();
+      const sortedB = [...b].sort();
+      return sortedA.every((value, index) => value === sortedB[index]);
+    }
+
     function loadLocalState() {
       const fallback = { days: {} };
-
       try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(OLD_STORAGE_KEY));
         if (!saved || typeof saved !== "object") return fallback;
         if (!saved.days || typeof saved.days !== "object") saved.days = {};
         return saved;
@@ -1158,16 +1027,96 @@
 
     function saveLocalState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.removeItem(OLD_STORAGE_KEY);
+    }
+
+    function getCleanDoneList(done) {
+      if (!Array.isArray(done)) return [];
+      return [...new Set(done.filter(id => TASK_IDS.includes(id)))];
+    }
+
+    function isEmptyDay(day) {
+      return getCleanDoneList(day?.done).length === 0 &&
+        day?.completed !== true &&
+        !(typeof day?.missedReason === "string" && day.missedReason.trim());
+    }
+
+    function normalizeState() {
+      let changed = false;
+      if (!state || typeof state !== "object") {
+        state = { days: {} };
+        changed = true;
+      }
+      if (!state.days || typeof state.days !== "object") {
+        state.days = {};
+        changed = true;
+      }
+
+      for (const dayKey of Object.keys(state.days)) {
+        const day = state.days[dayKey] || {};
+        const cleanDone = getCleanDoneList(day.done);
+        const cleanCompleted = cleanDone.length === TASKS.length;
+        const cleanReason = typeof day.missedReason === "string" ? day.missedReason : "";
+
+        if (!Array.isArray(day.done) || !arraysEqual(day.done, cleanDone) || day.completed !== cleanCompleted || day.missedReason !== cleanReason) {
+          state.days[dayKey] = { ...day, done: cleanDone, completed: cleanCompleted, missedReason: cleanReason };
+          changed = true;
+        }
+      }
+
+      for (const dayKey of Object.keys(state.days).sort()) {
+        const nextKey = addDaysToKey(dayKey, 1);
+        const day = state.days[dayKey];
+        const nextDay = state.days[nextKey];
+        if (!day || !nextDay) continue;
+
+        const done = getCleanDoneList(day.done);
+        const nextDone = getCleanDoneList(nextDay.done);
+        const nextOnlyHasNightTasks = nextDone.length > 0 && nextDone.every(id => NIGHT_TASK_IDS.includes(id));
+        const dayIsIncomplete = done.length > 0 && done.length < TASKS.length;
+
+        if (dayIsIncomplete && nextOnlyHasNightTasks) {
+          const mergedDone = [...new Set([...done, ...nextDone])];
+          const remainingNextDone = nextDone.filter(id => !NIGHT_TASK_IDS.includes(id));
+
+          state.days[dayKey] = {
+            ...day,
+            done: mergedDone,
+            completed: mergedDone.length === TASKS.length
+          };
+
+          if (remainingNextDone.length === 0 && !(nextDay.missedReason || "").trim()) {
+            delete state.days[nextKey];
+          } else {
+            state.days[nextKey] = {
+              ...nextDay,
+              done: remainingNextDone,
+              completed: remainingNextDone.length === TASKS.length
+            };
+          }
+
+          changed = true;
+        }
+      }
+
+      const activeDayKey = getTodayKey();
+      for (const dayKey of Object.keys(state.days)) {
+        if (dayKey !== activeDayKey && isEmptyDay(state.days[dayKey])) {
+          delete state.days[dayKey];
+          changed = true;
+        }
+      }
+
+      return changed;
     }
 
     async function loadSupabaseState() {
       if (!supabaseClient) {
-        syncStatus.textContent = "Supabase sync not connected yet.";
+        syncStatus.textContent = "Saved locally. Supabase not connected yet.";
         return;
       }
 
       syncStatus.textContent = "Loading from Supabase...";
-
       const { data, error } = await supabaseClient
         .from("locked_os_state")
         .select("state")
@@ -1182,9 +1131,10 @@
 
       if (data?.state && typeof data.state === "object") {
         state = data.state;
-        if (!state.days || typeof state.days !== "object") state.days = {};
+        const changed = normalizeState();
         saveLocalState();
         render();
+        if (changed) saveState();
       }
 
       syncStatus.textContent = "Synced with Supabase.";
@@ -1192,10 +1142,7 @@
 
     function queueSupabaseSave() {
       clearTimeout(saveTimer);
-
-      saveTimer = setTimeout(() => {
-        saveSupabaseState();
-      }, 450);
+      saveTimer = setTimeout(() => saveSupabaseState(), 450);
     }
 
     async function saveSupabaseState() {
@@ -1205,14 +1152,9 @@
       }
 
       syncStatus.textContent = "Saving...";
-
       const { error } = await supabaseClient
         .from("locked_os_state")
-        .upsert({
-          id: SUPABASE_ROW_ID,
-          state,
-          updated_at: new Date().toISOString()
-        });
+        .upsert({ id: SUPABASE_ROW_ID, state, updated_at: new Date().toISOString() });
 
       if (error) {
         syncStatus.textContent = "Supabase save failed. Saved locally only.";
@@ -1228,60 +1170,38 @@
       queueSupabaseSave();
     }
 
-    function ensureToday() {
-      const today = getTodayKey();
-
-      if (!state.days[today]) {
-        state.days[today] = {
-          done: [],
-          completed: false,
-          missedReason: ""
-        };
+    function ensureDay(dayKey = getTodayKey()) {
+      if (!state.days[dayKey]) {
+        state.days[dayKey] = { done: [], completed: false, missedReason: "" };
       }
-
-      if (!Array.isArray(state.days[today].done)) {
-        state.days[today].done = [];
-      }
-
-      if (typeof state.days[today].missedReason !== "string") {
-        state.days[today].missedReason = "";
-      }
-
-      return state.days[today];
+      if (!Array.isArray(state.days[dayKey].done)) state.days[dayKey].done = [];
+      if (typeof state.days[dayKey].missedReason !== "string") state.days[dayKey].missedReason = "";
+      state.days[dayKey].completed = state.days[dayKey].done.length === TASKS.length;
+      return state.days[dayKey];
     }
 
     function getTodayDoneSet() {
-      const todayState = ensureToday();
-      return new Set(todayState.done);
+      return new Set(ensureDay().done);
     }
 
     function setTodayDoneSet(doneSet) {
-      const today = getTodayKey();
-      const existing = ensureToday();
-
-      state.days[today] = {
-        ...existing,
-        done: [...doneSet],
-        completed: doneSet.size === TASKS.length
-      };
-
+      const todayKey = getTodayKey();
+      const existing = ensureDay(todayKey);
+      const done = [...doneSet];
+      state.days[todayKey] = { ...existing, done, completed: done.length === TASKS.length };
       saveState();
     }
 
     function calculateCurrentStreak() {
-      let date = new Date();
+      let date = keyToLocalDate(getTodayKey());
       let streak = 0;
 
-      const todayKey = getTodayKey(date);
-      const todayComplete = state.days[todayKey]?.completed === true;
-
-      if (!todayComplete) {
+      if (state.days[getTodayKey()]?.completed !== true) {
         date = addDays(date, -1);
       }
 
       while (true) {
-        const key = getTodayKey(date);
-
+        const key = formatDateKey(date);
         if (state.days[key]?.completed === true) {
           streak++;
           date = addDays(date, -1);
@@ -1289,24 +1209,19 @@
           break;
         }
       }
-
       return streak;
     }
 
     function calculateTaskStreak(taskId) {
-      let date = new Date();
+      let date = keyToLocalDate(getTodayKey());
       let streak = 0;
 
-      const todayKey = getTodayKey(date);
-      const todayDone = state.days[todayKey]?.done?.includes(taskId) === true;
-
-      if (!todayDone) {
+      if (state.days[getTodayKey()]?.done?.includes(taskId) !== true) {
         date = addDays(date, -1);
       }
 
       while (true) {
-        const key = getTodayKey(date);
-
+        const key = formatDateKey(date);
         if (state.days[key]?.done?.includes(taskId) === true) {
           streak++;
           date = addDays(date, -1);
@@ -1314,20 +1229,11 @@
           break;
         }
       }
-
       return streak;
     }
 
     function getCurrentRank(streak) {
-      let current = RANKS[0];
-
-      for (const rank of RANKS) {
-        if (streak >= rank.days) {
-          current = rank;
-        }
-      }
-
-      return current;
+      return RANKS.reduce((current, rank) => streak >= rank.days ? rank : current, RANKS[0]);
     }
 
     function getNextRank(streak) {
@@ -1342,7 +1248,6 @@
       morningList.innerHTML = "";
       afternoonList.innerHTML = "";
       nightList.innerHTML = "";
-
       const doneSet = getTodayDoneSet();
 
       for (const task of TASKS) {
@@ -1350,16 +1255,8 @@
         taskEl.type = "button";
         taskEl.className = `task ${doneSet.has(task.id) ? "done" : ""}`;
         taskEl.dataset.taskId = task.id;
-
-        taskEl.innerHTML = `
-          <div class="box">${doneSet.has(task.id) ? "✓" : ""}</div>
-          <div class="task-title">${task.title}</div>
-        `;
-
-        taskEl.addEventListener("click", () => {
-          toggleTask(task.id);
-        });
-
+        taskEl.innerHTML = `<div class="box">${doneSet.has(task.id) ? "✓" : ""}</div><div class="task-title">${task.title}</div>`;
+        taskEl.addEventListener("click", () => toggleTask(task.id));
         if (task.section === "morning") morningList.appendChild(taskEl);
         if (task.section === "afternoon") afternoonList.appendChild(taskEl);
         if (task.section === "night") nightList.appendChild(taskEl);
@@ -1368,13 +1265,8 @@
 
     function toggleTask(taskId) {
       const doneSet = getTodayDoneSet();
-
-      if (doneSet.has(taskId)) {
-        doneSet.delete(taskId);
-      } else {
-        doneSet.add(taskId);
-      }
-
+      if (doneSet.has(taskId)) doneSet.delete(taskId);
+      else doneSet.add(taskId);
       setTodayDoneSet(doneSet);
       render();
     }
@@ -1392,7 +1284,6 @@
       tasksLeftEl.textContent = left === 0
         ? "Today is complete. Keep the streak alive tomorrow."
         : `You have ${left} task${left === 1 ? "" : "s"} left today.`;
-
       progressCircle.style.background = `conic-gradient(var(--green) ${degrees}deg, rgba(42, 30, 18, 0.09) ${degrees}deg)`;
     }
 
@@ -1403,16 +1294,11 @@
 
       phoneLockCard.classList.toggle("locked", !complete);
       phoneLockCard.classList.toggle("unlocked", complete);
-
-      if (complete) {
-        phoneLockTitle.textContent = "Phone unlocked";
-        phoneLockText.textContent = "Morning list is complete. You earned phone access.";
-        phoneLockBadge.textContent = "Unlocked";
-      } else {
-        phoneLockTitle.textContent = "Phone locked";
-        phoneLockText.textContent = `${remaining} morning task${remaining === 1 ? "" : "s"} left before phone access.`;
-        phoneLockBadge.textContent = "Locked";
-      }
+      phoneLockTitle.textContent = complete ? "Phone unlocked" : "Phone locked";
+      phoneLockText.textContent = complete
+        ? "Morning list is complete. You earned phone access."
+        : `${remaining} morning task${remaining === 1 ? "" : "s"} left before phone access.`;
+      phoneLockBadge.textContent = complete ? "Unlocked" : "Locked";
     }
 
     function renderRankAndReward() {
@@ -1424,7 +1310,6 @@
       rankBadge.textContent = `Day ${streak}`;
       rankName.textContent = currentRank.name;
       rankCopy.textContent = currentRank.copy;
-
       bigStreak.textContent = streak;
       gameChecklistStreak.textContent = streak;
       gameGymStreak.textContent = gymStreak;
@@ -1434,8 +1319,7 @@
         const previousDays = currentRank.days;
         const needed = nextRank.days - previousDays;
         const currentProgress = streak - previousDays;
-        const progressPercent = Math.max(0, Math.min(100, (currentProgress / needed) * 100));
-        rankProgress.style.width = `${progressPercent}%`;
+        rankProgress.style.width = `${Math.max(0, Math.min(100, (currentProgress / needed) * 100))}%`;
       } else {
         rankProgress.style.width = "100%";
       }
@@ -1454,11 +1338,9 @@
 
     function renderRankLadder(streak) {
       rankLadder.innerHTML = "";
-
       for (const rank of RANKS) {
         const item = document.createElement("div");
         item.className = `ladder-item ${streak >= rank.days ? "active" : ""}`;
-
         item.innerHTML = `
           <div class="ladder-dot">${streak >= rank.days ? "✓" : rank.days}</div>
           <div>
@@ -1467,85 +1349,444 @@
           </div>
           <div class="badge">${streak >= rank.days ? "Unlocked" : "Locked"}</div>
         `;
-
         rankLadder.appendChild(item);
       }
     }
 
-    function renderReview() {
-      const today = ensureToday();
+    function getReviewDayKeys() {
+      const activeDayKey = getTodayKey();
+      return Object.keys(state.days)
+        .filter(dayKey => {
+          const day = state.days[dayKey];
+          const hasActivity = !isEmptyDay(day);
+          if (!hasActivity) return false;
+          if (dayKey === activeDayKey && day.completed !== true) return false;
+          return true;
+        })
+        .sort()
+        .slice(-7);
+    }
 
+    function renderReview() {
+      const today = ensureDay();
       if (document.activeElement !== missedReasonBox) {
         missedReasonBox.value = today.missedReason || "";
       }
 
-      const usedDays = Object.keys(state.days).sort().slice(-7);
-
+      const usedDays = getReviewDayKeys();
       const missedCounts = TASKS.map(task => {
         let missed = 0;
-
         for (const dayKey of usedDays) {
-          const day = state.days[dayKey];
-          const done = Array.isArray(day.done) ? day.done : [];
-
-          if (!done.includes(task.id)) {
-            missed++;
-          }
+          const done = getCleanDoneList(state.days[dayKey]?.done);
+          if (!done.includes(task.id)) missed++;
         }
-
-        return {
-          ...task,
-          missed
-        };
+        return { ...task, missed };
       })
         .filter(task => task.missed > 0)
         .sort((a, b) => b.missed - a.missed);
 
       missedTasksList.innerHTML = "";
-
       if (usedDays.length === 0 || missedCounts.length === 0) {
-        missedTasksList.innerHTML = `
-          <div class="missed-item">
-            <div class="missed-name">No missed-task data yet.</div>
-          </div>
-        `;
+        missedTasksList.innerHTML = `<div class="missed-item"><div class="missed-name">No missed-task data yet.</div></div>`;
         return;
       }
 
       const maxMissed = Math.max(...missedCounts.map(task => task.missed), 1);
-
       for (const task of missedCounts.slice(0, 8)) {
         const width = Math.round((task.missed / maxMissed) * 100);
-
         const item = document.createElement("div");
         item.className = "missed-item";
-
         item.innerHTML = `
           <div class="missed-top">
             <div class="missed-name">${task.title}</div>
             <div class="missed-count">${task.missed}x</div>
           </div>
-          <div class="missed-bar">
-            <span style="width: ${width}%"></span>
-          </div>
+          <div class="missed-bar"><span style="width: ${width}%"></span></div>
         `;
-
         missedTasksList.appendChild(item);
       }
     }
 
+    function setAdminStatus(message, type = "") {
+      adminStatus.textContent = message;
+      adminStatus.classList.toggle("good", type === "good");
+      adminStatus.classList.toggle("bad", type === "bad");
+    }
+
+    function getAdminSelectedKey() {
+      return adminDateInput.value || getTodayKey();
+    }
+
+    function setAdminDate(dayKey) {
+      adminDateInput.value = dayKey;
+      renderAdmin();
+    }
+
+    function getAdminSelectedDoneSet() {
+      const checked = adminTaskList.querySelectorAll("input[type='checkbox']:checked");
+      return new Set([...checked].map(input => input.value));
+    }
+
+    function renderAdminTaskEditor() {
+      const dayKey = getAdminSelectedKey();
+      const day = state.days[dayKey] || { done: [], completed: false, missedReason: "" };
+      const doneSet = new Set(getCleanDoneList(day.done));
+
+      adminDaySummary.textContent = `${dayKey}: ${doneSet.size} / ${TASKS.length} tasks complete. ${doneSet.size === TASKS.length ? "This day counts as complete." : "This day does not count as complete yet."}`;
+
+      if (document.activeElement !== adminMissedReason) {
+        adminMissedReason.value = day.missedReason || "";
+      }
+
+      adminTaskList.innerHTML = "";
+      for (const task of TASKS) {
+        const label = document.createElement("label");
+        label.className = "admin-task-check";
+        label.innerHTML = `
+          <input type="checkbox" value="${task.id}" ${doneSet.has(task.id) ? "checked" : ""} />
+          <span>${task.title}</span>
+        `;
+        adminTaskList.appendChild(label);
+      }
+    }
+
+    function renderAdminHistory() {
+      const dayKeys = Object.keys(state.days)
+        .filter(dayKey => !isEmptyDay(state.days[dayKey]))
+        .sort()
+        .reverse()
+        .slice(0, 14);
+
+      adminHistoryList.innerHTML = "";
+
+      if (dayKeys.length === 0) {
+        adminHistoryList.innerHTML = `<div class="missed-item"><div class="missed-name">No saved days yet.</div></div>`;
+        return;
+      }
+
+      for (const dayKey of dayKeys) {
+        const day = state.days[dayKey];
+        const done = getCleanDoneList(day.done);
+        const row = document.createElement("div");
+        row.className = "admin-day-row";
+        row.innerHTML = `
+          <span>${dayKey}</span>
+          <span>${done.length}/${TASKS.length}</span>
+          <button type="button" data-day="${dayKey}">Load</button>
+        `;
+        row.querySelector("button").addEventListener("click", () => setAdminDate(dayKey));
+        adminHistoryList.appendChild(row);
+      }
+    }
+
+    function renderAdmin() {
+      if (!adminDateInput.value) {
+        adminDateInput.value = getTodayKey();
+      }
+      renderAdminTaskEditor();
+      renderAdminHistory();
+    }
+
+    function resetAdminConfirmInputs() {
+      adminConfirmChecks.forEach(input => {
+        input.checked = false;
+      });
+      adminConfirmPhrase.value = "";
+      adminFinalConfirmBtn.disabled = true;
+    }
+
+    function updateAdminConfirmButton() {
+      const allChecked = adminConfirmChecks.every(input => input.checked);
+      const phraseMatches = adminConfirmPhrase.value.trim() === "LOCKED IN";
+      adminFinalConfirmBtn.disabled = !(allChecked && phraseMatches && pendingAdminAction);
+    }
+
+    function openAdminConfirm(actionLabel, detailText, actionFn) {
+      pendingAdminAction = { actionLabel, actionFn };
+      adminConfirmTitle.textContent = `Confirm: ${actionLabel}`;
+      adminConfirmText.textContent = detailText;
+      adminConfirmPanel.classList.add("active");
+      resetAdminConfirmInputs();
+      adminConfirmPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+      setAdminStatus("Finish all 5 verification steps, or cancel and turn back.");
+    }
+
+    function closeAdminConfirm() {
+      pendingAdminAction = null;
+      adminConfirmPanel.classList.remove("active");
+      resetAdminConfirmInputs();
+    }
+
+    function applyAdminDaySave(dayKey, doneList, missedReason) {
+      state.days[dayKey] = {
+        done: getCleanDoneList(doneList),
+        completed: getCleanDoneList(doneList).length === TASKS.length,
+        missedReason: missedReason || ""
+      };
+
+      if (isEmptyDay(state.days[dayKey])) {
+        delete state.days[dayKey];
+      }
+
+      normalizeState();
+      saveState();
+      render();
+      setAdminDate(dayKey);
+    }
+
+    function adminSaveSelectedDay() {
+      const dayKey = getAdminSelectedKey();
+      const doneList = [...getAdminSelectedDoneSet()];
+      const missedReason = adminMissedReason.value;
+
+      openAdminConfirm(
+        "Save selected day",
+        `You are about to save ${dayKey} with ${doneList.length}/${TASKS.length} tasks complete. Only continue if this is the real correction.`,
+        () => {
+          applyAdminDaySave(dayKey, doneList, missedReason);
+          setAdminStatus(`Saved ${dayKey}.`, "good");
+        }
+      );
+    }
+
+    function adminMarkPerfectDay() {
+      const dayKey = getAdminSelectedKey();
+      openAdminConfirm(
+        "Mark perfect day",
+        `You are about to mark ${dayKey} as a perfect complete day. This can increase your streak.`,
+        () => {
+          applyAdminDaySave(dayKey, TASK_IDS, adminMissedReason.value);
+          setAdminStatus(`${dayKey} marked as a perfect day.`, "good");
+        }
+      );
+    }
+
+    function adminClearSelectedDay() {
+      const dayKey = getAdminSelectedKey();
+      openAdminConfirm(
+        "Clear selected day",
+        `You are about to clear every task from ${dayKey}. This can break a streak.`,
+        () => {
+          applyAdminDaySave(dayKey, [], adminMissedReason.value);
+          setAdminStatus(`${dayKey} tasks cleared.`, "good");
+        }
+      );
+    }
+
+    function adminDeleteSelectedDay() {
+      const dayKey = getAdminSelectedKey();
+      openAdminConfirm(
+        "Delete selected day",
+        `You are about to completely delete saved data for ${dayKey}. This cannot be undone unless you exported a backup.`,
+        () => {
+          delete state.days[dayKey];
+          normalizeState();
+          saveState();
+          render();
+          setAdminDate(getTodayKey());
+          setAdminStatus(`${dayKey} deleted.`, "good");
+        }
+      );
+    }
+
+    function getBackwardDayKeys(count) {
+      const keys = [];
+      let date = keyToLocalDate(getTodayKey());
+      for (let index = 0; index < count; index++) {
+        keys.push(formatDateKey(date));
+        date = addDays(date, -1);
+      }
+      return keys;
+    }
+
+    function makeDayPerfect(dayKey) {
+      const existing = state.days[dayKey] || { missedReason: "" };
+      state.days[dayKey] = {
+        ...existing,
+        done: [...TASK_IDS],
+        completed: true,
+        missedReason: typeof existing.missedReason === "string" ? existing.missedReason : ""
+      };
+    }
+
+    function breakChecklistDay(dayKey) {
+      const existing = state.days[dayKey] || { done: [], missedReason: "" };
+      const done = getCleanDoneList(existing.done).filter(id => id !== "reading");
+      state.days[dayKey] = {
+        ...existing,
+        done,
+        completed: false,
+        missedReason: typeof existing.missedReason === "string" ? existing.missedReason : ""
+      };
+    }
+
+    function addTaskToDay(dayKey, taskId) {
+      const existing = state.days[dayKey] || { done: [], completed: false, missedReason: "" };
+      const done = [...new Set([...getCleanDoneList(existing.done), taskId])];
+      state.days[dayKey] = {
+        ...existing,
+        done,
+        completed: done.length === TASKS.length,
+        missedReason: typeof existing.missedReason === "string" ? existing.missedReason : ""
+      };
+    }
+
+    function removeTaskFromDay(dayKey, taskId) {
+      const existing = state.days[dayKey] || { done: [], completed: false, missedReason: "" };
+      const done = getCleanDoneList(existing.done).filter(id => id !== taskId);
+      state.days[dayKey] = {
+        ...existing,
+        done,
+        completed: done.length === TASKS.length,
+        missedReason: typeof existing.missedReason === "string" ? existing.missedReason : ""
+      };
+    }
+
+    function getAdminStreakTarget(input, label) {
+      const value = Number.parseInt(input.value, 10);
+      if (!Number.isInteger(value) || value < 0 || value > 365) {
+        setAdminStatus(`${label} must be a number from 0 to 365.`, "bad");
+        return null;
+      }
+      return value;
+    }
+
+    function adminSetChecklistStreak() {
+      const target = getAdminStreakTarget(adminChecklistStreakInput, "Checklist streak");
+      if (target === null) return;
+
+      openAdminConfirm(
+        "Set checklist streak",
+        `You are about to force your checklist streak to ${target}. This edits multiple saved days. Only continue if you are correcting real data.`,
+        () => {
+          if (target === 0) {
+            breakChecklistDay(getTodayKey());
+            breakChecklistDay(addDaysToKey(getTodayKey(), -1));
+          } else {
+            for (const dayKey of getBackwardDayKeys(target)) {
+              makeDayPerfect(dayKey);
+            }
+            breakChecklistDay(addDaysToKey(getTodayKey(), -target));
+          }
+          normalizeState();
+          saveState();
+          render();
+          setAdminDate(getTodayKey());
+          setAdminStatus(`Checklist streak set to ${target}.`, "good");
+        }
+      );
+    }
+
+    function adminSetGymStreak() {
+      const target = getAdminStreakTarget(adminGymStreakInput, "Gym streak");
+      if (target === null) return;
+
+      openAdminConfirm(
+        "Set gym streak",
+        `You are about to force your gym streak to ${target}. This edits the gym task across multiple saved days.`,
+        () => {
+          if (target === 0) {
+            removeTaskFromDay(getTodayKey(), "gym");
+            removeTaskFromDay(addDaysToKey(getTodayKey(), -1), "gym");
+          } else {
+            for (const dayKey of getBackwardDayKeys(target)) {
+              addTaskToDay(dayKey, "gym");
+            }
+            removeTaskFromDay(addDaysToKey(getTodayKey(), -target), "gym");
+          }
+          normalizeState();
+          saveState();
+          render();
+          setAdminDate(getTodayKey());
+          setAdminStatus(`Gym streak set to ${target}.`, "good");
+        }
+      );
+    }
+
+    function adminNormalizeData() {
+      openAdminConfirm(
+        "Fix false missed / normalize",
+        "This will clean saved task IDs, recalculate completed flags, remove empty old days, and move accidental after-midnight night tasks back to the previous day when possible.",
+        () => {
+          const changed = normalizeState();
+          saveState();
+          render();
+          setAdminStatus(changed ? "Data normalized and saved." : "Data already looked clean.", "good");
+        }
+      );
+    }
+
+    function adminResetEverything() {
+      openAdminConfirm(
+        "Reset everything",
+        "This will erase all saved checklist history, streak data, missed reasons, and review data. Export a backup first if you might need it.",
+        () => {
+          state = { days: {} };
+          saveState();
+          render();
+          setAdminDate(getTodayKey());
+          setAdminStatus("Everything reset.", "good");
+        }
+      );
+    }
+
+    function adminExportBackup() {
+      const backup = {
+        exportedAt: new Date().toISOString(),
+        app: "Locked OS",
+        storageKey: STORAGE_KEY,
+        state
+      };
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `locked-os-backup-${getTodayKey()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setAdminStatus("Backup exported.", "good");
+    }
+
+    function adminRestoreBackup() {
+      openAdminConfirm(
+        "Restore backup",
+        "This will replace your current saved data with the backup JSON pasted in the box. Export your current data first if you might need it.",
+        () => {
+          try {
+            const parsed = JSON.parse(adminImportBox.value);
+            const restoredState = parsed?.state || parsed;
+            if (!restoredState || typeof restoredState !== "object" || !restoredState.days || typeof restoredState.days !== "object") {
+              throw new Error("Backup does not contain a valid state.days object.");
+            }
+            state = restoredState;
+            normalizeState();
+            saveState();
+            render();
+            setAdminDate(getTodayKey());
+            setAdminStatus("Backup restored and saved.", "good");
+          } catch (error) {
+            console.error(error);
+            setAdminStatus(`Restore failed: ${error.message}`, "bad");
+          }
+        }
+      );
+    }
+
     function render() {
-      ensureToday();
+      ensureDay();
       renderTaskLists();
       renderProgress();
       renderPhoneLock();
       renderRankAndReward();
       renderReview();
+      renderAdmin();
     }
 
     async function unlock() {
       const value = passwordInput.value.trim();
-
       if (value === PASSWORD) {
         loginError.textContent = "";
         passwordInput.value = "";
@@ -1553,7 +1794,6 @@
         await loadSupabaseState();
         return;
       }
-
       loginError.textContent = "Wrong password.";
       passwordInput.select();
     }
@@ -1573,14 +1813,11 @@
     function setupTabs() {
       const tabs = document.querySelectorAll(".tab");
       const pages = document.querySelectorAll(".page");
-
       tabs.forEach(tab => {
         tab.addEventListener("click", () => {
           const targetId = tab.dataset.tab;
-
           tabs.forEach(item => item.classList.remove("active"));
           pages.forEach(page => page.classList.remove("active"));
-
           tab.classList.add("active");
           document.getElementById(targetId).classList.add("active");
         });
@@ -1588,30 +1825,51 @@
     }
 
     unlockBtn.addEventListener("click", unlock);
-
     passwordInput.addEventListener("keydown", event => {
-      if (event.key === "Enter") {
-        unlock();
-      }
+      if (event.key === "Enter") unlock();
     });
-
-    logoutBtn.addEventListener("click", () => {
-      showLogin();
-    });
-
+    logoutBtn.addEventListener("click", showLogin);
     missedReasonBox.addEventListener("input", () => {
-      const today = getTodayKey();
-      const existing = ensureToday();
-
-      state.days[today] = {
-        ...existing,
-        missedReason: missedReasonBox.value
-      };
-
+      const todayKey = getTodayKey();
+      const existing = ensureDay(todayKey);
+      state.days[todayKey] = { ...existing, missedReason: missedReasonBox.value };
       saveState();
     });
 
+    adminTodayBtn.addEventListener("click", () => setAdminDate(getTodayKey()));
+    adminYesterdayBtn.addEventListener("click", () => setAdminDate(addDaysToKey(getTodayKey(), -1)));
+    adminLoadBtn.addEventListener("click", renderAdmin);
+    adminDateInput.addEventListener("change", renderAdmin);
+    adminTaskList.addEventListener("change", () => {
+      const doneCount = getAdminSelectedDoneSet().size;
+      adminDaySummary.textContent = `${getAdminSelectedKey()}: ${doneCount} / ${TASKS.length} tasks selected. Click save to write this change.`;
+    });
+    adminSaveDayBtn.addEventListener("click", adminSaveSelectedDay);
+    adminPerfectDayBtn.addEventListener("click", adminMarkPerfectDay);
+    adminClearDayBtn.addEventListener("click", adminClearSelectedDay);
+    adminDeleteDayBtn.addEventListener("click", adminDeleteSelectedDay);
+    adminSetChecklistStreakBtn.addEventListener("click", adminSetChecklistStreak);
+    adminSetGymStreakBtn.addEventListener("click", adminSetGymStreak);
+    adminExportBtn.addEventListener("click", adminExportBackup);
+    adminNormalizeBtn.addEventListener("click", adminNormalizeData);
+    adminResetBtn.addEventListener("click", adminResetEverything);
+    adminImportBtn.addEventListener("click", adminRestoreBackup);
+    adminConfirmChecks.forEach(input => input.addEventListener("change", updateAdminConfirmButton));
+    adminConfirmPhrase.addEventListener("input", updateAdminConfirmButton);
+    adminCancelConfirmBtn.addEventListener("click", () => {
+      closeAdminConfirm();
+      setAdminStatus("Canceled. Nothing changed.");
+    });
+    adminFinalConfirmBtn.addEventListener("click", () => {
+      if (!pendingAdminAction || adminFinalConfirmBtn.disabled) return;
+      const action = pendingAdminAction.actionFn;
+      closeAdminConfirm();
+      action();
+    });
+
     setupTabs();
+    const localChanged = normalizeState();
+    if (localChanged) saveLocalState();
     showLogin();
   </script>
 </body>
