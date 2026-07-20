@@ -243,6 +243,11 @@
 
     .section { margin-bottom: 16px; }
 
+    .routine-section.locked .checklist { display: none; }
+    .section-lock { display: none; margin: 12px; padding: 15px; border: 1px dashed rgba(42, 30, 18, 0.2); border-radius: 18px; background: rgba(42, 30, 18, 0.045); color: var(--muted); font-weight: 850; line-height: 1.45; }
+    .routine-section.locked .section-lock { display: block; }
+    .routine-section.unlocked .section-lock { display: none; }
+
     .section-header {
       padding: 17px 20px;
       border-bottom: 1px solid var(--line);
@@ -390,31 +395,6 @@
     .ladder-name { font-weight: 950; }
     .ladder-days { color: var(--muted); font-weight: 850; font-size: 0.88rem; }
 
-    .looks-day-strip {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 8px;
-      margin-bottom: 18px;
-    }
-
-    .day-chip {
-      padding: 10px 6px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(255, 250, 241, 0.62);
-      color: var(--muted);
-      text-align: center;
-      font-size: 0.78rem;
-      font-weight: 950;
-    }
-
-    .day-chip.active {
-      border-color: rgba(37, 132, 184, 0.42);
-      background: var(--blue);
-      color: white;
-      box-shadow: 0 10px 24px rgba(37, 132, 184, 0.18);
-    }
-
     .water-card {
       scroll-margin-top: 18px;
       background: linear-gradient(145deg, rgba(255, 250, 241, 0.9), rgba(37, 132, 184, 0.08));
@@ -431,9 +411,6 @@
     .water-custom-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; }
 
     .workout-name { margin: 0; font-size: 1.8rem; line-height: 1.05; letter-spacing: -0.035em; }
-    .workout-parts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-    .workout-part { padding: 9px 12px; border-radius: 999px; background: var(--blue-soft); color: var(--blue-dark); font-size: 0.84rem; font-weight: 950; }
-    .workout-extra { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.44); color: var(--muted); font-weight: 800; line-height: 1.45; }
     .safety-note { margin-top: 12px; padding: 12px; border-radius: 16px; background: rgba(42, 30, 18, 0.055); border: 1px solid var(--line); color: var(--muted); font-size: 0.82rem; font-weight: 750; line-height: 1.45; }
 
     .review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr); gap: 18px; align-items: start; }
@@ -494,8 +471,6 @@
 
     @media (max-width: 560px) {
       .game-grid { grid-template-columns: 1fr; }
-      .looks-day-strip { gap: 5px; }
-      .day-chip { padding: 9px 3px; font-size: 0.68rem; }
       .water-custom-row { grid-template-columns: 1fr; }
     }
   </style>
@@ -535,12 +510,12 @@
               <div id="progressCircle" class="circle">
                 <div class="circle-inner">
                   <div id="percent" class="percent">0%</div>
-                  <div id="doneCount" class="done-count">0 / 14</div>
+                  <div id="doneCount" class="done-count">0 / 12</div>
                 </div>
               </div>
               <div>
                 <p class="quote">Win today. No drama.</p>
-                <p id="tasksLeft" class="tasks-left">You have 14 tasks left today.</p>
+                <p id="tasksLeft" class="tasks-left">You have 12 tasks left today.</p>
                 <p id="syncStatus" class="sync-status">Supabase sync not connected yet.</p>
               </div>
             </section>
@@ -571,7 +546,6 @@
             <section class="card section">
               <div class="section-header">
                 <h3>Night</h3>
-                <p>The checklist rolls over at 4 AM, so late-night completions still count for the night before.</p>
               </div>
               <div id="nightList" class="checklist"></div>
             </section>
@@ -603,13 +577,10 @@
       </section>
 
       <section id="looksPage" class="page">
-        <div id="looksDayStrip" class="looks-day-strip" aria-label="Weekly rotation"></div>
-
         <div class="looks-hero">
           <section class="card looks-title-card">
-            <p class="eyebrow blue">Automatic daily rotation</p>
             <h2 id="looksDayName">Monday routine</h2>
-            <p id="looksDateText">The correct routine loads automatically using the same 4 AM rollover as the main checklist.</p>
+            <p id="looksDateText">Monday, July 20th</p>
           </section>
 
           <section class="card summary">
@@ -636,19 +607,21 @@
               <div id="looksMorningList" class="checklist"></div>
             </section>
 
-            <section class="card section">
+            <section id="looksMiddaySection" class="card section routine-section locked">
               <div class="section-header">
                 <h3>Midday</h3>
                 <p>Training, nutrition basics, creatine, and hydration.</p>
               </div>
+              <div id="looksMiddayLock" class="section-lock">Finish every morning task to unlock Midday.</div>
               <div id="looksMiddayList" class="checklist"></div>
             </section>
 
-            <section class="card section">
+            <section id="looksNightSection" class="card section routine-section locked">
               <div class="section-header">
                 <h3>Night</h3>
                 <p>Wind down at 9 PM and complete the correct rotating treatment tasks.</p>
               </div>
+              <div id="looksNightLock" class="section-lock">Finish every midday task to unlock Night.</div>
               <div id="looksNightList" class="checklist"></div>
             </section>
           </div>
@@ -681,17 +654,8 @@
             <section class="card workout-card">
               <div class="panel-title">
                 <h3>Today's gym</h3>
-                <span id="workoutBadge" class="badge blue">Split</span>
               </div>
-              <h2 id="workoutName" class="workout-name">Chest + side delts</h2>
-              <div id="workoutParts" class="workout-parts"></div>
-              <div id="workoutExtra" class="workout-extra"></div>
-            </section>
-
-            <section class="card panel-card">
-              <div class="panel-title"><h3>Routine note</h3><span class="badge blue">4 AM reset</span></div>
-              <p class="small-muted">The routine changes automatically each day. Checkmarks and water are saved separately for each date and sync through the existing Supabase state.</p>
-              <div class="safety-note">Follow product directions. Stop any treatment or exercise that causes significant irritation, pain, swelling, or injury.</div>
+              <h2 id="workoutName" class="workout-name">Chest + side delts + neck exercises</h2>
             </section>
           </aside>
         </div>
@@ -774,49 +738,11 @@
               </div>
               <span id="missedOverrideBadge" class="badge">Calculated</span>
             </div>
-            <p>Put the count you want beside each original checklist task. Use 0 for tasks you do not want showing up.</p>
+            <p>Put the count you want beside each original checklist task, then save. Use 0 for anything you do not want showing.</p>
             <div id="adminMissedCountsList" class="missed-admin-list"></div>
             <div class="actions">
               <button id="adminSaveMissedCountsBtn" class="btn green" type="button">Save missed numbers</button>
-              <button id="adminClearMissedCountsBtn" class="btn secondary" type="button">Use calculated missed tasks</button>
-            </div>
-
-            <div id="adminConfirmPanel" class="confirm-panel">
-              <h3 id="adminConfirmTitle">Confirm admin change</h3>
-              <p id="adminConfirmText">This changes the numbers shown in the app. Do all 5 checks before continuing.</p>
-
-              <label class="confirm-step">
-                <input class="admin-confirm-check" type="checkbox" />
-                <span>Step 1: I am only using this because the app data is wrong or needs a real correction.</span>
-              </label>
-
-              <label class="confirm-step">
-                <input class="admin-confirm-check" type="checkbox" />
-                <span>Step 2: I understand this changes what the app shows me.</span>
-              </label>
-
-              <label class="confirm-step">
-                <input class="admin-confirm-check" type="checkbox" />
-                <span>Step 3: I checked the number I typed before continuing.</span>
-              </label>
-
-              <label class="confirm-step">
-                <input class="admin-confirm-check" type="checkbox" />
-                <span>Step 4: I know it is okay to cancel and turn back right now.</span>
-              </label>
-
-              <div class="confirm-step">
-                <input class="admin-confirm-check" type="checkbox" />
-                <span>
-                  Step 5: Type <strong>LOCKED IN</strong> below to confirm you actually mean it.
-                  <input id="adminConfirmPhrase" type="text" placeholder="Type LOCKED IN" autocomplete="off" />
-                </span>
-              </div>
-
-              <div class="actions">
-                <button id="adminFinalConfirmBtn" class="btn danger" type="button" disabled>Confirm change</button>
-                <button id="adminCancelConfirmBtn" class="btn secondary" type="button">Cancel, turn back</button>
-              </div>
+              <button id="adminClearMissedCountsBtn" class="btn secondary" type="button">Reset all to 0</button>
             </div>
           </section>
         </div>
@@ -829,8 +755,10 @@
     const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
     const SUPABASE_ROW_ID = "samuel-main";
-    const STORAGE_KEY = "locked_os_daily_checklist_v7";
+    const SUPABASE_TABLE = "locked_os_state_v2";
+    const STORAGE_KEY = "locked_os_daily_checklist_v8";
     const OLD_STORAGE_KEYS = [
+      "locked_os_daily_checklist_v7",
       "locked_os_daily_checklist_v6",
       "locked_os_daily_checklist_v5",
       "locked_os_daily_checklist_v4"
@@ -858,12 +786,10 @@
       { id: "real-world-lesson", section: "morning", title: "Real World daily lesson" },
       { id: "real-world-puzzle", section: "morning", title: "Real World daily puzzle" },
       { id: "breakfast", section: "morning", title: "Eat breakfast" },
-      { id: "accutane", section: "morning", title: "Take Accutane" },
       { id: "gym", section: "afternoon", title: "Go to gym" },
       { id: "creatine", section: "afternoon", title: "Take creatine" },
       { id: "reading", section: "night", title: "Read for 10 minutes" },
-      { id: "plan-next-day", section: "night", title: "Plan next day" },
-      { id: "bed-routine", section: "night", title: "Full bedtime routine" }
+      { id: "plan-next-day", section: "night", title: "Plan next day" }
     ];
 
     const LEGACY_TASK_ID_MAP = { "bed-ready": "plan-next-day" };
@@ -914,41 +840,13 @@
     ];
 
     const WORKOUTS = {
-      Monday: {
-        name: "Chest + side delts",
-        parts: ["Chest", "Side delts", "Neck exercises"],
-        extra: "Complete neck exercises after or alongside the main workout."
-      },
-      Tuesday: {
-        name: "Back + rear delts",
-        parts: ["Back", "Rear delts"],
-        extra: "Today is the back and rear-delt rotation day."
-      },
-      Wednesday: {
-        name: "Arms",
-        parts: ["Arms"],
-        extra: "Wash bed sheets during the midday block."
-      },
-      Thursday: {
-        name: "Legs",
-        parts: ["Legs"],
-        extra: "Face shaving and eyebrow management are included in the morning routine."
-      },
-      Friday: {
-        name: "Cardio + abs",
-        parts: ["Cardio", "Abs", "Neck exercises"],
-        extra: "Complete neck exercises after or alongside cardio and abs."
-      },
-      Saturday: {
-        name: "Chest + side delts",
-        parts: ["Chest", "Side delts"],
-        extra: "Masseter training is included in the night routine."
-      },
-      Sunday: {
-        name: "Back + rear delts",
-        parts: ["Back", "Rear delts"],
-        extra: "Wash bed sheets midday. Lip exfoliation and eyebrow microneedling are included at night."
-      }
+      Monday: "Chest + side delts + neck exercises",
+      Tuesday: "Back + rear delts",
+      Wednesday: "Arms",
+      Thursday: "Legs",
+      Friday: "Cardio + abs + neck exercises",
+      Saturday: "Chest + side delts",
+      Sunday: "Back + rear delts"
     };
 
     function cloneTasks(tasks) {
@@ -956,22 +854,12 @@
     }
 
     function makeMidday(dayName) {
-      const workout = WORKOUTS[dayName];
+      const workoutName = WORKOUTS[dayName];
       const tasks = [
-        {
-          id: "gym",
-          title: `Gym: ${workout.name.toLowerCase()}`,
-          subtitle: `Today's focus: ${workout.parts.join(" • ")}`,
-          linkCore: "gym"
-        }
+        { id: "gym", title: `Gym: ${workoutName}`, linkCore: "gym" },
+        { id: "creatine", title: "Take creatine", linkCore: "creatine" },
+        { id: "low-sodium-potassium", title: "Low sodium + high potassium" }
       ];
-
-      if (dayName === "Monday" || dayName === "Friday") {
-        tasks.push({ id: "neck-exercises", title: "Neck exercises" });
-      }
-
-      tasks.push({ id: "creatine", title: "Take creatine", linkCore: "creatine" });
-      tasks.push({ id: "low-sodium-potassium", title: "Low sodium + high potassium" });
 
       if (dayName === "Wednesday" || dayName === "Sunday") {
         tasks.push({ id: "wash-bed-sheets", title: "Wash bed sheets" });
@@ -1073,15 +961,6 @@
     const adminSaveMissedCountsBtn = document.getElementById("adminSaveMissedCountsBtn");
     const adminClearMissedCountsBtn = document.getElementById("adminClearMissedCountsBtn");
     const missedOverrideBadge = document.getElementById("missedOverrideBadge");
-    const adminConfirmPanel = document.getElementById("adminConfirmPanel");
-    const adminConfirmTitle = document.getElementById("adminConfirmTitle");
-    const adminConfirmText = document.getElementById("adminConfirmText");
-    const adminConfirmChecks = [...document.querySelectorAll(".admin-confirm-check")];
-    const adminConfirmPhrase = document.getElementById("adminConfirmPhrase");
-    const adminFinalConfirmBtn = document.getElementById("adminFinalConfirmBtn");
-    const adminCancelConfirmBtn = document.getElementById("adminCancelConfirmBtn");
-
-    const looksDayStrip = document.getElementById("looksDayStrip");
     const looksDayName = document.getElementById("looksDayName");
     const looksDateText = document.getElementById("looksDateText");
     const looksProgressCircle = document.getElementById("looksProgressCircle");
@@ -1089,7 +968,9 @@
     const looksDoneCount = document.getElementById("looksDoneCount");
     const looksTasksLeft = document.getElementById("looksTasksLeft");
     const looksMorningList = document.getElementById("looksMorningList");
+    const looksMiddaySection = document.getElementById("looksMiddaySection");
     const looksMiddayList = document.getElementById("looksMiddayList");
+    const looksNightSection = document.getElementById("looksNightSection");
     const looksNightList = document.getElementById("looksNightList");
     const waterCard = document.getElementById("waterCard");
     const waterBadge = document.getElementById("waterBadge");
@@ -1099,14 +980,10 @@
     const waterCustomInput = document.getElementById("waterCustomInput");
     const addCustomWaterBtn = document.getElementById("addCustomWaterBtn");
     const resetWaterBtn = document.getElementById("resetWaterBtn");
-    const workoutBadge = document.getElementById("workoutBadge");
     const workoutName = document.getElementById("workoutName");
-    const workoutParts = document.getElementById("workoutParts");
-    const workoutExtra = document.getElementById("workoutExtra");
 
     let state = loadLocalState();
     let saveTimer = null;
-    let pendingAdminAction = null;
     let renderedDayKey = getTodayKey();
 
     function formatDateKey(date) {
@@ -1244,7 +1121,7 @@
         const oldJson = JSON.stringify(state.adminOverrides.missedCounts);
         const newJson = JSON.stringify(cleanCounts);
         if (oldJson !== newJson) {
-          state.adminOverrides.missedCounts = Object.keys(cleanCounts).length ? cleanCounts : null;
+          state.adminOverrides.missedCounts = cleanCounts;
           changed = true;
         }
       }
@@ -1302,10 +1179,10 @@
 
       syncStatus.textContent = "Loading from Supabase...";
       const { data, error } = await supabaseClient
-        .from("locked_os_state")
+        .from(SUPABASE_TABLE)
         .select("state")
         .eq("id", SUPABASE_ROW_ID)
-        .single();
+        .maybeSingle();
 
       if (error) {
         syncStatus.textContent = "Supabase load failed. Using local save.";
@@ -1319,6 +1196,8 @@
         saveLocalState();
         render();
         if (changed) saveState();
+      } else {
+        await saveSupabaseState();
       }
 
       syncStatus.textContent = "Synced with Supabase.";
@@ -1337,7 +1216,7 @@
 
       syncStatus.textContent = "Saving...";
       const { error } = await supabaseClient
-        .from("locked_os_state")
+        .from(SUPABASE_TABLE)
         .upsert({ id: SUPABASE_ROW_ID, state, updated_at: new Date().toISOString() });
 
       if (error) {
@@ -1558,10 +1437,10 @@
       const nextRank = getNextRank(streak);
       const overrideActive = Number.isInteger(state.adminOverrides?.currentStreak);
 
-      rankBadge.textContent = overrideActive ? `Day ${streak} edited` : `Day ${streak}`;
-      rankBadge.classList.toggle("warning", overrideActive);
+      rankBadge.textContent = `Day ${streak}`;
+      rankBadge.classList.remove("warning");
       rankName.textContent = currentRank.name;
-      rankCopy.textContent = overrideActive ? `${currentRank.copy} Current streak is manually adjusted in Admin.` : currentRank.copy;
+      rankCopy.textContent = currentRank.copy;
       bigStreak.textContent = streak;
       gameChecklistStreak.textContent = streak;
       gameGymStreak.textContent = gymStreak;
@@ -1602,16 +1481,6 @@
           <div class="badge">${streak >= rank.days ? "Unlocked" : "Locked"}</div>
         `;
         rankLadder.appendChild(item);
-      }
-    }
-
-    function renderLooksDayStrip(dayName) {
-      looksDayStrip.innerHTML = "";
-      for (const name of WEEK_ORDER) {
-        const chip = document.createElement("div");
-        chip.className = `day-chip ${name === dayName ? "active" : ""}`;
-        chip.textContent = name.slice(0, 3);
-        looksDayStrip.appendChild(chip);
       }
     }
 
@@ -1702,17 +1571,21 @@
     }
 
     function renderWorkout(dayName) {
-      const workout = WORKOUTS[dayName];
-      workoutBadge.textContent = dayName;
-      workoutName.textContent = workout.name;
-      workoutParts.innerHTML = "";
-      for (const part of workout.parts) {
-        const chip = document.createElement("span");
-        chip.className = "workout-part";
-        chip.textContent = part;
-        workoutParts.appendChild(chip);
-      }
-      workoutExtra.textContent = workout.extra;
+      workoutName.textContent = WORKOUTS[dayName];
+    }
+
+    function getOrdinalDay(day) {
+      const mod100 = day % 100;
+      if (mod100 >= 11 && mod100 <= 13) return `${day}th`;
+      if (day % 10 === 1) return `${day}st`;
+      if (day % 10 === 2) return `${day}nd`;
+      if (day % 10 === 3) return `${day}rd`;
+      return `${day}th`;
+    }
+
+    function setRoutineSectionState(section, unlocked) {
+      section.classList.toggle("locked", !unlocked);
+      section.classList.toggle("unlocked", unlocked);
     }
 
     function renderLooks() {
@@ -1722,14 +1595,14 @@
       const doneSet = getTodayLooksDoneSet();
       const date = keyToLocalDate(todayKey);
 
-      looksDayName.textContent = `${dayName} routine`;
-      looksDateText.textContent = `${date.toLocaleDateString(undefined, {
-        weekday: "long",
-        month: "long",
-        day: "numeric"
-      })}. The routine rotates automatically at 4:00 AM.`;
+      const morningComplete = routine.morning.every(task => doneSet.has(task.id));
+      const middayComplete = routine.midday.every(task => doneSet.has(task.id));
 
-      renderLooksDayStrip(dayName);
+      looksDayName.textContent = `${dayName} routine`;
+      looksDateText.textContent = `${dayName}, ${date.toLocaleDateString(undefined, { month: "long" })} ${getOrdinalDay(date.getDate())}`;
+
+      setRoutineSectionState(looksMiddaySection, morningComplete);
+      setRoutineSectionState(looksNightSection, morningComplete && middayComplete);
       renderLooksTaskList(looksMorningList, routine.morning, doneSet);
       renderLooksTaskList(looksMiddayList, routine.midday, doneSet);
       renderLooksTaskList(looksNightList, routine.night, doneSet);
@@ -1846,33 +1719,6 @@
       }
     }
 
-    function resetAdminConfirmInputs() {
-      adminConfirmChecks.forEach(input => input.checked = false);
-      adminConfirmPhrase.value = "";
-      adminFinalConfirmBtn.disabled = true;
-    }
-
-    function updateAdminConfirmButton() {
-      const allChecked = adminConfirmChecks.every(input => input.checked);
-      const phraseMatches = adminConfirmPhrase.value.trim() === "LOCKED IN";
-      adminFinalConfirmBtn.disabled = !(allChecked && phraseMatches && pendingAdminAction);
-    }
-
-    function openAdminConfirmation(title, text, action) {
-      pendingAdminAction = action;
-      adminConfirmTitle.textContent = title;
-      adminConfirmText.textContent = text;
-      adminConfirmPanel.classList.add("active");
-      resetAdminConfirmInputs();
-      setAdminStatus("Confirmation opened. You can still cancel.");
-    }
-
-    function closeAdminConfirmation() {
-      pendingAdminAction = null;
-      adminConfirmPanel.classList.remove("active");
-      resetAdminConfirmInputs();
-    }
-
     function setCurrentStreakOverride() {
       const value = Number(adminCurrentStreakInput.value);
       if (!Number.isInteger(value) || value < 0 || value > 365) {
@@ -1880,30 +1726,18 @@
         return;
       }
 
-      openAdminConfirmation(
-        "Set current streak",
-        `This will manually show your current day streak as ${value}. It will not edit each saved day.`,
-        () => {
-          state.adminOverrides.currentStreak = value;
-          adminCurrentStreakInput.value = "";
-          saveState();
-          render();
-          setAdminStatus(`Current streak manually set to ${value}.`, "good");
-        }
-      );
+      state.adminOverrides.currentStreak = value;
+      adminCurrentStreakInput.value = "";
+      saveState();
+      render();
+      setAdminStatus(`Current streak set to ${value}.`, "good");
     }
 
     function clearCurrentStreakOverride() {
-      openAdminConfirmation(
-        "Use calculated streak",
-        "This will remove the manual streak number and go back to calculating your streak from completed days.",
-        () => {
-          state.adminOverrides.currentStreak = null;
-          saveState();
-          render();
-          setAdminStatus("Current streak is now calculated again.", "good");
-        }
-      );
+      state.adminOverrides.currentStreak = null;
+      saveState();
+      render();
+      setAdminStatus("Current streak now uses completed-day history.", "good");
     }
 
     function saveMissedCountOverrides() {
@@ -1919,29 +1753,17 @@
         if (value > 0) counts[input.dataset.taskId] = value;
       }
 
-      openAdminConfirmation(
-        "Save missed-task numbers",
-        "This will manually replace the most-missed task numbers shown in the Review tab.",
-        () => {
-          state.adminOverrides.missedCounts = Object.keys(counts).length ? counts : null;
-          saveState();
-          render();
-          setAdminStatus("Most-missed task numbers updated.", "good");
-        }
-      );
+      state.adminOverrides.missedCounts = counts;
+      saveState();
+      render();
+      setAdminStatus("Missed-task numbers saved.", "good");
     }
 
     function clearMissedCountOverrides() {
-      openAdminConfirmation(
-        "Use calculated missed tasks",
-        "This will remove your manual missed-task numbers and go back to calculating them from saved days.",
-        () => {
-          state.adminOverrides.missedCounts = null;
-          saveState();
-          render();
-          setAdminStatus("Most-missed tasks are calculated again.", "good");
-        }
-      );
+      state.adminOverrides.missedCounts = {};
+      saveState();
+      render();
+      setAdminStatus("All displayed missed-task numbers reset to 0.", "good");
     }
 
     function render() {
@@ -2032,19 +1854,6 @@
     adminClearCurrentStreakBtn.addEventListener("click", clearCurrentStreakOverride);
     adminSaveMissedCountsBtn.addEventListener("click", saveMissedCountOverrides);
     adminClearMissedCountsBtn.addEventListener("click", clearMissedCountOverrides);
-
-    adminConfirmChecks.forEach(input => input.addEventListener("change", updateAdminConfirmButton));
-    adminConfirmPhrase.addEventListener("input", updateAdminConfirmButton);
-    adminCancelConfirmBtn.addEventListener("click", () => {
-      closeAdminConfirmation();
-      setAdminStatus("Canceled. No changes made.");
-    });
-    adminFinalConfirmBtn.addEventListener("click", () => {
-      if (!pendingAdminAction) return;
-      const action = pendingAdminAction;
-      closeAdminConfirmation();
-      action();
-    });
 
     setInterval(() => {
       if (getTodayKey() !== renderedDayKey && !mainApp.classList.contains("hidden")) {
