@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Daily Checklist</title>
+  <title>Locked OS</title>
 
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M69 10 84 25 40 69 25 54 69 10Z' fill='%23f4d28b'/%3E%3Cpath d='M20 59 41 38 48 45 27 66 20 59Z' fill='%23fff8ec'/%3E%3Cpath d='M18 68 32 54 46 68 32 82 18 68Z' fill='%232f8f56'/%3E%3Cpath d='M14 83 25 72 32 79 21 90 14 83Z' fill='%239b6a2f'/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -19,6 +19,9 @@
       --green: #2f8f56;
       --green-dark: #1f6f3f;
       --green-soft: rgba(47, 143, 86, 0.12);
+      --blue: #2584b8;
+      --blue-dark: #15658f;
+      --blue-soft: rgba(37, 132, 184, 0.12);
       --red: #b64242;
       --red-soft: rgba(182, 66, 66, 0.1);
       --shadow: 0 18px 50px rgba(55, 38, 18, 0.12);
@@ -26,6 +29,8 @@
     }
 
     * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
 
     body {
       margin: 0;
@@ -75,7 +80,9 @@
     .rank-name,
     .game-title-card h2,
     .review-card h2,
-    .admin-card h2 { letter-spacing: -0.035em; }
+    .admin-card h2,
+    .looks-title-card h2,
+    .water-amount { letter-spacing: -0.035em; }
 
     .login-card h1 { margin: 0; font-size: 2.45rem; line-height: 0.98; }
 
@@ -89,7 +96,8 @@
     .login-row { display: grid; gap: 10px; }
 
     .login-row input,
-    .admin-input {
+    .admin-input,
+    .water-input {
       min-height: 48px;
       border: 1px solid var(--line);
       border-radius: 999px;
@@ -103,7 +111,8 @@
 
     .login-row input:focus,
     .missed-box:focus,
-    .admin-input:focus {
+    .admin-input:focus,
+    .water-input:focus {
       border-color: rgba(47, 143, 86, 0.65);
       box-shadow: 0 0 0 4px rgba(47, 143, 86, 0.12);
     }
@@ -130,7 +139,9 @@
     .btn:active { transform: scale(0.98); }
     .btn.secondary { background: rgba(255, 255, 255, 0.55); color: var(--text); border: 1px solid var(--line); }
     .btn.green { background: var(--green); color: #fff; }
+    .btn.blue { background: var(--blue); color: #fff; }
     .btn.danger { background: var(--red); color: #fff; }
+    .btn.compact { min-height: 38px; padding: 0 14px; }
 
     .top {
       display: flex;
@@ -209,6 +220,10 @@
       transition: background 0.2s ease;
     }
 
+    .circle.looks-circle {
+      background: conic-gradient(var(--blue) 0deg, rgba(42, 30, 18, 0.09) 0deg);
+    }
+
     .circle-inner {
       width: 112px;
       height: 112px;
@@ -257,6 +272,7 @@
 
     .task:hover { background: rgba(255, 255, 255, 0.65); border-color: var(--line-strong); }
     .task:active { transform: scale(0.995); }
+    .task.tracked { border-style: dashed; }
 
     .box {
       width: 28px;
@@ -272,7 +288,11 @@
 
     .task.done { border-color: rgba(47, 143, 86, 0.28); background: rgba(47, 143, 86, 0.09); }
     .task.done .box { background: var(--green); border-color: var(--green); }
+    .looks-task.done { border-color: rgba(37, 132, 184, 0.3); background: var(--blue-soft); }
+    .looks-task.done .box { background: var(--blue); border-color: var(--blue); }
+    .task-copy { min-width: 0; }
     .task-title { font-weight: 850; letter-spacing: -0.005em; line-height: 1.35; }
+    .task-subtitle { margin-top: 4px; color: var(--muted); font-size: 0.82rem; font-weight: 750; line-height: 1.35; }
     .task.done .task-title { text-decoration: line-through; color: rgba(33, 24, 15, 0.64); }
 
     .phone-lock {
@@ -307,9 +327,10 @@
     }
 
     .badge { min-height: 28px; background: rgba(47, 143, 86, 0.12); color: var(--green-dark); font-size: 0.75rem; }
+    .badge.blue { background: var(--blue-soft); color: var(--blue-dark); }
     .badge.warning { background: rgba(182, 66, 66, 0.1); color: var(--red); }
     .mini-side { position: sticky; top: 18px; display: grid; gap: 14px; }
-    .panel-card, .stat-card, .review-card, .admin-card { padding: 18px; }
+    .panel-card, .stat-card, .review-card, .admin-card, .water-card, .workout-card { padding: 18px; }
 
     .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
     .panel-title h3 { margin: 0; font-size: 1.1rem; letter-spacing: -0.02em; }
@@ -323,14 +344,16 @@
     .reward strong { display: block; letter-spacing: -0.01em; }
     .reward p { margin: 6px 0 0; color: var(--muted); line-height: 1.45; font-size: 0.92rem; }
 
-    .game-hero {
+    .game-hero,
+    .looks-hero {
       display: grid;
       grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
       gap: 18px;
       margin-bottom: 18px;
     }
 
-    .game-title-card {
+    .game-title-card,
+    .looks-title-card {
       padding: 24px;
       min-height: 240px;
       display: flex;
@@ -339,15 +362,22 @@
       background: radial-gradient(circle at top right, rgba(47, 143, 86, 0.18), transparent 18rem), rgba(255, 250, 241, 0.84);
     }
 
+    .looks-title-card {
+      background: radial-gradient(circle at top right, rgba(37, 132, 184, 0.2), transparent 18rem), rgba(255, 250, 241, 0.84);
+    }
+
     .eyebrow { margin: 0 0 8px; color: var(--green-dark); font-size: 0.74rem; font-weight: 950; letter-spacing: 0.14em; text-transform: uppercase; }
-    .game-title-card h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 1; }
-    .game-title-card p { max-width: 580px; margin: 14px 0 0; color: var(--muted); line-height: 1.55; font-weight: 700; }
+    .eyebrow.blue { color: var(--blue-dark); }
+    .game-title-card h2,
+    .looks-title-card h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 1; }
+    .game-title-card p,
+    .looks-title-card p { max-width: 580px; margin: 14px 0 0; color: var(--muted); line-height: 1.55; font-weight: 700; }
 
     .big-streak-card { display: grid; align-content: center; padding: 24px; text-align: center; }
     .big-streak-card strong { display: block; font-size: clamp(4rem, 10vw, 7rem); line-height: 0.9; letter-spacing: -0.06em; }
     .big-streak-card span { display: block; margin-top: 12px; color: var(--muted); font-weight: 900; }
 
-    .game-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .game-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
     .stat-card small { display: block; color: var(--muted); font-weight: 950; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; margin-bottom: 8px; }
     .stat-card strong { display: block; font-size: 2.3rem; letter-spacing: -0.04em; line-height: 1; }
 
@@ -359,6 +389,52 @@
     .ladder-item.active .ladder-dot { background: var(--green); color: #fff; }
     .ladder-name { font-weight: 950; }
     .ladder-days { color: var(--muted); font-weight: 850; font-size: 0.88rem; }
+
+    .looks-day-strip {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .day-chip {
+      padding: 10px 6px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 250, 241, 0.62);
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.78rem;
+      font-weight: 950;
+    }
+
+    .day-chip.active {
+      border-color: rgba(37, 132, 184, 0.42);
+      background: var(--blue);
+      color: white;
+      box-shadow: 0 10px 24px rgba(37, 132, 184, 0.18);
+    }
+
+    .water-card {
+      scroll-margin-top: 18px;
+      background: linear-gradient(145deg, rgba(255, 250, 241, 0.9), rgba(37, 132, 184, 0.08));
+    }
+
+    .water-amount { margin: 0; font-size: 3rem; line-height: 1; font-weight: 950; }
+    .water-amount span { color: var(--muted); font-size: 1rem; letter-spacing: 0; }
+    .water-track { position: relative; height: 18px; border-radius: 999px; background: rgba(37, 132, 184, 0.12); overflow: hidden; margin-top: 16px; border: 1px solid rgba(37, 132, 184, 0.12); }
+    .water-fill { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--blue-dark), var(--blue)); border-radius: inherit; transition: width 0.2s ease; }
+    .water-minimum-marker { position: absolute; top: 0; bottom: 0; left: 83.333%; width: 2px; background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(21, 101, 143, 0.25); }
+    .water-labels { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font-size: 0.72rem; font-weight: 900; }
+    .water-status { margin: 12px 0 0; color: var(--blue-dark); font-weight: 900; line-height: 1.4; }
+    .water-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .water-custom-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; }
+
+    .workout-name { margin: 0; font-size: 1.8rem; line-height: 1.05; letter-spacing: -0.035em; }
+    .workout-parts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .workout-part { padding: 9px 12px; border-radius: 999px; background: var(--blue-soft); color: var(--blue-dark); font-size: 0.84rem; font-weight: 950; }
+    .workout-extra { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.44); color: var(--muted); font-weight: 800; line-height: 1.45; }
+    .safety-note { margin-top: 12px; padding: 12px; border-radius: 16px; background: rgba(42, 30, 18, 0.055); border: 1px solid var(--line); color: var(--muted); font-size: 0.82rem; font-weight: 750; line-height: 1.45; }
 
     .review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr); gap: 18px; align-items: start; }
     .review-card h2, .admin-card h2 { margin: 0; font-size: clamp(1.55rem, 4vw, 2.4rem); line-height: 1.05; }
@@ -396,12 +472,16 @@
     .confirm-step input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--green); }
     .confirm-step input[type="text"] { margin-top: 8px; width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 14px; padding: 0 12px; outline: none; font-weight: 900; }
 
+    @media (max-width: 980px) {
+      .game-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
     @media (max-width: 860px) {
       body { padding: 14px; }
       .top { align-items: stretch; flex-direction: column; }
       .tabs { width: 100%; overflow-x: auto; border-radius: 18px; }
       .tab { flex: 1; }
-      .layout, .game-hero, .game-grid, .review-grid, .admin-grid { grid-template-columns: 1fr; }
+      .layout, .game-hero, .looks-hero, .review-grid, .admin-grid { grid-template-columns: 1fr; }
       .mini-side { position: static; }
       .summary { grid-template-columns: 1fr; text-align: left; }
       .circle { margin: 0; }
@@ -410,6 +490,13 @@
       .ladder-item .badge { grid-column: 2; width: max-content; }
       .missed-admin-row { grid-template-columns: 1fr; }
       .missed-admin-row input { text-align: left; }
+    }
+
+    @media (max-width: 560px) {
+      .game-grid { grid-template-columns: 1fr; }
+      .looks-day-strip { gap: 5px; }
+      .day-chip { padding: 9px 3px; font-size: 0.68rem; }
+      .water-custom-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -420,7 +507,7 @@
       <div class="login-card">
         <div class="login-icon">⚔</div>
         <h1>Locked OS</h1>
-        <p>Enter the password to unlock your daily checklist.</p>
+        <p>Enter the password to unlock your daily system.</p>
         <div class="login-row">
           <input id="passwordInput" type="password" inputmode="numeric" placeholder="Password" autocomplete="off" />
           <button id="unlockBtn" class="btn green">Unlock</button>
@@ -434,6 +521,7 @@
         <div><h1>Daily Checklist</h1></div>
         <nav class="tabs" aria-label="App tabs">
           <button class="tab active" data-tab="checklistPage">Checklist</button>
+          <button class="tab" data-tab="looksPage">Looksmaxxing</button>
           <button class="tab" data-tab="gamePage">Gamification</button>
           <button class="tab" data-tab="reviewPage">Review</button>
           <button class="tab admin-tab" data-tab="adminPage">Admin</button>
@@ -514,6 +602,101 @@
         </div>
       </section>
 
+      <section id="looksPage" class="page">
+        <div id="looksDayStrip" class="looks-day-strip" aria-label="Weekly rotation"></div>
+
+        <div class="looks-hero">
+          <section class="card looks-title-card">
+            <p class="eyebrow blue">Automatic daily rotation</p>
+            <h2 id="looksDayName">Monday routine</h2>
+            <p id="looksDateText">The correct routine loads automatically using the same 4 AM rollover as the main checklist.</p>
+          </section>
+
+          <section class="card summary">
+            <div id="looksProgressCircle" class="circle looks-circle">
+              <div class="circle-inner">
+                <div id="looksPercent" class="percent">0%</div>
+                <div id="looksDoneCount" class="done-count">0 / 0</div>
+              </div>
+            </div>
+            <div>
+              <p class="quote">Build it daily.</p>
+              <p id="looksTasksLeft" class="tasks-left">Your routine is loading.</p>
+            </div>
+          </section>
+        </div>
+
+        <div class="layout">
+          <div>
+            <section class="card section">
+              <div class="section-header">
+                <h3>Morning</h3>
+                <p>Hair, skin, grooming, and dental routine.</p>
+              </div>
+              <div id="looksMorningList" class="checklist"></div>
+            </section>
+
+            <section class="card section">
+              <div class="section-header">
+                <h3>Midday</h3>
+                <p>Training, nutrition basics, creatine, and hydration.</p>
+              </div>
+              <div id="looksMiddayList" class="checklist"></div>
+            </section>
+
+            <section class="card section">
+              <div class="section-header">
+                <h3>Night</h3>
+                <p>Wind down at 9 PM and complete the correct rotating treatment tasks.</p>
+              </div>
+              <div id="looksNightList" class="checklist"></div>
+            </section>
+          </div>
+
+          <aside class="mini-side">
+            <section id="waterCard" class="card water-card">
+              <div class="panel-title">
+                <h3>Water tracker</h3>
+                <span id="waterBadge" class="badge blue">0%</span>
+              </div>
+              <p id="waterAmount" class="water-amount">0 <span>oz / 120 oz</span></p>
+              <div class="water-track">
+                <span id="waterFill" class="water-fill"></span>
+                <span class="water-minimum-marker" aria-hidden="true"></span>
+              </div>
+              <div class="water-labels"><span>0</span><span>100 minimum</span><span>120 target</span></div>
+              <p id="waterStatus" class="water-status">100 oz until the daily minimum.</p>
+              <div class="water-controls">
+                <button class="btn blue compact" type="button" data-water-add="8">+8 oz</button>
+                <button class="btn blue compact" type="button" data-water-add="16">+16 oz</button>
+                <button class="btn secondary compact" type="button" data-water-add="-8">−8 oz</button>
+                <button id="resetWaterBtn" class="btn secondary compact" type="button">Reset</button>
+              </div>
+              <div class="water-custom-row">
+                <input id="waterCustomInput" class="water-input" type="number" min="1" max="120" inputmode="numeric" placeholder="Custom ounces" />
+                <button id="addCustomWaterBtn" class="btn blue" type="button">Add</button>
+              </div>
+            </section>
+
+            <section class="card workout-card">
+              <div class="panel-title">
+                <h3>Today's gym</h3>
+                <span id="workoutBadge" class="badge blue">Split</span>
+              </div>
+              <h2 id="workoutName" class="workout-name">Chest + side delts</h2>
+              <div id="workoutParts" class="workout-parts"></div>
+              <div id="workoutExtra" class="workout-extra"></div>
+            </section>
+
+            <section class="card panel-card">
+              <div class="panel-title"><h3>Routine note</h3><span class="badge blue">4 AM reset</span></div>
+              <p class="small-muted">The routine changes automatically each day. Checkmarks and water are saved separately for each date and sync through the existing Supabase state.</p>
+              <div class="safety-note">Follow product directions. Stop any treatment or exercise that causes significant irritation, pain, swelling, or injury.</div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
       <section id="gamePage" class="page">
         <div class="game-hero">
           <section class="card game-title-card">
@@ -531,6 +714,7 @@
         <section class="game-grid">
           <div class="card stat-card"><small>Checklist streak</small><strong id="gameChecklistStreak">0</strong></div>
           <div class="card stat-card"><small>Gym streak</small><strong id="gameGymStreak">0</strong></div>
+          <div class="card stat-card"><small>Looks today</small><strong id="gameLooksProgress">0%</strong></div>
           <div class="card stat-card"><small>Reward progress</small><strong id="gameRewardProgress">0 / 7</strong></div>
         </section>
 
@@ -552,7 +736,7 @@
           <section class="card review-card">
             <p class="eyebrow">Weekly review</p>
             <h2>Most missed tasks</h2>
-            <p>This shows the tasks you missed most over the last 7 closed days you used the checklist. The active day is not counted against you.</p>
+            <p>This shows the original checklist tasks you missed most over the last 7 closed days you used the checklist. The active day is not counted against you.</p>
             <div id="missedTasksList" class="missed-list"></div>
           </section>
         </div>
@@ -563,7 +747,7 @@
           <section class="card admin-card admin-warning">
             <p class="eyebrow">Admin panel</p>
             <h2>Only fix real data.</h2>
-            <p>This admin panel is simplified. It only changes your displayed current streak and your most-missed task numbers.</p>
+            <p>This admin panel changes your displayed current streak and your most-missed task numbers.</p>
 
             <div class="field-grid">
               <div class="admin-note" id="adminCurrentInfo">Current streak is calculated from completed days.</div>
@@ -590,7 +774,7 @@
               </div>
               <span id="missedOverrideBadge" class="badge">Calculated</span>
             </div>
-            <p>Put the count you want beside each task. Use 0 for tasks you do not want showing up.</p>
+            <p>Put the count you want beside each original checklist task. Use 0 for tasks you do not want showing up.</p>
             <div id="adminMissedCountsList" class="missed-admin-list"></div>
             <div class="actions">
               <button id="adminSaveMissedCountsBtn" class="btn green" type="button">Save missed numbers</button>
@@ -645,9 +829,16 @@
     const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
     const SUPABASE_ROW_ID = "samuel-main";
-    const STORAGE_KEY = "locked_os_daily_checklist_v6";
-    const OLD_STORAGE_KEYS = ["locked_os_daily_checklist_v5", "locked_os_daily_checklist_v4"];
+    const STORAGE_KEY = "locked_os_daily_checklist_v7";
+    const OLD_STORAGE_KEYS = [
+      "locked_os_daily_checklist_v6",
+      "locked_os_daily_checklist_v5",
+      "locked_os_daily_checklist_v4"
+    ];
     const DAY_ROLLOVER_HOUR = 4;
+    const WATER_MINIMUM_OZ = 100;
+    const WATER_TARGET_OZ = 120;
+    const WATER_MAX_OZ = 240;
 
     const hasSupabaseConfig =
       SUPABASE_URL.startsWith("https://") &&
@@ -675,10 +866,7 @@
       { id: "bed-routine", section: "night", title: "Full bedtime routine" }
     ];
 
-    const LEGACY_TASK_ID_MAP = {
-      "bed-ready": "plan-next-day"
-    };
-
+    const LEGACY_TASK_ID_MAP = { "bed-ready": "plan-next-day" };
     const TASK_IDS = TASKS.map(task => task.id);
     const MORNING_TASK_IDS = TASKS.filter(task => task.section === "morning").map(task => task.id);
 
@@ -689,6 +877,160 @@
       { name: "Machine", days: 14, copy: "Two weeks. This is no longer random motivation." },
       { name: "Unbreakable", days: 30, copy: "Thirty days. This is identity-level discipline." }
     ];
+
+    const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const WEEK_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+    const MORNING_BASE = [
+      { id: "wake-water", title: "Wake up and chug 1 glass of water immediately", meta: "morningWater" },
+      { id: "lukewarm-shower", title: "Take a lukewarm shower" },
+      { id: "no-shampoo", title: "No shampoo" },
+      { id: "conditioner-soap", title: "Use conditioner and soap" },
+      { id: "cold-finish", title: "Finish the shower with cold water" },
+      { id: "scrunch-hair", title: "Lightly scrunch hair with a towel" },
+      { id: "gua-sha", title: "Gua sha" },
+      { id: "face-rinse", title: "Wash face only if oily; otherwise, rinse with lukewarm water" },
+      { id: "vitamin-c", title: "Apply vitamin C serum" },
+      { id: "morning-moisturizer", title: "Apply moisturizer" },
+      { id: "sunscreen", title: "Apply sunscreen" },
+      { id: "morning-minoxidil", title: "Apply minoxidil to eyebrows" },
+      { id: "sea-salt-spray", title: "Apply sea salt spray to hair" },
+      { id: "deodorant", title: "Apply deodorant" },
+      { id: "curl-eyelashes", title: "Curl eyelashes" },
+      { id: "brush-eyebrows", title: "Brush eyebrows" },
+      { id: "morning-teeth", title: "Floss and brush teeth" }
+    ];
+
+    const NIGHT_BASE = [
+      { id: "no-phone", title: "No phone" },
+      { id: "bed-nine", title: "Start getting ready for bed at 9:00 PM" },
+      { id: "hydrating-cleanser", title: "Wash face with hydrating facial cleanser" },
+      { id: "azelaic-acid", title: "Apply azelaic acid" },
+      { id: "night-moisturizer", title: "Apply moisturizer" },
+      { id: "night-minoxidil", title: "Apply minoxidil to eyebrows" },
+      { id: "eyelash-serum", title: "Apply peptide eyelash growth serum" },
+      { id: "night-teeth", title: "Floss and brush teeth" },
+      { id: "whitening-strips", title: "Use Crest whitening strips" }
+    ];
+
+    const WORKOUTS = {
+      Monday: {
+        name: "Chest + side delts",
+        parts: ["Chest", "Side delts", "Neck exercises"],
+        extra: "Complete neck exercises after or alongside the main workout."
+      },
+      Tuesday: {
+        name: "Back + rear delts",
+        parts: ["Back", "Rear delts"],
+        extra: "Today is the back and rear-delt rotation day."
+      },
+      Wednesday: {
+        name: "Arms",
+        parts: ["Arms"],
+        extra: "Wash bed sheets during the midday block."
+      },
+      Thursday: {
+        name: "Legs",
+        parts: ["Legs"],
+        extra: "Face shaving and eyebrow management are included in the morning routine."
+      },
+      Friday: {
+        name: "Cardio + abs",
+        parts: ["Cardio", "Abs", "Neck exercises"],
+        extra: "Complete neck exercises after or alongside cardio and abs."
+      },
+      Saturday: {
+        name: "Chest + side delts",
+        parts: ["Chest", "Side delts"],
+        extra: "Masseter training is included in the night routine."
+      },
+      Sunday: {
+        name: "Back + rear delts",
+        parts: ["Back", "Rear delts"],
+        extra: "Wash bed sheets midday. Lip exfoliation and eyebrow microneedling are included at night."
+      }
+    };
+
+    function cloneTasks(tasks) {
+      return tasks.map(task => ({ ...task }));
+    }
+
+    function makeMidday(dayName) {
+      const workout = WORKOUTS[dayName];
+      const tasks = [
+        {
+          id: "gym",
+          title: `Gym: ${workout.name.toLowerCase()}`,
+          subtitle: `Today's focus: ${workout.parts.join(" • ")}`,
+          linkCore: "gym"
+        }
+      ];
+
+      if (dayName === "Monday" || dayName === "Friday") {
+        tasks.push({ id: "neck-exercises", title: "Neck exercises" });
+      }
+
+      tasks.push({ id: "creatine", title: "Take creatine", linkCore: "creatine" });
+      tasks.push({ id: "low-sodium-potassium", title: "Low sodium + high potassium" });
+
+      if (dayName === "Wednesday" || dayName === "Sunday") {
+        tasks.push({ id: "wash-bed-sheets", title: "Wash bed sheets" });
+      }
+
+      tasks.push({
+        id: "water-through-day",
+        title: "Drink 100–120 oz of water throughout the day",
+        subtitle: "Completes automatically when the water tracker reaches 100 oz.",
+        meta: "waterTracked"
+      });
+
+      return tasks;
+    }
+
+    function makeMorning(dayName) {
+      const tasks = cloneTasks(MORNING_BASE);
+      if (dayName === "Thursday") {
+        const coldIndex = tasks.findIndex(task => task.id === "cold-finish");
+        tasks.splice(coldIndex + 1, 0, { id: "shave-manage-brows", title: "Shave face/manage eyebrows" });
+      }
+      return tasks;
+    }
+
+    function makeNight(dayName) {
+      const tasks = cloneTasks(NIGHT_BASE);
+      const minoxidilIndex = tasks.findIndex(task => task.id === "night-minoxidil");
+
+      if (dayName === "Monday" || dayName === "Sunday") {
+        tasks.splice(minoxidilIndex, 0, { id: "microneedle-eyebrows", title: "Microneedle eyebrows" });
+      }
+
+      if (["Tuesday", "Thursday", "Saturday"].includes(dayName)) {
+        tasks.push({ id: "masseter-training", title: "Train masseter muscles" });
+      }
+
+      if (dayName === "Sunday") {
+        const whiteningIndex = tasks.findIndex(task => task.id === "whitening-strips");
+        tasks.splice(
+          whiteningIndex,
+          0,
+          {
+            id: "exfoliate-lips",
+            title: "Exfoliate lips: mix 2 tablespoons of sugar, 1 tablespoon of coconut oil, and 1 tablespoon of raw honey"
+          },
+          { id: "vaseline-lips", title: "Apply Vaseline to lips" }
+        );
+      }
+
+      return tasks;
+    }
+
+    const LOOKS_ROUTINES = Object.fromEntries(
+      WEEK_ORDER.map(dayName => [dayName, {
+        morning: makeMorning(dayName),
+        midday: makeMidday(dayName),
+        night: makeNight(dayName)
+      }])
+    );
 
     const loginScreen = document.getElementById("loginScreen");
     const mainApp = document.getElementById("mainApp");
@@ -716,6 +1058,7 @@
     const bigStreak = document.getElementById("bigStreak");
     const gameChecklistStreak = document.getElementById("gameChecklistStreak");
     const gameGymStreak = document.getElementById("gameGymStreak");
+    const gameLooksProgress = document.getElementById("gameLooksProgress");
     const gameRewardProgress = document.getElementById("gameRewardProgress");
     const rankLadder = document.getElementById("rankLadder");
     const missedReasonBox = document.getElementById("missedReasonBox");
@@ -738,9 +1081,33 @@
     const adminFinalConfirmBtn = document.getElementById("adminFinalConfirmBtn");
     const adminCancelConfirmBtn = document.getElementById("adminCancelConfirmBtn");
 
+    const looksDayStrip = document.getElementById("looksDayStrip");
+    const looksDayName = document.getElementById("looksDayName");
+    const looksDateText = document.getElementById("looksDateText");
+    const looksProgressCircle = document.getElementById("looksProgressCircle");
+    const looksPercent = document.getElementById("looksPercent");
+    const looksDoneCount = document.getElementById("looksDoneCount");
+    const looksTasksLeft = document.getElementById("looksTasksLeft");
+    const looksMorningList = document.getElementById("looksMorningList");
+    const looksMiddayList = document.getElementById("looksMiddayList");
+    const looksNightList = document.getElementById("looksNightList");
+    const waterCard = document.getElementById("waterCard");
+    const waterBadge = document.getElementById("waterBadge");
+    const waterAmount = document.getElementById("waterAmount");
+    const waterFill = document.getElementById("waterFill");
+    const waterStatus = document.getElementById("waterStatus");
+    const waterCustomInput = document.getElementById("waterCustomInput");
+    const addCustomWaterBtn = document.getElementById("addCustomWaterBtn");
+    const resetWaterBtn = document.getElementById("resetWaterBtn");
+    const workoutBadge = document.getElementById("workoutBadge");
+    const workoutName = document.getElementById("workoutName");
+    const workoutParts = document.getElementById("workoutParts");
+    const workoutExtra = document.getElementById("workoutExtra");
+
     let state = loadLocalState();
     let saveTimer = null;
     let pendingAdminAction = null;
+    let renderedDayKey = getTodayKey();
 
     function formatDateKey(date) {
       const year = date.getFullYear();
@@ -768,12 +1135,32 @@
       return next;
     }
 
+    function getRoutineDayName(dayKey = getTodayKey()) {
+      return DAY_NAMES[keyToLocalDate(dayKey).getDay()];
+    }
+
+    function getLooksRoutine(dayKey = getTodayKey()) {
+      return LOOKS_ROUTINES[getRoutineDayName(dayKey)];
+    }
+
+    function getLooksTasks(dayKey = getTodayKey()) {
+      const routine = getLooksRoutine(dayKey);
+      return [...routine.morning, ...routine.midday, ...routine.night];
+    }
+
+    function getLooksTaskIds(dayKey = getTodayKey()) {
+      return getLooksTasks(dayKey).map(task => task.id);
+    }
+
     function normalizeTaskId(taskId) {
       return LEGACY_TASK_ID_MAP[taskId] || taskId;
     }
 
+    function createEmptyState() {
+      return { days: {}, adminOverrides: { currentStreak: null, missedCounts: null } };
+    }
+
     function loadLocalState() {
-      const fallback = { days: {}, adminOverrides: { currentStreak: null, missedCounts: null } };
       const candidateKeys = [STORAGE_KEY, ...OLD_STORAGE_KEYS];
 
       for (const key of candidateKeys) {
@@ -792,14 +1179,12 @@
         }
       }
 
-      return fallback;
+      return createEmptyState();
     }
 
     function saveLocalState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      for (const oldKey of OLD_STORAGE_KEYS) {
-        localStorage.removeItem(oldKey);
-      }
+      for (const oldKey of OLD_STORAGE_KEYS) localStorage.removeItem(oldKey);
     }
 
     function getCleanDoneList(done) {
@@ -808,8 +1193,16 @@
       return [...new Set(normalized)];
     }
 
-    function isEmptyDay(day) {
+    function getCleanLooksDoneList(done, dayKey) {
+      if (!Array.isArray(done)) return [];
+      const allowed = new Set(getLooksTaskIds(dayKey));
+      return [...new Set(done.filter(id => typeof id === "string" && allowed.has(id)))];
+    }
+
+    function isEmptyDay(day, dayKey = getTodayKey()) {
       return getCleanDoneList(day?.done).length === 0 &&
+        getCleanLooksDoneList(day?.looksDone, dayKey).length === 0 &&
+        Number(day?.waterOz || 0) === 0 &&
         day?.completed !== true &&
         !(typeof day?.missedReason === "string" && day.missedReason.trim());
     }
@@ -818,7 +1211,7 @@
       let changed = false;
 
       if (!state || typeof state !== "object") {
-        state = { days: {}, adminOverrides: { currentStreak: null, missedCounts: null } };
+        state = createEmptyState();
         changed = true;
       }
 
@@ -859,28 +1252,46 @@
       for (const dayKey of Object.keys(state.days)) {
         const day = state.days[dayKey] || {};
         const cleanDone = getCleanDoneList(day.done);
+        const cleanWater = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(day.waterOz) || 0)));
+        const cleanLooksDoneSet = new Set(getCleanLooksDoneList(day.looksDone, dayKey));
+        if (cleanWater >= WATER_MINIMUM_OZ) cleanLooksDoneSet.add("water-through-day");
+        else cleanLooksDoneSet.delete("water-through-day");
+        const cleanLooksDone = [...cleanLooksDoneSet];
         const cleanCompleted = cleanDone.length === TASKS.length;
         const cleanReason = typeof day.missedReason === "string" ? day.missedReason : "";
-        const changedDay = !Array.isArray(day.done) ||
-          JSON.stringify(day.done) !== JSON.stringify(cleanDone) ||
-          day.completed !== cleanCompleted ||
-          day.missedReason !== cleanReason;
 
-        if (changedDay) {
-          state.days[dayKey] = { ...day, done: cleanDone, completed: cleanCompleted, missedReason: cleanReason };
+        const normalizedDay = {
+          ...day,
+          done: cleanDone,
+          looksDone: cleanLooksDone,
+          waterOz: cleanWater,
+          completed: cleanCompleted,
+          missedReason: cleanReason
+        };
+
+        if (JSON.stringify(day) !== JSON.stringify(normalizedDay)) {
+          state.days[dayKey] = normalizedDay;
           changed = true;
         }
       }
 
       const activeDayKey = getTodayKey();
       for (const dayKey of Object.keys(state.days)) {
-        if (dayKey !== activeDayKey && isEmptyDay(state.days[dayKey])) {
+        if (dayKey !== activeDayKey && isEmptyDayForKey(state.days[dayKey], dayKey)) {
           delete state.days[dayKey];
           changed = true;
         }
       }
 
       return changed;
+    }
+
+    function isEmptyDayForKey(day, dayKey) {
+      return getCleanDoneList(day?.done).length === 0 &&
+        getCleanLooksDoneList(day?.looksDone, dayKey).length === 0 &&
+        Number(day?.waterOz || 0) === 0 &&
+        day?.completed !== true &&
+        !(typeof day?.missedReason === "string" && day.missedReason.trim());
     }
 
     async function loadSupabaseState() {
@@ -945,33 +1356,78 @@
 
     function ensureDay(dayKey = getTodayKey()) {
       if (!state.days[dayKey]) {
-        state.days[dayKey] = { done: [], completed: false, missedReason: "" };
+        state.days[dayKey] = {
+          done: [],
+          looksDone: [],
+          waterOz: 0,
+          completed: false,
+          missedReason: ""
+        };
       }
-      state.days[dayKey].done = getCleanDoneList(state.days[dayKey].done);
-      if (typeof state.days[dayKey].missedReason !== "string") state.days[dayKey].missedReason = "";
-      state.days[dayKey].completed = state.days[dayKey].done.length === TASKS.length;
-      return state.days[dayKey];
+
+      const day = state.days[dayKey];
+      day.done = getCleanDoneList(day.done);
+      day.looksDone = getCleanLooksDoneList(day.looksDone, dayKey);
+      day.waterOz = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(day.waterOz) || 0)));
+      if (typeof day.missedReason !== "string") day.missedReason = "";
+      day.completed = day.done.length === TASKS.length;
+      syncWaterTask(day, dayKey);
+      return day;
+    }
+
+    function syncWaterTask(day, dayKey) {
+      const doneSet = new Set(getCleanLooksDoneList(day.looksDone, dayKey));
+      if (day.waterOz >= WATER_MINIMUM_OZ) doneSet.add("water-through-day");
+      else doneSet.delete("water-through-day");
+      day.looksDone = [...doneSet];
     }
 
     function getTodayDoneSet() {
       return new Set(ensureDay().done);
     }
 
-    function setTodayDoneSet(doneSet) {
+    function getTodayLooksDoneSet() {
+      return new Set(ensureDay().looksDone);
+    }
+
+    function setTodayDoneSet(doneSet, shouldSave = true) {
       const todayKey = getTodayKey();
       const existing = ensureDay(todayKey);
       const done = [...doneSet];
       state.days[todayKey] = { ...existing, done, completed: done.length === TASKS.length };
-      saveState();
+      if (shouldSave) saveState();
+    }
+
+    function setTodayLooksDoneSet(doneSet, shouldSave = true) {
+      const todayKey = getTodayKey();
+      const existing = ensureDay(todayKey);
+      state.days[todayKey] = { ...existing, looksDone: [...doneSet] };
+      syncWaterTask(state.days[todayKey], todayKey);
+      if (shouldSave) saveState();
+    }
+
+    function getCurrentLooksTaskByCoreId(coreTaskId) {
+      return getLooksTasks().find(task => task.linkCore === coreTaskId) || null;
+    }
+
+    function syncCoreToLooks(coreTaskId, completed, doneSet) {
+      const linkedTask = getCurrentLooksTaskByCoreId(coreTaskId);
+      if (!linkedTask) return;
+      if (completed) doneSet.add(linkedTask.id);
+      else doneSet.delete(linkedTask.id);
+    }
+
+    function syncLooksToCore(looksTask, completed, doneSet) {
+      if (!looksTask?.linkCore) return;
+      if (completed) doneSet.add(looksTask.linkCore);
+      else doneSet.delete(looksTask.linkCore);
     }
 
     function calculateCurrentStreak() {
       let date = keyToLocalDate(getTodayKey());
       let streak = 0;
 
-      if (state.days[getTodayKey()]?.completed !== true) {
-        date = addDays(date, -1);
-      }
+      if (state.days[getTodayKey()]?.completed !== true) date = addDays(date, -1);
 
       while (true) {
         const key = formatDateKey(date);
@@ -994,9 +1450,7 @@
       let date = keyToLocalDate(getTodayKey());
       let streak = 0;
 
-      if (state.days[getTodayKey()]?.done?.includes(taskId) !== true) {
-        date = addDays(date, -1);
-      }
+      if (state.days[getTodayKey()]?.done?.includes(taskId) !== true) date = addDays(date, -1);
 
       while (true) {
         const key = formatDateKey(date);
@@ -1022,6 +1476,22 @@
       return MORNING_TASK_IDS.every(id => doneSet.has(id));
     }
 
+    function createTaskButton(task, done, className, onClick) {
+      const taskEl = document.createElement("button");
+      taskEl.type = "button";
+      taskEl.className = `task ${className} ${done ? "done" : ""} ${task.meta === "waterTracked" ? "tracked" : ""}`;
+      taskEl.dataset.taskId = task.id;
+      taskEl.innerHTML = `
+        <div class="box">${done ? "✓" : ""}</div>
+        <div class="task-copy">
+          <div class="task-title">${task.title}</div>
+          ${task.subtitle ? `<div class="task-subtitle">${task.subtitle}</div>` : ""}
+        </div>
+      `;
+      taskEl.addEventListener("click", onClick);
+      return taskEl;
+    }
+
     function renderTaskLists() {
       morningList.innerHTML = "";
       afternoonList.innerHTML = "";
@@ -1029,12 +1499,7 @@
       const doneSet = getTodayDoneSet();
 
       for (const task of TASKS) {
-        const taskEl = document.createElement("button");
-        taskEl.type = "button";
-        taskEl.className = `task ${doneSet.has(task.id) ? "done" : ""}`;
-        taskEl.dataset.taskId = task.id;
-        taskEl.innerHTML = `<div class="box">${doneSet.has(task.id) ? "✓" : ""}</div><div class="task-title">${task.title}</div>`;
-        taskEl.addEventListener("click", () => toggleTask(task.id));
+        const taskEl = createTaskButton(task, doneSet.has(task.id), "", () => toggleTask(task.id));
         if (task.section === "morning") morningList.appendChild(taskEl);
         if (task.section === "afternoon") afternoonList.appendChild(taskEl);
         if (task.section === "night") nightList.appendChild(taskEl);
@@ -1043,9 +1508,16 @@
 
     function toggleTask(taskId) {
       const doneSet = getTodayDoneSet();
-      if (doneSet.has(taskId)) doneSet.delete(taskId);
-      else doneSet.add(taskId);
-      setTodayDoneSet(doneSet);
+      const looksDoneSet = getTodayLooksDoneSet();
+      const completed = !doneSet.has(taskId);
+
+      if (completed) doneSet.add(taskId);
+      else doneSet.delete(taskId);
+
+      syncCoreToLooks(taskId, completed, looksDoneSet);
+      setTodayDoneSet(doneSet, false);
+      setTodayLooksDoneSet(looksDoneSet, false);
+      saveState();
       render();
     }
 
@@ -1053,11 +1525,11 @@
       const doneSet = getTodayDoneSet();
       const done = doneSet.size;
       const total = TASKS.length;
-      const percent = Math.round((done / total) * 100);
+      const progressPercent = Math.round((done / total) * 100);
       const degrees = Math.round((done / total) * 360);
       const left = total - done;
 
-      percentEl.textContent = `${percent}%`;
+      percentEl.textContent = `${progressPercent}%`;
       doneCountEl.textContent = `${done} / ${total}`;
       tasksLeftEl.textContent = left === 0
         ? "Today is complete. Keep the streak alive tomorrow."
@@ -1133,12 +1605,145 @@
       }
     }
 
+    function renderLooksDayStrip(dayName) {
+      looksDayStrip.innerHTML = "";
+      for (const name of WEEK_ORDER) {
+        const chip = document.createElement("div");
+        chip.className = `day-chip ${name === dayName ? "active" : ""}`;
+        chip.textContent = name.slice(0, 3);
+        looksDayStrip.appendChild(chip);
+      }
+    }
+
+    function renderLooksTaskList(listElement, tasks, doneSet) {
+      listElement.innerHTML = "";
+      for (const task of tasks) {
+        const done = doneSet.has(task.id);
+        const taskEl = createTaskButton(task, done, "looks-task", () => {
+          if (task.meta === "waterTracked") {
+            waterCard.scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
+          }
+          toggleLooksTask(task);
+        });
+        listElement.appendChild(taskEl);
+      }
+    }
+
+    function toggleLooksTask(task) {
+      const looksDoneSet = getTodayLooksDoneSet();
+      const coreDoneSet = getTodayDoneSet();
+      const completed = !looksDoneSet.has(task.id);
+
+      if (completed) looksDoneSet.add(task.id);
+      else looksDoneSet.delete(task.id);
+
+      if (task.meta === "morningWater" && completed && ensureDay().waterOz < 8) {
+        ensureDay().waterOz = 8;
+      }
+
+      syncLooksToCore(task, completed, coreDoneSet);
+      setTodayLooksDoneSet(looksDoneSet, false);
+      setTodayDoneSet(coreDoneSet, false);
+      saveState();
+      render();
+    }
+
+    function renderLooksProgress() {
+      const tasks = getLooksTasks();
+      const doneSet = getTodayLooksDoneSet();
+      const done = tasks.filter(task => doneSet.has(task.id)).length;
+      const total = tasks.length;
+      const progressPercent = total ? Math.round((done / total) * 100) : 0;
+      const degrees = total ? Math.round((done / total) * 360) : 0;
+      const left = total - done;
+
+      looksPercent.textContent = `${progressPercent}%`;
+      looksDoneCount.textContent = `${done} / ${total}`;
+      looksTasksLeft.textContent = left === 0
+        ? "Looksmaxxing routine complete for today."
+        : `${left} routine task${left === 1 ? "" : "s"} left today.`;
+      looksProgressCircle.style.background = `conic-gradient(var(--blue) ${degrees}deg, rgba(42, 30, 18, 0.09) ${degrees}deg)`;
+      gameLooksProgress.textContent = `${progressPercent}%`;
+    }
+
+    function renderWater() {
+      const waterOz = ensureDay().waterOz;
+      const displayPercent = Math.round((waterOz / WATER_TARGET_OZ) * 100);
+      const fillPercent = Math.max(0, Math.min(100, displayPercent));
+
+      waterAmount.innerHTML = `${waterOz} <span>oz / ${WATER_TARGET_OZ} oz</span>`;
+      waterBadge.textContent = `${displayPercent}%`;
+      waterFill.style.width = `${fillPercent}%`;
+
+      if (waterOz < WATER_MINIMUM_OZ) {
+        const left = WATER_MINIMUM_OZ - waterOz;
+        waterStatus.textContent = `${left} oz until the daily minimum.`;
+      } else if (waterOz < WATER_TARGET_OZ) {
+        const left = WATER_TARGET_OZ - waterOz;
+        waterStatus.textContent = `Minimum hit. ${left} oz until the 120 oz target.`;
+      } else {
+        waterStatus.textContent = waterOz === WATER_TARGET_OZ
+          ? "120 oz target complete."
+          : `Target complete. ${waterOz - WATER_TARGET_OZ} oz above target.`;
+      }
+    }
+
+    function setWaterOz(nextValue) {
+      const day = ensureDay();
+      day.waterOz = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(nextValue) || 0)));
+      syncWaterTask(day, getTodayKey());
+      saveState();
+      render();
+    }
+
+    function addWater(amount) {
+      setWaterOz(ensureDay().waterOz + amount);
+    }
+
+    function renderWorkout(dayName) {
+      const workout = WORKOUTS[dayName];
+      workoutBadge.textContent = dayName;
+      workoutName.textContent = workout.name;
+      workoutParts.innerHTML = "";
+      for (const part of workout.parts) {
+        const chip = document.createElement("span");
+        chip.className = "workout-part";
+        chip.textContent = part;
+        workoutParts.appendChild(chip);
+      }
+      workoutExtra.textContent = workout.extra;
+    }
+
+    function renderLooks() {
+      const todayKey = getTodayKey();
+      const dayName = getRoutineDayName(todayKey);
+      const routine = getLooksRoutine(todayKey);
+      const doneSet = getTodayLooksDoneSet();
+      const date = keyToLocalDate(todayKey);
+
+      looksDayName.textContent = `${dayName} routine`;
+      looksDateText.textContent = `${date.toLocaleDateString(undefined, {
+        weekday: "long",
+        month: "long",
+        day: "numeric"
+      })}. The routine rotates automatically at 4:00 AM.`;
+
+      renderLooksDayStrip(dayName);
+      renderLooksTaskList(looksMorningList, routine.morning, doneSet);
+      renderLooksTaskList(looksMiddayList, routine.midday, doneSet);
+      renderLooksTaskList(looksNightList, routine.night, doneSet);
+      renderLooksProgress();
+      renderWater();
+      renderWorkout(dayName);
+    }
+
     function getReviewDayKeys() {
       const activeDayKey = getTodayKey();
       return Object.keys(state.days)
         .filter(dayKey => {
           const day = state.days[dayKey];
-          const hasActivity = !isEmptyDay(day);
+          const hasActivity = !isEmptyDayForKey(day, dayKey);
           if (!hasActivity) return false;
           if (dayKey === activeDayKey && day.completed !== true) return false;
           return true;
@@ -1176,9 +1781,7 @@
 
     function renderReview() {
       const today = ensureDay();
-      if (document.activeElement !== missedReasonBox) {
-        missedReasonBox.value = today.missedReason || "";
-      }
+      if (document.activeElement !== missedReasonBox) missedReasonBox.value = today.missedReason || "";
 
       const counts = getDisplayedMissedCounts();
       const missedCounts = TASKS.map(task => ({ ...task, missed: counts[task.id] || 0 }))
@@ -1225,7 +1828,6 @@
       adminCurrentStreakInput.placeholder = `Current: ${displayedStreak}`;
       missedOverrideBadge.textContent = state.adminOverrides?.missedCounts ? "Edited" : "Calculated";
       missedOverrideBadge.classList.toggle("warning", Boolean(state.adminOverrides?.missedCounts));
-
       renderAdminMissedCounts();
     }
 
@@ -1343,11 +1945,13 @@
     }
 
     function render() {
+      renderedDayKey = getTodayKey();
       ensureDay();
       renderTaskLists();
       renderProgress();
       renderPhoneLock();
       renderRankAndReward();
+      renderLooks();
       renderReview();
       renderAdmin();
     }
@@ -1387,7 +1991,8 @@
           pages.forEach(page => page.classList.remove("active"));
           tab.classList.add("active");
           document.getElementById(targetId).classList.add("active");
-          renderAdmin();
+          if (targetId === "looksPage") renderLooks();
+          if (targetId === "adminPage") renderAdmin();
         });
       });
     }
@@ -1403,6 +2008,24 @@
       const existing = ensureDay(todayKey);
       state.days[todayKey] = { ...existing, missedReason: missedReasonBox.value };
       saveState();
+    });
+
+    document.querySelectorAll("[data-water-add]").forEach(button => {
+      button.addEventListener("click", () => addWater(Number(button.dataset.waterAdd)));
+    });
+
+    resetWaterBtn.addEventListener("click", () => setWaterOz(0));
+    addCustomWaterBtn.addEventListener("click", () => {
+      const amount = Number(waterCustomInput.value);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        waterCustomInput.focus();
+        return;
+      }
+      addWater(amount);
+      waterCustomInput.value = "";
+    });
+    waterCustomInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") addCustomWaterBtn.click();
     });
 
     adminSetCurrentStreakBtn.addEventListener("click", setCurrentStreakOverride);
@@ -1422,6 +2045,13 @@
       closeAdminConfirmation();
       action();
     });
+
+    setInterval(() => {
+      if (getTodayKey() !== renderedDayKey && !mainApp.classList.contains("hidden")) {
+        normalizeState();
+        render();
+      }
+    }, 60000);
 
     setupTabs();
     const localChanged = normalizeState();
