@@ -243,11 +243,6 @@
 
     .section { margin-bottom: 16px; }
 
-    .routine-section.locked .checklist { display: none; }
-    .section-lock { display: none; margin: 12px; padding: 15px; border: 1px dashed rgba(42, 30, 18, 0.2); border-radius: 18px; background: rgba(42, 30, 18, 0.045); color: var(--muted); font-weight: 850; line-height: 1.45; }
-    .routine-section.locked .section-lock { display: block; }
-    .routine-section.unlocked .section-lock { display: none; }
-
     .section-header {
       padding: 17px 20px;
       border-bottom: 1px solid var(--line);
@@ -607,21 +602,19 @@
               <div id="looksMorningList" class="checklist"></div>
             </section>
 
-            <section id="looksMiddaySection" class="card section routine-section locked">
+            <section id="looksMiddaySection" class="card section">
               <div class="section-header">
                 <h3>Midday</h3>
                 <p>Training, nutrition basics, creatine, and hydration.</p>
               </div>
-              <div id="looksMiddayLock" class="section-lock">Finish every morning task to unlock Midday.</div>
               <div id="looksMiddayList" class="checklist"></div>
             </section>
 
-            <section id="looksNightSection" class="card section routine-section locked">
+            <section id="looksNightSection" class="card section">
               <div class="section-header">
                 <h3>Night</h3>
                 <p>Wind down at 9 PM and complete the correct rotating treatment tasks.</p>
               </div>
-              <div id="looksNightLock" class="section-lock">Finish every midday task to unlock Night.</div>
               <div id="looksNightList" class="checklist"></div>
             </section>
           </div>
@@ -756,8 +749,9 @@
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
     const SUPABASE_ROW_ID = "samuel-main";
     const SUPABASE_TABLE = "locked_os_state_v2";
-    const STORAGE_KEY = "locked_os_daily_checklist_v8";
+    const STORAGE_KEY = "locked_os_daily_checklist_v9";
     const OLD_STORAGE_KEYS = [
+      "locked_os_daily_checklist_v8",
       "locked_os_daily_checklist_v7",
       "locked_os_daily_checklist_v6",
       "locked_os_daily_checklist_v5",
@@ -792,7 +786,10 @@
       { id: "plan-next-day", section: "night", title: "Plan next day" }
     ];
 
-    const LEGACY_TASK_ID_MAP = { "bed-ready": "plan-next-day" };
+    const LEGACY_TASK_ID_MAP = {
+      "bed-ready": "plan-next-day",
+      "no-shampoo": "conditional-shampoo"
+    };
     const TASK_IDS = TASKS.map(task => task.id);
     const MORNING_TASK_IDS = TASKS.filter(task => task.section === "morning").map(task => task.id);
 
@@ -810,9 +807,10 @@
     const MORNING_BASE = [
       { id: "wake-water", title: "Wake up and chug 1 glass of water immediately", meta: "morningWater" },
       { id: "lukewarm-shower", title: "Take a lukewarm shower" },
-      { id: "no-shampoo", title: "No shampoo" },
+      { id: "conditional-shampoo", title: "Shampoo only if hair is dirty; otherwise, skip shampoo" },
       { id: "conditioner-soap", title: "Use conditioner and soap" },
       { id: "cold-finish", title: "Finish the shower with cold water" },
+      { id: "get-dressed", title: "Get fully dressed and ready for the day" },
       { id: "scrunch-hair", title: "Lightly scrunch hair with a towel" },
       { id: "gua-sha", title: "Gua sha" },
       { id: "face-rinse", title: "Wash face only if oily; otherwise, rinse with lukewarm water" },
@@ -968,9 +966,7 @@
     const looksDoneCount = document.getElementById("looksDoneCount");
     const looksTasksLeft = document.getElementById("looksTasksLeft");
     const looksMorningList = document.getElementById("looksMorningList");
-    const looksMiddaySection = document.getElementById("looksMiddaySection");
     const looksMiddayList = document.getElementById("looksMiddayList");
-    const looksNightSection = document.getElementById("looksNightSection");
     const looksNightList = document.getElementById("looksNightList");
     const waterCard = document.getElementById("waterCard");
     const waterBadge = document.getElementById("waterBadge");
@@ -1073,7 +1069,8 @@
     function getCleanLooksDoneList(done, dayKey) {
       if (!Array.isArray(done)) return [];
       const allowed = new Set(getLooksTaskIds(dayKey));
-      return [...new Set(done.filter(id => typeof id === "string" && allowed.has(id)))];
+      const normalized = done.map(normalizeTaskId);
+      return [...new Set(normalized.filter(id => typeof id === "string" && allowed.has(id)))];
     }
 
     function isEmptyDay(day, dayKey = getTodayKey()) {
@@ -1583,11 +1580,6 @@
       return `${day}th`;
     }
 
-    function setRoutineSectionState(section, unlocked) {
-      section.classList.toggle("locked", !unlocked);
-      section.classList.toggle("unlocked", unlocked);
-    }
-
     function renderLooks() {
       const todayKey = getTodayKey();
       const dayName = getRoutineDayName(todayKey);
@@ -1595,14 +1587,9 @@
       const doneSet = getTodayLooksDoneSet();
       const date = keyToLocalDate(todayKey);
 
-      const morningComplete = routine.morning.every(task => doneSet.has(task.id));
-      const middayComplete = routine.midday.every(task => doneSet.has(task.id));
-
       looksDayName.textContent = `${dayName} routine`;
       looksDateText.textContent = `${dayName}, ${date.toLocaleDateString(undefined, { month: "long" })} ${getOrdinalDay(date.getDate())}`;
 
-      setRoutineSectionState(looksMiddaySection, morningComplete);
-      setRoutineSectionState(looksNightSection, morningComplete && middayComplete);
       renderLooksTaskList(looksMorningList, routine.morning, doneSet);
       renderLooksTaskList(looksMiddayList, routine.midday, doneSet);
       renderLooksTaskList(looksNightList, routine.night, doneSet);
