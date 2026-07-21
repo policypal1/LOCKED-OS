@@ -1,1574 +1,676 @@
-/* Accountability OS
-   Static-first app with optional Supabase sync.
-   Paste your Supabase project URL and anon/public key below if you want cloud login.
-*/
+"use strict";
 
-const SUPABASE_URL = "";
-const SUPABASE_ANON_KEY = "";
-
-let sb = null;
-let currentUser = null;
-let syncTimer = null;
-let toastTimer = null;
-
-if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase) {
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
-
-const STORE_KEY = "accountabilityOS.v2";
-const APP_VERSION = 2;
-
-const SECTION_ORDER = ["morning", "afternoon", "night", "extra"];
-
-const SECTION_META = {
-  morning: {
-    title: "Morning Gate",
-    subtitle: "This must be resolved first. Complete it or fail it honestly.",
-  },
-  afternoon: {
-    title: "Afternoon",
-    subtitle: "Training, supplements, and daytime execution.",
-  },
-  night: {
-    title: "Night",
-    subtitle: "Close the day properly. Bedtime routine starts at 8:00 PM.",
-  },
-  extra: {
-    title: "Extra",
-    subtitle: "Quick tasks and custom add-ons for this date.",
-  },
-};
-
-const BASE_TASKS = [
-  {
-    id: "wake_planned",
-    title: "Wake up at planned time",
-    section: "morning",
-    schedule: "daily",
-    xp: 25,
-    critical: true,
-    special: "wake",
-    icon: "⏰",
-    note: "Set planned wake time, log actual wake time, and confirm no alarm skipping.",
-  },
-  {
-    id: "water_glass",
-    title: "Drink one full glass of water",
-    section: "morning",
-    schedule: "daily",
-    xp: 10,
-    icon: "💧",
-    note: "Regular glass. Drink it early and move.",
-  },
-  {
-    id: "clean_room",
-    title: "Clean room",
-    section: "morning",
-    schedule: "daily",
-    xp: 15,
-    icon: "🧹",
-    note: "Reset your room so the day starts clean.",
-  },
-  {
-    id: "pray_morning",
-    title: "Pray",
-    section: "morning",
-    schedule: "daily",
-    xp: 10,
-    icon: "✦",
-    note: "Morning prayer before the desk tasks.",
-  },
-  {
-    id: "trw_good_morning",
-    title: "The Real World daily good morning",
-    section: "morning",
-    schedule: "daily",
-    xp: 10,
-    icon: "☀",
-    note: "Check in and start the workday.",
-  },
-  {
-    id: "trw_lesson",
-    title: "The Real World daily lesson",
-    section: "morning",
-    schedule: "daily",
-    xp: 15,
-    icon: "▣",
-    note: "Complete the lesson before random work.",
-  },
-  {
-    id: "trw_puzzle",
-    title: "The Real World daily puzzle",
-    section: "morning",
-    schedule: "daily",
-    xp: 10,
-    icon: "◇",
-    note: "Finish the daily puzzle.",
-  },
-  {
-    id: "full_get_ready",
-    title: "Full get ready: dressed, hygiene, hairstyle",
-    section: "morning",
-    schedule: "daily",
-    xp: 15,
-    icon: "◆",
-    note: "Get dressed, hygiene handled, hair styled, and actually ready for the day.",
-  },
-  {
-    id: "gym",
-    title: "Go to the gym",
-    section: "afternoon",
-    schedule: "days",
-    days: [1, 3, 5],
-    xp: 35,
-    icon: "▲",
-    note: "Monday, Wednesday, Friday.",
-  },
-  {
-    id: "creatine",
-    title: "Take creatine",
-    section: "afternoon",
-    schedule: "daily",
-    xp: 12,
-    special: "creatine",
-    icon: "◉",
-    note: "Goal: 5 to 10 grams every day.",
-  },
-  {
-    id: "microneedle_eyebrows",
-    title: "Microneedle eyebrows",
-    section: "night",
-    schedule: "days",
-    days: [3, 6],
-    xp: 18,
-    icon: "✧",
-    note: "Wednesday and Saturday.",
-  },
-  {
-    id: "bedtime_routine",
-    title: "Full bedtime routine at 8:00 PM",
-    section: "night",
-    schedule: "daily",
-    due: "8:00 PM",
-    xp: 20,
-    icon: "☾",
-    note: "You do not have to sleep yet. Start the routine at 8.",
-  },
-  {
-    id: "pray_night",
-    title: "Pray before bed",
-    section: "night",
-    schedule: "daily",
-    xp: 10,
-    icon: "✦",
-    note: "Final prayer before sleep.",
-  },
+const PASSWORD = "2009";
+const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
+const SUPABASE_ROW_ID = "samuel-main";
+const SUPABASE_TABLE = "locked_os_state_v2";
+const STORAGE_KEY = "locked_os_daily_checklist_v10";
+const OLD_STORAGE_KEYS = [
+  "locked_os_daily_checklist_v9",
+  "locked_os_daily_checklist_v8",
+  "locked_os_daily_checklist_v7",
+  "locked_os_daily_checklist_v6",
+  "locked_os_daily_checklist_v5",
+  "locked_os_daily_checklist_v4"
 ];
+const DAY_ROLLOVER_HOUR = 4;
+const WATER_MINIMUM_OZ = 100;
+const WATER_TARGET_OZ = 120;
+const WATER_MAX_OZ = 240;
+
+const hasSupabaseConfig =
+  SUPABASE_URL.startsWith("https://") &&
+  !SUPABASE_URL.includes("PASTE_") &&
+  !SUPABASE_PUBLISHABLE_KEY.includes("PASTE_");
+const supabaseClient = hasSupabaseConfig && window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+  : null;
+
+const TASKS = [
+  { id: "wake-up", section: "morning", title: "Wake up at planned time" },
+  { id: "water", section: "morning", title: "Chug one glass of water immediately after waking up" },
+  { id: "clean-room", section: "morning", title: "Clean room" },
+  { id: "dressed", section: "morning", title: "Get fully dressed and ready for the day" },
+  { id: "real-world-good-morning", section: "morning", title: "Real World daily good morning" },
+  { id: "real-world-lesson", section: "morning", title: "Real World daily lesson" },
+  { id: "real-world-puzzle", section: "morning", title: "Real World daily puzzle" },
+  { id: "breakfast", section: "morning", title: "Eat breakfast" },
+  { id: "gym", section: "afternoon", title: "Go to gym" },
+  { id: "creatine", section: "afternoon", title: "Take creatine" },
+  { id: "reading", section: "night", title: "Read for 10 minutes" },
+  { id: "plan-next-day", section: "night", title: "Plan next day" }
+];
+const TASK_IDS = TASKS.map(task => task.id);
+const MORNING_TASK_IDS = TASKS.filter(task => task.section === "morning").map(task => task.id);
+const LEGACY_TASK_ID_MAP = { "bed-ready": "plan-next-day", "no-shampoo": "conditional-shampoo" };
 
 const RANKS = [
-  { name: "Rookie", xp: 0 },
-  { name: "Locked In", xp: 150 },
-  { name: "Disciplined", xp: 400 },
-  { name: "Machine", xp: 800 },
-  { name: "Elite", xp: 1300 },
-  { name: "Unbreakable", xp: 2000 },
-  { name: "Legend Mode", xp: 3200 },
+  { name: "Starter", days: 0, copy: "Resolve the full main checklist to start the streak." },
+  { name: "Locked In", days: 3, copy: "Three straight main-checklist days. The system is sticking." },
+  { name: "Disciplined", days: 7, copy: "Seven main-checklist days in a row. Reward unlocked." },
+  { name: "Machine", days: 14, copy: "Two weeks. This is no longer random motivation." },
+  { name: "Unbreakable", days: 30, copy: "Thirty days. This is identity-level discipline." }
 ];
 
-const ACHIEVEMENTS = [
-  {
-    id: "first_task",
-    title: "First Rep",
-    description: "Complete your first tracked task.",
-    test: (stats) => stats.totalDone >= 1,
-  },
-  {
-    id: "first_perfect_day",
-    title: "Clean Day",
-    description: "Hit one perfect day.",
-    test: (stats) => stats.perfectDays >= 1,
-  },
-  {
-    id: "three_streak",
-    title: "3-Day Lock",
-    description: "Hold a 3-day perfect streak.",
-    test: (stats) => stats.streak >= 3,
-  },
-  {
-    id: "seven_streak",
-    title: "One Full Week",
-    description: "Hold a 7-day perfect streak.",
-    test: (stats) => stats.streak >= 7,
-  },
-  {
-    id: "gym_proof",
-    title: "Gym Proof",
-    description: "Complete at least one gym day.",
-    test: (stats) => stats.gymCompletions >= 1,
-  },
-  {
-    id: "morning_master",
-    title: "Morning Master",
-    description: "Complete all morning tasks on any day.",
-    test: (stats) => stats.morningPerfectDays >= 1,
-  },
-  {
-    id: "one_k_xp",
-    title: "1K XP",
-    description: "Earn 1,000 XP.",
-    test: (stats) => stats.totalXp >= 1000,
-  },
-  {
-    id: "thirty_perfect",
-    title: "30 Perfect Days",
-    description: "Stack 30 total perfect days.",
-    test: (stats) => stats.perfectDays >= 30,
-  },
-  {
-    id: "hard_truth",
-    title: "Honest Fail",
-    description: "Mark a task failed instead of hiding it.",
-    test: (stats) => stats.totalFailed >= 1,
-  },
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WEEK_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const MORNING_BASE = [
+  { id: "wake-water", title: "Wake up and chug 1 glass of water immediately", meta: "morningWater" },
+  { id: "lukewarm-shower", title: "Take a lukewarm shower" },
+  { id: "conditional-shampoo", title: "Shampoo only if hair is dirty; otherwise, skip shampoo" },
+  { id: "conditioner-soap", title: "Use conditioner and soap" },
+  { id: "cold-finish", title: "Finish the shower with cold water" },
+  { id: "get-dressed", title: "Get fully dressed and ready for the day" },
+  { id: "scrunch-hair", title: "Lightly scrunch hair with a towel" },
+  { id: "gua-sha", title: "Gua sha" },
+  { id: "face-rinse", title: "Wash face only if oily; otherwise, rinse with lukewarm water" },
+  { id: "vitamin-c", title: "Apply vitamin C serum" },
+  { id: "morning-moisturizer", title: "Apply moisturizer" },
+  { id: "sunscreen", title: "Apply sunscreen" },
+  { id: "morning-minoxidil", title: "Apply minoxidil to eyebrows" },
+  { id: "sea-salt-spray", title: "Apply sea salt spray to hair" },
+  { id: "deodorant", title: "Apply deodorant" },
+  { id: "curl-eyelashes", title: "Curl eyelashes" },
+  { id: "brush-eyebrows", title: "Brush eyebrows" },
+  { id: "morning-teeth", title: "Floss and brush teeth" }
 ];
-
-const PAGE_META = {
-  today: {
-    eyebrow: "Today",
-    title: "Daily Accountability",
-    subtitle: "Finish the morning gate, then move through the rest of the day.",
-  },
-  planner: {
-    eyebrow: "Planner",
-    title: "Rules & Add-ons",
-    subtitle: "Your default recurring system plus quick tasks for the selected day.",
-  },
-  stats: {
-    eyebrow: "Stats",
-    title: "Progress Dashboard",
-    subtitle: "XP, rank, achievements, perfect days, and completion quality.",
-  },
-  history: {
-    eyebrow: "History",
-    title: "Past Performance",
-    subtitle: "Review recent days and spot where the routine is breaking.",
-  },
-  settings: {
-    eyebrow: "Settings",
-    title: "Backup & Sync",
-    subtitle: "Export your tracker, import a backup, or connect Supabase.",
-  },
+const NIGHT_BASE = [
+  { id: "no-phone", title: "No phone" },
+  { id: "bed-nine", title: "Start getting ready for bed at 9:00 PM" },
+  { id: "hydrating-cleanser", title: "Wash face with hydrating facial cleanser" },
+  { id: "azelaic-acid", title: "Apply azelaic acid" },
+  { id: "night-moisturizer", title: "Apply moisturizer" },
+  { id: "night-minoxidil", title: "Apply minoxidil to eyebrows" },
+  { id: "eyelash-serum", title: "Apply peptide eyelash growth serum" },
+  { id: "night-teeth", title: "Floss and brush teeth" },
+  { id: "whitening-strips", title: "Use Crest whitening strips" }
+];
+const WORKOUTS = {
+  Monday: "Chest + side delts + neck exercises",
+  Tuesday: "Back + rear delts",
+  Wednesday: "Arms",
+  Thursday: "Legs",
+  Friday: "Cardio + abs + neck exercises",
+  Saturday: "Chest + side delts",
+  Sunday: "Back + rear delts"
 };
 
-const $ = (id) => document.getElementById(id);
-
-let selectedDate = normalizeDate(new Date());
-let selectedHistoryDate = normalizeDate(new Date());
-let state = loadState();
-
-function loadState() {
-  const raw = localStorage.getItem(STORE_KEY);
-
-  if (!raw) {
-    return freshState();
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return migrateState(parsed);
-  } catch {
-    return freshState();
-  }
+function cloneTasks(tasks) { return tasks.map(task => ({ ...task })); }
+function makeMidday(dayName) {
+  const tasks = [
+    { id: "gym", title: `Gym: ${WORKOUTS[dayName]}` },
+    { id: "creatine", title: "Take creatine" },
+    { id: "low-sodium-potassium", title: "Low sodium + high potassium" }
+  ];
+  if (dayName === "Wednesday" || dayName === "Sunday") tasks.push({ id: "wash-bed-sheets", title: "Wash bed sheets" });
+  tasks.push({ id: "water-through-day", title: "Drink 100–120 oz of water throughout the day", subtitle: "Completes automatically at 100 oz.", meta: "waterTracked" });
+  return tasks;
 }
-
-function freshState() {
-  return {
-    version: APP_VERSION,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    days: {},
-    customTasks: [],
-  };
+function makeMorning(dayName) {
+  const tasks = cloneTasks(MORNING_BASE);
+  if (dayName === "Thursday") {
+    const index = tasks.findIndex(task => task.id === "cold-finish");
+    tasks.splice(index + 1, 0, { id: "shave-manage-brows", title: "Shave face/manage eyebrows" });
+  }
+  return tasks;
 }
+function makeNight(dayName) {
+  const tasks = cloneTasks(NIGHT_BASE);
+  const minoxidilIndex = tasks.findIndex(task => task.id === "night-minoxidil");
+  if (dayName === "Monday" || dayName === "Sunday") tasks.splice(minoxidilIndex, 0, { id: "microneedle-eyebrows", title: "Microneedle eyebrows" });
+  if (["Tuesday", "Thursday", "Saturday"].includes(dayName)) tasks.push({ id: "masseter-training", title: "Train masseter muscles" });
+  if (dayName === "Sunday") {
+    const whiteningIndex = tasks.findIndex(task => task.id === "whitening-strips");
+    tasks.splice(whiteningIndex, 0,
+      { id: "exfoliate-lips", title: "Exfoliate lips: sugar, coconut oil, and raw honey mix" },
+      { id: "vaseline-lips", title: "Apply Vaseline to lips" }
+    );
+  }
+  return tasks;
+}
+const LOOKS_ROUTINES = Object.fromEntries(WEEK_ORDER.map(dayName => [dayName, {
+  morning: makeMorning(dayName), midday: makeMidday(dayName), night: makeNight(dayName)
+}]));
 
-function migrateState(input) {
-  const next = {
-    ...freshState(),
-    ...input,
-    version: APP_VERSION,
-    days: input.days || {},
-    customTasks: input.customTasks || [],
-  };
+const $ = id => document.getElementById(id);
+const loginScreen = $("loginScreen");
+const mainApp = $("mainApp");
+const passwordInput = $("passwordInput");
+const unlockBtn = $("unlockBtn");
+const loginError = $("loginError");
+const syncStatus = $("syncStatus");
+let state = loadLocalState();
+let saveTimer = null;
+let toastTimer = null;
+let renderedDayKey = getTodayKey();
 
-  Object.keys(next.days).forEach((key) => {
-    next.days[key] = normalizeDayState(next.days[key]);
-  });
-
+function formatDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+function getTodayKey(date = new Date()) {
+  const effectiveDate = new Date(date);
+  if (effectiveDate.getHours() < DAY_ROLLOVER_HOUR) effectiveDate.setDate(effectiveDate.getDate() - 1);
+  return formatDateKey(effectiveDate);
+}
+function keyToLocalDate(key) {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
   return next;
 }
-
-function normalizeDayState(day = {}) {
-  return {
-    completed: day.completed || {},
-    failed: day.failed || {},
-    wake: {
-      planned: day.wake?.planned || "",
-      actual: day.wake?.actual || "",
-      noAlarmSkipping: !!day.wake?.noAlarmSkipping,
-    },
-    creatineGrams: day.creatineGrams || "",
-    quickTasks: Array.isArray(day.quickTasks) ? day.quickTasks : [],
-    notes: day.notes || "",
-  };
+function getRoutineDayName(dayKey = getTodayKey()) { return DAY_NAMES[keyToLocalDate(dayKey).getDay()]; }
+function getLooksRoutine(dayKey = getTodayKey()) { return LOOKS_ROUTINES[getRoutineDayName(dayKey)]; }
+function getLooksTasks(dayKey = getTodayKey()) {
+  const routine = getLooksRoutine(dayKey);
+  return [...routine.morning, ...routine.midday, ...routine.night];
 }
-
-function saveState({ sync = true } = {}) {
-  state.updatedAt = new Date().toISOString();
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
-
-  if (sync) {
-    scheduleSupabaseSync();
+function getLooksTaskIds(dayKey = getTodayKey()) { return getLooksTasks(dayKey).map(task => task.id); }
+function normalizeTaskId(taskId) { return LEGACY_TASK_ID_MAP[taskId] || taskId; }
+function cleanList(values, allowedIds) {
+  if (!Array.isArray(values)) return [];
+  const allowed = new Set(allowedIds);
+  return [...new Set(values.map(normalizeTaskId).filter(id => typeof id === "string" && allowed.has(id)))];
+}
+function createEmptyState() {
+  return { days: {}, adminOverrides: { streakOffset: null, currentStreak: null, missedCounts: null } };
+}
+function loadLocalState() {
+  for (const key of [STORAGE_KEY, ...OLD_STORAGE_KEYS]) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key));
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch { /* try next key */ }
   }
+  return createEmptyState();
 }
-
-function normalizeDate(date) {
-  const copy = new Date(date);
-  copy.setHours(12, 0, 0, 0);
-  return copy;
+function saveLocalState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  OLD_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
 }
-
-function dateKey(date = selectedDate) {
-  return normalizeDate(date).toISOString().slice(0, 10);
+function getResolvedSet(day, type = "main") {
+  const done = type === "main" ? day.done : day.looksDone;
+  const skipped = type === "main" ? day.skipped : day.looksSkipped;
+  return new Set([...(done || []), ...(skipped || [])]);
 }
-
-function fromKey(key) {
-  return normalizeDate(new Date(`${key}T12:00:00`));
-}
-
-function formatDate(date = selectedDate, options = {}) {
-  return date.toLocaleDateString(undefined, {
-    weekday: options.short ? "short" : "long",
-    month: "short",
-    day: "numeric",
-    year: options.year === false ? undefined : "numeric",
-  });
-}
-
-function getDayState(key = dateKey()) {
-  if (!state.days[key]) {
-    state.days[key] = normalizeDayState();
-  }
-
-  return state.days[key];
-}
-
-function getAllTasksForDate(date = selectedDate) {
-  const key = dateKey(date);
-  const base = BASE_TASKS.filter((task) => taskScheduled(task, date));
-  const custom = state.customTasks
-    .filter((task) => taskScheduled(task, date))
-    .map((task) => ({
-      ...task,
-      custom: true,
-      icon: task.icon || "＋",
-      note: task.note || "Custom recurring task.",
-    }));
-
-  const quick = getDayState(key).quickTasks.map((task) => ({
-    ...task,
-    quick: true,
-    schedule: "once",
-    icon: task.icon || "＋",
-    note: task.note || "Quick task for this day only.",
-  }));
-
-  return [...base, ...custom, ...quick].sort((a, b) => {
-    const sectionDiff = SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section);
-    if (sectionDiff !== 0) return sectionDiff;
-    return String(a.title).localeCompare(String(b.title));
-  });
-}
-
-function taskScheduled(task, date) {
-  const day = normalizeDate(date).getDay();
-
-  if (task.schedule === "daily") return true;
-  if (task.schedule === "once") return true;
-  if (task.schedule === "weekend") return day === 0 || day === 6;
-  if (task.schedule === "gym") return [1, 3, 5].includes(day);
-  if (task.schedule === "days") return Array.isArray(task.days) && task.days.includes(day);
-
-  return true;
-}
-
-function isDone(task, key = dateKey()) {
-  return !!getDayState(key).completed[task.id];
-}
-
-function isFailed(task, key = dateKey()) {
-  return !!getDayState(key).failed[task.id];
-}
-
-function isResolved(task, key = dateKey()) {
-  return isDone(task, key) || isFailed(task, key);
-}
-
-function getMorningTasks(date = selectedDate) {
-  return getAllTasksForDate(date).filter((task) => task.section === "morning");
-}
-
-function morningGateOpen(date = selectedDate) {
-  const key = dateKey(date);
-  const morningTasks = getMorningTasks(date);
-
-  if (!morningTasks.length) return true;
-
-  return morningTasks.every((task) => isResolved(task, key));
-}
-
-function sectionLocked(section, date = selectedDate) {
-  if (section === "morning") return false;
-  return !morningGateOpen(date);
-}
-
-function setTaskDone(task, value = true) {
-  const key = dateKey();
-  const day = getDayState(key);
-
-  if (sectionLocked(task.section) && !isResolved(task, key)) {
-    toast("Morning gate is still locked. Resolve morning first.");
-    return;
-  }
-
-  if (value) {
-    const validation = validateTaskBeforeDone(task, day);
-    if (!validation.ok) {
-      toast(validation.message);
-      return;
-    }
-
-    day.completed[task.id] = new Date().toISOString();
-    delete day.failed[task.id];
+function syncWaterTask(day, dayKey) {
+  const allowed = getLooksTaskIds(dayKey);
+  const doneSet = new Set(cleanList(day.looksDone, allowed));
+  const skippedSet = new Set(cleanList(day.looksSkipped, allowed));
+  if (day.waterOz >= WATER_MINIMUM_OZ) {
+    doneSet.add("water-through-day");
+    skippedSet.delete("water-through-day");
   } else {
-    delete day.completed[task.id];
+    doneSet.delete("water-through-day");
+  }
+  day.looksDone = [...doneSet];
+  day.looksSkipped = [...skippedSet];
+}
+function normalizeState() {
+  let changed = false;
+  if (!state || typeof state !== "object") { state = createEmptyState(); changed = true; }
+  if (!state.days || typeof state.days !== "object") { state.days = {}; changed = true; }
+  if (!state.adminOverrides || typeof state.adminOverrides !== "object") { state.adminOverrides = {}; changed = true; }
+
+  for (const dayKey of Object.keys(state.days)) {
+    const original = state.days[dayKey] || {};
+    const allowedLooks = getLooksTaskIds(dayKey);
+    const normalized = {
+      ...original,
+      done: cleanList(original.done, TASK_IDS),
+      skipped: cleanList(original.skipped, TASK_IDS),
+      looksDone: cleanList(original.looksDone, allowedLooks),
+      looksSkipped: cleanList(original.looksSkipped, allowedLooks),
+      waterOz: Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(original.waterOz) || 0))),
+      missedReason: typeof original.missedReason === "string" ? original.missedReason : ""
+    };
+    normalized.skipped = normalized.skipped.filter(id => !normalized.done.includes(id));
+    normalized.looksSkipped = normalized.looksSkipped.filter(id => !normalized.looksDone.includes(id));
+    syncWaterTask(normalized, dayKey);
+    normalized.completed = getResolvedSet(normalized, "main").size === TASK_IDS.length;
+    normalized.looksCompleted = getResolvedSet(normalized, "looks").size === allowedLooks.length;
+    if (JSON.stringify(original) !== JSON.stringify(normalized)) { state.days[dayKey] = normalized; changed = true; }
   }
 
-  saveState();
-  renderAll();
-}
-
-function failTask(task) {
-  const key = dateKey();
-  const day = getDayState(key);
-
-  if (sectionLocked(task.section) && !isResolved(task, key)) {
-    toast("Morning gate is still locked. Resolve morning first.");
-    return;
-  }
-
-  day.failed[task.id] = new Date().toISOString();
-  delete day.completed[task.id];
-
-  saveState();
-  renderAll();
-
-  if (task.critical) {
-    toast("Wake-up failed. Perfect day is gone, but the day is still trackable.");
-  } else {
-    toast("Task marked failed.");
-  }
-}
-
-function validateTaskBeforeDone(task, day) {
-  if (task.special === "wake") {
-    if (!day.wake.planned) {
-      return { ok: false, message: "Set your planned wake time first." };
-    }
-
-    if (!day.wake.actual) {
-      return { ok: false, message: "Log your actual wake time first." };
-    }
-
-    if (!day.wake.noAlarmSkipping) {
-      return { ok: false, message: "Confirm no alarm skipping first." };
-    }
-
-    if (timeToMinutes(day.wake.actual) > timeToMinutes(day.wake.planned)) {
-      return {
-        ok: false,
-        message: "Actual wake time is later than planned. Mark it failed or correct the time.",
-      };
-    }
-  }
-
-  if (task.special === "creatine") {
-    const grams = Number(day.creatineGrams);
-
-    if (!grams || grams < 5 || grams > 10) {
-      return { ok: false, message: "Enter creatine between 5 and 10 grams first." };
-    }
-  }
-
-  return { ok: true };
-}
-
-function timeToMinutes(value) {
-  const [hours, minutes] = String(value).split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-function failUnfinishedMorning() {
-  const key = dateKey();
-  const day = getDayState(key);
-  const morningTasks = getMorningTasks();
-
-  const unfinished = morningTasks.filter((task) => !isResolved(task, key));
-
-  if (!unfinished.length) {
-    toast("Morning is already resolved.");
-    return;
-  }
-
-  unfinished.forEach((task) => {
-    day.failed[task.id] = new Date().toISOString();
-    delete day.completed[task.id];
-  });
-
-  saveState();
-  renderAll();
-  toast(`${unfinished.length} unfinished morning task${unfinished.length === 1 ? "" : "s"} failed. Afternoon unlocked.`);
-}
-
-function completeAllVisibleCleanTasks() {
-  const key = dateKey();
-  const day = getDayState(key);
-  const tasks = getAllTasksForDate();
-
-  let count = 0;
-
-  tasks.forEach((task) => {
-    if (sectionLocked(task.section) && !isResolved(task, key)) return;
-    if (isResolved(task, key)) return;
-    if (task.special) return;
-
-    day.completed[task.id] = new Date().toISOString();
-    count += 1;
-  });
-
-  saveState();
-  renderAll();
-
-  if (!count) {
-    toast("No clean visible tasks were available to complete.");
-  } else {
-    toast(`${count} clean task${count === 1 ? "" : "s"} completed.`);
-  }
-}
-
-function getDayStats(key = dateKey(), date = fromKey(key)) {
-  const tasks = getAllTasksForDate(date);
-  const done = tasks.filter((task) => isDone(task, key));
-  const failed = tasks.filter((task) => isFailed(task, key));
-  const resolved = tasks.filter((task) => isResolved(task, key));
-  const unresolved = tasks.length - resolved.length;
-  const completePercent = tasks.length ? Math.round((done.length / tasks.length) * 100) : 0;
-  const resolvedPercent = tasks.length ? Math.round((resolved.length / tasks.length) * 100) : 0;
-  const todayXp = done.reduce((sum, task) => sum + Number(task.xp || 0), 0);
-  const perfect = tasks.length > 0 && failed.length === 0 && done.length === tasks.length;
-
-  return {
-    key,
-    date,
-    tasks,
-    done,
-    failed,
-    resolved,
-    unresolved,
-    completePercent,
-    resolvedPercent,
-    todayXp,
-    perfect,
-  };
-}
-
-function getLifetimeStats() {
-  let totalXp = 0;
-  let totalDone = 0;
-  let totalFailed = 0;
-  let totalScheduled = 0;
-  let totalResolved = 0;
-  let perfectDays = 0;
-  let morningPerfectDays = 0;
-  let gymCompletions = 0;
-
-  const allKeys = getRelevantHistoryKeys();
-
-  allKeys.forEach((key) => {
-    const date = fromKey(key);
-    const dayStats = getDayStats(key, date);
-    const morningTasks = dayStats.tasks.filter((task) => task.section === "morning");
-    const morningDone = morningTasks.filter((task) => isDone(task, key));
-
-    totalXp += dayStats.todayXp;
-    totalDone += dayStats.done.length;
-    totalFailed += dayStats.failed.length;
-    totalScheduled += dayStats.tasks.length;
-    totalResolved += dayStats.resolved.length;
-
-    if (dayStats.perfect) perfectDays += 1;
-
-    if (morningTasks.length && morningDone.length === morningTasks.length) {
-      morningPerfectDays += 1;
-    }
-
-    if (isDone({ id: "gym" }, key)) {
-      gymCompletions += 1;
-    }
-  });
-
-  const completionRate = totalResolved ? Math.round((totalDone / totalResolved) * 100) : 0;
-
-  return {
-    totalXp,
-    totalDone,
-    totalFailed,
-    totalScheduled,
-    totalResolved,
-    perfectDays,
-    morningPerfectDays,
-    gymCompletions,
-    completionRate,
-    streak: calculatePerfectStreak(),
-  };
-}
-
-function getRelevantHistoryKeys() {
-  const keys = new Set(Object.keys(state.days));
-
-  const today = normalizeDate(new Date());
-  for (let i = 0; i < 90; i++) {
-    const date = normalizeDate(today);
-    date.setDate(today.getDate() - i);
-    keys.add(dateKey(date));
-  }
-
-  return [...keys].sort();
-}
-
-function calculatePerfectStreak() {
-  let streak = 0;
-  const cursor = normalizeDate(new Date());
-
-  while (true) {
-    const key = dateKey(cursor);
-    const stats = getDayStats(key, cursor);
-
-    if (stats.perfect) {
-      streak += 1;
-      cursor.setDate(cursor.getDate() - 1);
+  const override = state.adminOverrides;
+  if (!Number.isInteger(override.streakOffset)) {
+    if (Number.isInteger(override.currentStreak) && override.currentStreak >= 0) {
+      override.streakOffset = override.currentStreak - calculateCurrentStreak();
+      changed = true;
     } else {
-      break;
+      override.streakOffset = null;
     }
   }
+  override.currentStreak = null;
+  if (override.missedCounts !== null && typeof override.missedCounts !== "object") { override.missedCounts = null; changed = true; }
+  return changed;
+}
+function ensureDay(dayKey = getTodayKey()) {
+  if (!state.days[dayKey]) state.days[dayKey] = { done: [], skipped: [], looksDone: [], looksSkipped: [], waterOz: 0, completed: false, looksCompleted: false, missedReason: "" };
+  const day = state.days[dayKey];
+  day.done = cleanList(day.done, TASK_IDS);
+  day.skipped = cleanList(day.skipped, TASK_IDS).filter(id => !day.done.includes(id));
+  day.looksDone = cleanList(day.looksDone, getLooksTaskIds(dayKey));
+  day.looksSkipped = cleanList(day.looksSkipped, getLooksTaskIds(dayKey)).filter(id => !day.looksDone.includes(id));
+  day.waterOz = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(day.waterOz) || 0)));
+  if (typeof day.missedReason !== "string") day.missedReason = "";
+  syncWaterTask(day, dayKey);
+  day.completed = getResolvedSet(day, "main").size === TASK_IDS.length;
+  day.looksCompleted = getResolvedSet(day, "looks").size === getLooksTaskIds(dayKey).length;
+  return day;
+}
+function saveState() { saveLocalState(); queueSupabaseSave(); }
+function queueSupabaseSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveSupabaseState, 450);
+}
+async function loadSupabaseState() {
+  if (!supabaseClient) { syncStatus.textContent = "Saved locally. Supabase is not connected."; return; }
+  syncStatus.textContent = "Loading from Supabase…";
+  const { data, error } = await supabaseClient.from(SUPABASE_TABLE).select("state").eq("id", SUPABASE_ROW_ID).maybeSingle();
+  if (error) { console.error(error); syncStatus.textContent = "Supabase load failed. Using local save."; return; }
+  if (data?.state && typeof data.state === "object") {
+    state = data.state;
+    normalizeState();
+    saveLocalState();
+    render();
+  } else {
+    await saveSupabaseState();
+  }
+  syncStatus.textContent = "Synced with Supabase.";
+}
+async function saveSupabaseState() {
+  if (!supabaseClient) { syncStatus.textContent = "Saved locally. Supabase is not connected."; return; }
+  syncStatus.textContent = "Saving…";
+  const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert({ id: SUPABASE_ROW_ID, state, updated_at: new Date().toISOString() });
+  if (error) { console.error(error); syncStatus.textContent = "Supabase save failed. Saved locally only."; return; }
+  syncStatus.textContent = "Saved to Supabase.";
+}
 
+function calculateStreak(completedField) {
+  let date = keyToLocalDate(getTodayKey());
+  let streak = 0;
+  if (state.days[getTodayKey()]?.[completedField] !== true) date = addDays(date, -1);
+  while (state.days[formatDateKey(date)]?.[completedField] === true) {
+    streak += 1;
+    date = addDays(date, -1);
+  }
   return streak;
 }
-
-function getRank(totalXp) {
-  let current = RANKS[0];
-  let next = RANKS[1] || null;
-
-  for (let i = 0; i < RANKS.length; i++) {
-    if (totalXp >= RANKS[i].xp) {
-      current = RANKS[i];
-      next = RANKS[i + 1] || null;
-    }
-  }
-
-  const progress = next ? totalXp - current.xp : 1;
-  const needed = next ? next.xp - current.xp : 1;
-  const percent = next ? Math.min(100, Math.round((progress / needed) * 100)) : 100;
-
-  return {
-    current,
-    next,
-    progress,
-    needed,
-    percent,
-  };
+function calculateCurrentStreak() { return calculateStreak("completed"); }
+function calculateLooksStreak() { return calculateStreak("looksCompleted"); }
+function getDisplayedCurrentStreak() {
+  const offset = Number.isInteger(state.adminOverrides?.streakOffset) ? state.adminOverrides.streakOffset : 0;
+  return Math.max(0, calculateCurrentStreak() + offset);
 }
-
-function renderAll() {
-  renderHeader();
-  renderToday();
-  renderPlanner();
-  renderStats();
-  renderHistory();
-  renderSettings();
+function calculateTaskStreak(taskId) {
+  let date = keyToLocalDate(getTodayKey());
+  let streak = 0;
+  if (!state.days[getTodayKey()]?.done?.includes(taskId)) date = addDays(date, -1);
+  while (state.days[formatDateKey(date)]?.done?.includes(taskId)) {
+    streak += 1;
+    date = addDays(date, -1);
+  }
+  return streak;
 }
+function getCurrentRank(streak) { return RANKS.reduce((current, rank) => streak >= rank.days ? rank : current, RANKS[0]); }
+function getNextRank(streak) { return RANKS.find(rank => rank.days > streak) || null; }
 
-function renderHeader() {
-  $("dateChip").textContent = formatDate(selectedDate, { year: false });
-
-  const activePage = document.querySelector(".nav-item.active")?.dataset.page || "today";
-  const meta = PAGE_META[activePage] || PAGE_META.today;
-
-  $("pageEyebrow").textContent = meta.eyebrow;
-  $("pageTitle").textContent = meta.title;
-  $("pageSubtitle").textContent = meta.subtitle;
-}
-
-function renderToday() {
-  const key = dateKey();
-  const day = getDayState(key);
-  const stats = getDayStats(key, selectedDate);
-  const lifetime = getLifetimeStats();
-  const rank = getRank(lifetime.totalXp);
-  const gateOpen = morningGateOpen(selectedDate);
-  const morningLeft = getMorningTasks(selectedDate).filter((task) => !isResolved(task, key)).length;
-  const dayTags = buildDayTags(selectedDate);
-
-  $("dayBadge").textContent = dayTags.join(" • ");
-  $("gateBadge").textContent = gateOpen ? "Morning resolved" : "Morning locked";
-  $("gateBadge").className = `soft-badge ${gateOpen ? "good" : "warning"}`;
-
-  const scoreDegrees = Math.round((stats.completePercent / 100) * 360);
-  $("scoreRing").style.background = `conic-gradient(var(--gold) ${scoreDegrees}deg, rgba(55,43,28,.09) ${scoreDegrees}deg)`;
-  $("scorePercent").textContent = `${stats.completePercent}%`;
-  $("scoreFraction").textContent = `${stats.done.length} / ${stats.tasks.length} done`;
-
-  if (stats.perfect) {
-    $("todayMainMessage").textContent = "Perfect day locked.";
-    $("todaySubMessage").textContent = "Every scheduled task is complete with no failures.";
-  } else if (!gateOpen) {
-    $("todayMainMessage").textContent = "Finish the morning gate.";
-    $("todaySubMessage").textContent = "The rest of the app stays strict until every morning task is completed or failed.";
-  } else if (stats.failed.length) {
-    $("todayMainMessage").textContent = "Keep tracking honestly.";
-    $("todaySubMessage").textContent = "There are failed tasks today, but finishing the rest still protects the data.";
-  } else {
-    $("todayMainMessage").textContent = "Morning is clear. Keep moving.";
-    $("todaySubMessage").textContent = "Afternoon and night are open. Finish the scheduled tasks.";
+function setMainStatus(taskId, status) {
+  const day = ensureDay();
+  const done = new Set(day.done);
+  const skipped = new Set(day.skipped);
+  if (status === "done") {
+    if (done.has(taskId)) done.delete(taskId); else { done.add(taskId); skipped.delete(taskId); }
+  } else if (status === "skipped") {
+    if (skipped.has(taskId)) skipped.delete(taskId); else { skipped.add(taskId); done.delete(taskId); }
   }
-
-  $("currentStreak").textContent = lifetime.streak;
-  $("currentRank").textContent = rank.current.name;
-  $("rankProgressText").textContent = rank.next
-    ? `${rank.progress}/${rank.needed} XP`
-    : "Max rank";
-  $("todayXp").textContent = stats.todayXp;
-
-  $("sideScoreText").textContent = `${stats.completePercent}%`;
-  $("sideResolvedText").textContent = `${stats.resolved.length}/${stats.tasks.length} resolved`;
-  $("sideScoreBar").style.width = `${stats.completePercent}%`;
-
-  renderFocusBanner(gateOpen, morningLeft, stats);
-  renderTaskBoard(stats.tasks);
-
-  $("dailyNotes").value = day.notes || "";
-}
-
-function renderFocusBanner(gateOpen, morningLeft, stats) {
-  const banner = $("focusBanner");
-  banner.className = "focus-banner";
-
-  if (stats.perfect) {
-    banner.classList.add("good");
-    $("focusTitle").textContent = "Perfect day";
-    $("focusText").textContent = "Everything scheduled for this date is complete.";
-    $("focusCount").textContent = "clean";
-    return;
-  }
-
-  if (!gateOpen) {
-    $("focusTitle").textContent = "Morning gate active";
-    $("focusText").textContent = "Complete or fail all morning tasks to unlock afternoon and night.";
-    $("focusCount").textContent = `${morningLeft} left`;
-    return;
-  }
-
-  if (stats.failed.length) {
-    banner.classList.add("bad");
-    $("focusTitle").textContent = "Failures logged";
-    $("focusText").textContent = "The perfect day is gone, but honest tracking is still better than hiding misses.";
-    $("focusCount").textContent = `${stats.failed.length} failed`;
-    return;
-  }
-
-  banner.classList.add("good");
-  $("focusTitle").textContent = "Morning resolved";
-  $("focusText").textContent = "Afternoon and night are unlocked. Finish the remaining tasks clean.";
-  $("focusCount").textContent = `${stats.unresolved} left`;
-}
-
-function renderTaskBoard(tasks) {
-  const board = $("taskBoard");
-  board.innerHTML = "";
-
-  SECTION_ORDER.forEach((section) => {
-    const sectionTasks = tasks.filter((task) => task.section === section);
-    if (!sectionTasks.length) return;
-
-    const locked = sectionLocked(section);
-    const key = dateKey();
-    const doneCount = sectionTasks.filter((task) => isDone(task, key)).length;
-    const resolvedCount = sectionTasks.filter((task) => isResolved(task, key)).length;
-
-    const wrapper = document.createElement("section");
-    wrapper.className = `task-section ${locked ? "locked" : ""}`;
-    wrapper.innerHTML = `
-      <div class="task-section-header">
-        <div>
-          <h3>${escapeHtml(SECTION_META[section].title)}</h3>
-          <p>${escapeHtml(SECTION_META[section].subtitle)}</p>
-        </div>
-        <span class="task-section-count">${doneCount}/${sectionTasks.length} done • ${resolvedCount}/${sectionTasks.length} resolved</span>
-      </div>
-    `;
-
-    if (locked) {
-      const lock = document.createElement("div");
-      lock.className = "lock-message";
-      lock.innerHTML = `<span>Locked until morning is resolved.</span><span>Strict mode</span>`;
-      wrapper.appendChild(lock);
-    }
-
-    const list = document.createElement("div");
-    list.className = "task-list";
-
-    sectionTasks.forEach((task) => {
-      list.appendChild(renderTaskCard(task, locked));
-    });
-
-    wrapper.appendChild(list);
-    board.appendChild(wrapper);
-  });
-}
-
-function renderTaskCard(task, lockedSection) {
-  const key = dateKey();
-  const day = getDayState(key);
-  const done = isDone(task, key);
-  const failed = isFailed(task, key);
-  const resolved = done || failed;
-  const locked = lockedSection && !resolved;
-
-  const card = document.createElement("article");
-  card.className = `task-card ${done ? "done" : ""} ${failed ? "failed" : ""} ${locked ? "locked" : ""}`;
-
-  const check = document.createElement("button");
-  check.className = "check-button";
-  check.disabled = locked;
-  check.textContent = done ? "✓" : failed ? "×" : task.icon || "";
-  check.title = done ? "Undo complete" : "Mark complete";
-  check.addEventListener("click", () => setTaskDone(task, !done));
-
-  const content = document.createElement("div");
-  content.className = "task-content";
-
-  const badges = [];
-  if (task.critical) badges.push(`<span class="soft-badge bad">critical</span>`);
-  if (task.due) badges.push(`<span class="soft-badge blue">${escapeHtml(task.due)}</span>`);
-  if (task.days) badges.push(`<span class="soft-badge">${escapeHtml(formatDays(task.days))}</span>`);
-  if (task.quick) badges.push(`<span class="soft-badge">quick</span>`);
-  if (task.custom) badges.push(`<span class="soft-badge">custom</span>`);
-  badges.push(`<span class="soft-badge good">+${Number(task.xp || 0)} XP</span>`);
-
-  content.innerHTML = `
-    <div class="task-title-row">
-      <h4>${escapeHtml(task.title)}</h4>
-    </div>
-    <p class="task-subtext">${escapeHtml(task.note || "")}</p>
-    <div class="task-meta-row">${badges.join("")}</div>
-  `;
-
-  if (task.special === "wake") {
-    content.appendChild(renderWakeFields(day));
-  }
-
-  if (task.special === "creatine") {
-    content.appendChild(renderCreatineFields(day));
-  }
-
-  const actions = document.createElement("div");
-  actions.className = "task-actions";
-
-  const doneButton = document.createElement("button");
-  doneButton.className = "mini-action";
-  doneButton.disabled = locked;
-  doneButton.textContent = done ? "Undo" : "Done";
-  doneButton.addEventListener("click", () => setTaskDone(task, !done));
-  actions.appendChild(doneButton);
-
-  const failButton = document.createElement("button");
-  failButton.className = "mini-action fail";
-  failButton.disabled = locked;
-  failButton.textContent = failed ? "Unfail" : "Fail";
-  failButton.addEventListener("click", () => {
-    if (failed) {
-      const day = getDayState(dateKey());
-      delete day.failed[task.id];
-      saveState();
-      renderAll();
-      return;
-    }
-
-    failTask(task);
-  });
-  actions.appendChild(failButton);
-
-  if (task.quick) {
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "mini-action delete";
-    deleteButton.textContent = "Delete";
-    deleteButton.addEventListener("click", () => deleteQuickTask(task.id));
-    actions.appendChild(deleteButton);
-  }
-
-  card.appendChild(check);
-  card.appendChild(content);
-  card.appendChild(actions);
-
-  return card;
-}
-
-function renderWakeFields(day) {
-  const wrap = document.createElement("div");
-  wrap.className = "special-fields";
-  wrap.innerHTML = `
-    <label>
-      Planned wake time
-      <input type="time" value="${escapeAttribute(day.wake.planned)}" data-wake-field="planned" />
-    </label>
-    <label>
-      Actual wake time
-      <input type="time" value="${escapeAttribute(day.wake.actual)}" data-wake-field="actual" />
-    </label>
-  `;
-
-  const noSkip = document.createElement("label");
-  noSkip.className = "inline-check";
-  noSkip.innerHTML = `
-    <input type="checkbox" ${day.wake.noAlarmSkipping ? "checked" : ""} data-wake-field="noAlarmSkipping" />
-    No alarm skipping
-  `;
-
-  const container = document.createElement("div");
-  container.appendChild(wrap);
-  container.appendChild(noSkip);
-
-  container.querySelectorAll("[data-wake-field]").forEach((input) => {
-    input.addEventListener("input", handleWakeInput);
-    input.addEventListener("change", handleWakeInput);
-  });
-
-  return container;
-}
-
-function handleWakeInput(event) {
-  const day = getDayState(dateKey());
-  const field = event.target.dataset.wakeField;
-
-  if (field === "noAlarmSkipping") {
-    day.wake.noAlarmSkipping = event.target.checked;
-  } else {
-    day.wake[field] = event.target.value;
-  }
-
+  day.done = [...done];
+  day.skipped = [...skipped];
+  day.completed = getResolvedSet(day, "main").size === TASK_IDS.length;
   saveState();
+  render();
 }
-
-function renderCreatineFields(day) {
-  const wrap = document.createElement("div");
-  wrap.className = "special-fields one";
-  wrap.innerHTML = `
-    <label>
-      Creatine grams
-      <input type="number" min="0" max="20" step="1" value="${escapeAttribute(day.creatineGrams)}" placeholder="5 to 10" id="creatineGramsInput" />
-    </label>
-  `;
-
-  wrap.querySelector("input").addEventListener("input", (event) => {
-    const dayState = getDayState(dateKey());
-    dayState.creatineGrams = event.target.value;
-    saveState();
-  });
-
-  return wrap;
-}
-
-function renderPlanner() {
-  renderRulesList();
-  renderCustomTaskList();
-
-  const picker = $("customDayPicker");
-  picker.classList.toggle("active", $("customTaskSchedule").value === "custom");
-}
-
-function renderRulesList() {
-  const list = $("rulesList");
-  list.innerHTML = "";
-
-  BASE_TASKS.forEach((task) => {
-    const row = document.createElement("div");
-    row.className = "rule-item";
-    row.innerHTML = `
-      <div class="rule-icon">${escapeHtml(task.icon || "✓")}</div>
-      <div>
-        <h4>${escapeHtml(task.title)}</h4>
-        <p>${escapeHtml(task.note || "")}</p>
-      </div>
-      <span class="soft-badge">${escapeHtml(scheduleLabel(task))}</span>
-    `;
-    list.appendChild(row);
-  });
-}
-
-function renderCustomTaskList() {
-  const list = $("customTaskList");
-  list.innerHTML = "";
-
-  if (!state.customTasks.length) {
-    list.innerHTML = `<p class="muted-line">No custom recurring tasks yet.</p>`;
-    return;
+function setLooksStatus(task, status) {
+  const day = ensureDay();
+  const done = new Set(day.looksDone);
+  const skipped = new Set(day.looksSkipped);
+  if (status === "done") {
+    if (done.has(task.id)) done.delete(task.id); else { done.add(task.id); skipped.delete(task.id); }
+  } else if (status === "skipped") {
+    if (skipped.has(task.id)) skipped.delete(task.id); else { skipped.add(task.id); done.delete(task.id); }
   }
+  if (task.meta === "morningWater" && status === "done" && done.has(task.id) && day.waterOz < 8) day.waterOz = 8;
+  day.looksDone = [...done];
+  day.looksSkipped = [...skipped];
+  syncWaterTask(day, getTodayKey());
+  day.looksCompleted = getResolvedSet(day, "looks").size === getLooksTaskIds().length;
+  saveState();
+  render();
+}
+function createTaskRow(task, done, skipped, theme, onToggle, onSkip) {
+  const row = document.createElement("div");
+  row.className = `task-row ${theme} ${done ? "done" : ""} ${skipped ? "skipped" : ""} ${task.meta === "waterTracked" ? "tracked" : ""}`;
 
-  state.customTasks.forEach((task) => {
+  const main = document.createElement("button");
+  main.type = "button";
+  main.className = "task-main";
+  main.innerHTML = `
+    <div class="task-box">${done ? "✓" : skipped ? "−" : ""}</div>
+    <div class="task-copy">
+      <div class="task-title">${escapeHtml(task.title)}</div>
+      ${task.subtitle ? `<div class="task-subtitle">${escapeHtml(task.subtitle)}</div>` : ""}
+      ${skipped ? `<div class="task-status">Skipped today</div>` : ""}
+    </div>`;
+  main.addEventListener("click", onToggle);
+
+  const menu = document.createElement("details");
+  menu.className = "task-menu";
+  const summary = document.createElement("summary");
+  summary.setAttribute("aria-label", `Options for ${task.title}`);
+  summary.textContent = "⋯";
+  const popover = document.createElement("div");
+  popover.className = "task-menu-popover";
+  const skipButton = document.createElement("button");
+  skipButton.type = "button";
+  skipButton.className = "task-menu-action";
+  skipButton.textContent = skipped ? "Unskip task" : "Skip this task";
+  skipButton.addEventListener("click", event => {
+    event.stopPropagation();
+    menu.open = false;
+    onSkip();
+    toast(skipped ? "Task returned to today." : "Task skipped for today.");
+  });
+  popover.appendChild(skipButton);
+  menu.append(summary, popover);
+  row.append(main, menu);
+  return row;
+}
+
+function renderTaskLists() {
+  const day = ensureDay();
+  const done = new Set(day.done);
+  const skipped = new Set(day.skipped);
+  $("morningList").innerHTML = "";
+  $("afternoonList").innerHTML = "";
+  $("nightList").innerHTML = "";
+  for (const task of TASKS) {
+    const row = createTaskRow(task, done.has(task.id), skipped.has(task.id), "", () => setMainStatus(task.id, "done"), () => setMainStatus(task.id, "skipped"));
+    $(`${task.section}List`).appendChild(row);
+  }
+}
+function renderProgress() {
+  const day = ensureDay();
+  const done = day.done.length;
+  const skipped = day.skipped.length;
+  const resolved = done + skipped;
+  const total = TASKS.length;
+  const percent = Math.round((resolved / total) * 100);
+  const left = total - resolved;
+  $("percent").textContent = `${percent}%`;
+  $("doneCount").textContent = skipped ? `${done} done • ${skipped} skipped` : `${done} / ${total}`;
+  $("tasksLeft").textContent = left === 0
+    ? "Main checklist resolved. The streak updated immediately."
+    : `${left} main task${left === 1 ? "" : "s"} left today.`;
+  $("progressCircle").style.background = `conic-gradient(var(--green) ${Math.round((resolved / total) * 360)}deg, rgba(42,30,18,.09) 0deg)`;
+}
+function renderPhoneLock() {
+  const resolved = getResolvedSet(ensureDay(), "main");
+  const remaining = MORNING_TASK_IDS.filter(id => !resolved.has(id)).length;
+  const complete = remaining === 0;
+  $("phoneLockCard").classList.toggle("locked", !complete);
+  $("phoneLockCard").classList.toggle("unlocked", complete);
+  $("phoneLockTitle").textContent = complete ? "Phone unlocked" : "Phone locked";
+  $("phoneLockText").textContent = complete ? "Morning list is resolved." : `${remaining} morning task${remaining === 1 ? "" : "s"} left.`;
+  $("phoneLockBadge").textContent = complete ? "Unlocked" : "Locked";
+}
+function renderRankAndReward() {
+  const streak = getDisplayedCurrentStreak();
+  const looksStreak = calculateLooksStreak();
+  const gymStreak = calculateTaskStreak("gym");
+  const currentRank = getCurrentRank(streak);
+  const nextRank = getNextRank(streak);
+  $("rankBadge").textContent = `Day ${streak}`;
+  $("rankName").textContent = currentRank.name;
+  $("rankCopy").textContent = currentRank.copy;
+  $("bigStreak").textContent = streak;
+  $("gameChecklistStreak").textContent = streak;
+  $("gameLooksStreak").textContent = looksStreak;
+  $("gameGymStreak").textContent = gymStreak;
+  $("gameRewardProgress").textContent = `${Math.min(streak, 7)} / 7`;
+  $("looksStreak").textContent = looksStreak;
+
+  if (nextRank) {
+    const span = nextRank.days - currentRank.days;
+    $("rankProgress").style.width = `${Math.max(0, Math.min(100, ((streak - currentRank.days) / span) * 100))}%`;
+  } else $("rankProgress").style.width = "100%";
+
+  if (streak >= 7) {
+    $("rewardBadge").textContent = "Unlocked";
+    $("rewardText").textContent = "You earned it. Guts Racing seat cover unlocked.";
+  } else {
+    const left = 7 - streak;
+    $("rewardBadge").textContent = `${left} left`;
+    $("rewardText").textContent = `Resolve ${left} more main-checklist day${left === 1 ? "" : "s"} in a row.`;
+  }
+  renderRankLadder(streak);
+}
+function renderRankLadder(streak) {
+  const ladder = $("rankLadder");
+  ladder.innerHTML = "";
+  for (const rank of RANKS) {
+    const active = streak >= rank.days;
     const item = document.createElement("div");
-    item.className = "custom-task-item";
-    item.innerHTML = `
-      <div>
-        <strong>${escapeHtml(task.title)}</strong>
-        <span>${escapeHtml(SECTION_META[task.section]?.title || task.section)} • ${escapeHtml(scheduleLabel(task))} • +${Number(task.xp || 0)} XP</span>
-      </div>
-    `;
+    item.className = `ladder-item ${active ? "active" : ""}`;
+    item.innerHTML = `<div class="ladder-dot">${active ? "✓" : rank.days}</div><div><div class="ladder-name">${rank.name}</div><div class="ladder-days">${rank.days} main day${rank.days === 1 ? "" : "s"}</div></div><div class="badge">${active ? "Unlocked" : "Locked"}</div>`;
+    ladder.appendChild(item);
+  }
+}
+function renderLooksTaskList(element, tasks, day) {
+  element.innerHTML = "";
+  const done = new Set(day.looksDone);
+  const skipped = new Set(day.looksSkipped);
+  for (const task of tasks) {
+    const toggle = () => {
+      if (task.meta === "waterTracked") { $("waterCard").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+      setLooksStatus(task, "done");
+    };
+    element.appendChild(createTaskRow(task, done.has(task.id), skipped.has(task.id), "looks-task", toggle, () => setLooksStatus(task, "skipped")));
+  }
+}
+function renderLooks() {
+  const key = getTodayKey();
+  const day = ensureDay(key);
+  const dayName = getRoutineDayName(key);
+  const routine = getLooksRoutine(key);
+  const date = keyToLocalDate(key);
+  $("looksDayName").textContent = `${dayName} routine`;
+  $("looksDateText").textContent = `${dayName}, ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
+  renderLooksTaskList($("looksMorningList"), routine.morning, day);
+  renderLooksTaskList($("looksMiddayList"), routine.midday, day);
+  renderLooksTaskList($("looksNightList"), routine.night, day);
 
-    const del = document.createElement("button");
-    del.className = "mini-action delete";
-    del.textContent = "Delete";
-    del.addEventListener("click", () => deleteCustomTask(task.id));
+  const total = getLooksTaskIds(key).length;
+  const done = day.looksDone.length;
+  const skipped = day.looksSkipped.length;
+  const resolved = done + skipped;
+  const left = total - resolved;
+  const percent = total ? Math.round((resolved / total) * 100) : 0;
+  $("looksPercent").textContent = `${percent}%`;
+  $("looksDoneCount").textContent = skipped ? `${done} done • ${skipped} skipped` : `${done} / ${total}`;
+  $("looksTasksLeft").textContent = left === 0 ? "Looksmaxxing routine resolved. Its separate streak updated." : `${left} looks task${left === 1 ? "" : "s"} left today.`;
+  $("looksProgressCircle").style.background = `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
+  $("workoutName").textContent = WORKOUTS[dayName];
+  renderWater();
+}
+function renderWater() {
+  const waterOz = ensureDay().waterOz;
+  const displayPercent = Math.round((waterOz / WATER_TARGET_OZ) * 100);
+  $("waterAmount").innerHTML = `${waterOz} <span>oz / ${WATER_TARGET_OZ} oz</span>`;
+  $("waterBadge").textContent = `${displayPercent}%`;
+  $("waterFill").style.width = `${Math.max(0, Math.min(100, displayPercent))}%`;
+  if (waterOz < WATER_MINIMUM_OZ) $("waterStatus").textContent = `${WATER_MINIMUM_OZ - waterOz} oz until the daily minimum.`;
+  else if (waterOz < WATER_TARGET_OZ) $("waterStatus").textContent = `Minimum hit. ${WATER_TARGET_OZ - waterOz} oz until target.`;
+  else $("waterStatus").textContent = waterOz === WATER_TARGET_OZ ? "120 oz target complete." : `${waterOz - WATER_TARGET_OZ} oz above target.`;
+}
+function setWaterOz(value) {
+  const day = ensureDay();
+  day.waterOz = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(value) || 0)));
+  syncWaterTask(day, getTodayKey());
+  day.looksCompleted = getResolvedSet(day, "looks").size === getLooksTaskIds().length;
+  saveState();
+  render();
+}
 
-    item.appendChild(del);
+function getReviewDayKeys() {
+  const active = getTodayKey();
+  return Object.keys(state.days).filter(key => {
+    const day = state.days[key];
+    const hasMainActivity = (day.done?.length || 0) + (day.skipped?.length || 0) > 0 || day.completed === true || day.missedReason?.trim();
+    return hasMainActivity && !(key === active && day.completed !== true);
+  }).sort().slice(-7);
+}
+function getCalculatedMissedCounts() {
+  const counts = Object.fromEntries(TASKS.map(task => [task.id, 0]));
+  for (const key of getReviewDayKeys()) {
+    const resolved = getResolvedSet(ensureDay(key), "main");
+    TASKS.forEach(task => { if (!resolved.has(task.id)) counts[task.id] += 1; });
+  }
+  return counts;
+}
+function getDisplayedMissedCounts() {
+  const override = state.adminOverrides?.missedCounts;
+  if (!override || typeof override !== "object") return getCalculatedMissedCounts();
+  return Object.fromEntries(TASKS.map(task => [task.id, Number.isInteger(Number(override[task.id])) ? Math.max(0, Number(override[task.id])) : 0]));
+}
+function renderReview() {
+  const day = ensureDay();
+  if (document.activeElement !== $("missedReasonBox")) $("missedReasonBox").value = day.missedReason;
+  const missed = TASKS.map(task => ({ ...task, missed: getDisplayedMissedCounts()[task.id] || 0 })).filter(task => task.missed > 0).sort((a,b) => b.missed - a.missed);
+  const list = $("missedTasksList");
+  list.innerHTML = "";
+  if (!missed.length) { list.innerHTML = `<div class="missed-item"><div class="missed-name">No missed-task data yet.</div></div>`; return; }
+  const max = Math.max(...missed.map(task => task.missed), 1);
+  missed.slice(0,8).forEach(task => {
+    const item = document.createElement("div");
+    item.className = "missed-item";
+    item.innerHTML = `<div class="missed-top"><div class="missed-name">${escapeHtml(task.title)}</div><div class="missed-count">${task.missed}x</div></div><div class="missed-bar"><span style="width:${Math.round((task.missed/max)*100)}%"></span></div>`;
     list.appendChild(item);
   });
 }
-
-function scheduleLabel(task) {
-  if (task.schedule === "daily") return "Every day";
-  if (task.schedule === "gym") return "Mon/Wed/Fri";
-  if (task.schedule === "weekend") return "Weekend";
-  if (task.schedule === "days") return formatDays(task.days || []);
-  if (task.schedule === "once") return "One day";
-  return "Custom";
-}
-
-function renderStats() {
-  const lifetime = getLifetimeStats();
-  const rank = getRank(lifetime.totalXp);
-
-  $("statsRank").textContent = rank.current.name;
-  $("statsRankCopy").textContent = rank.next
-    ? `Next rank: ${rank.next.name}. Keep stacking XP by finishing scheduled tasks.`
-    : "Maximum rank reached. Keep the streak clean.";
-  $("rankBar").style.width = `${rank.percent}%`;
-  $("statsRankProgress").textContent = rank.next
-    ? `${rank.progress} / ${rank.needed} XP to ${rank.next.name}`
-    : "Max rank reached";
-
-  $("statsTotalXp").textContent = lifetime.totalXp;
-  $("statsPerfectDays").textContent = lifetime.perfectDays;
-  $("statsCompletionRate").textContent = `${lifetime.completionRate}%`;
-
-  const grid = $("achievementGrid");
-  grid.innerHTML = "";
-
-  ACHIEVEMENTS.forEach((achievement) => {
-    const unlocked = achievement.test(lifetime);
-    const card = document.createElement("div");
-    card.className = `achievement-card ${unlocked ? "unlocked" : ""}`;
-    card.innerHTML = `
-      <div class="achievement-medal">${unlocked ? "✓" : "○"}</div>
-      <strong>${escapeHtml(achievement.title)}</strong>
-      <p>${escapeHtml(achievement.description)}</p>
-    `;
-    grid.appendChild(card);
+function renderAdmin() {
+  const calculated = calculateCurrentStreak();
+  const displayed = getDisplayedCurrentStreak();
+  const offset = Number.isInteger(state.adminOverrides?.streakOffset) ? state.adminOverrides.streakOffset : 0;
+  $("adminCurrentInfo").textContent = offset
+    ? `Calculated: ${calculated}. Correction: ${offset > 0 ? "+" : ""}${offset}. Displayed: ${displayed}. It will still update when today resolves.`
+    : `Current streak is calculated from resolved main-checklist days: ${calculated}.`;
+  $("adminCurrentStreakInput").placeholder = `Current: ${displayed}`;
+  $("missedOverrideBadge").textContent = state.adminOverrides?.missedCounts ? "Edited" : "Calculated";
+  const list = $("adminMissedCountsList");
+  list.innerHTML = "";
+  const counts = getDisplayedMissedCounts();
+  TASKS.forEach(task => {
+    const row = document.createElement("label");
+    row.className = "missed-admin-row";
+    row.innerHTML = `<span>${escapeHtml(task.title)}</span><input class="admin-input admin-missed-count" type="number" min="0" max="99" inputmode="numeric" value="${counts[task.id] || 0}" data-task-id="${task.id}" />`;
+    list.appendChild(row);
   });
 }
-
-function renderHistory() {
-  const grid = $("historyGrid");
-  grid.innerHTML = "";
-
-  const today = normalizeDate(new Date());
-
-  for (let i = 20; i >= 0; i--) {
-    const date = normalizeDate(today);
-    date.setDate(today.getDate() - i);
-
-    const key = dateKey(date);
-    const stats = getDayStats(key, date);
-    const selected = key === dateKey(selectedHistoryDate);
-
-    const button = document.createElement("button");
-    button.className = `history-day ${stats.perfect ? "perfect" : ""} ${stats.failed.length ? "failed" : ""} ${selected ? "selected" : ""}`;
-    button.innerHTML = `
-      <div>
-        <strong>${escapeHtml(date.toLocaleDateString(undefined, { weekday: "short" }))}</strong>
-        <small>${escapeHtml(date.toLocaleDateString(undefined, { month: "short", day: "numeric" }))}</small>
-      </div>
-      <div>
-        <small>${stats.done.length}/${stats.tasks.length} done</small>
-        <div class="history-score"><span style="width:${stats.completePercent}%"></span></div>
-      </div>
-    `;
-
-    button.addEventListener("click", () => {
-      selectedHistoryDate = normalizeDate(date);
-      selectedDate = normalizeDate(date);
-      renderAll();
-    });
-
-    grid.appendChild(button);
+function setCurrentStreakCorrection() {
+  const value = Number($("adminCurrentStreakInput").value);
+  if (!Number.isInteger(value) || value < 0 || value > 365) return setAdminStatus("Enter a whole number from 0 to 365.", "bad");
+  state.adminOverrides.streakOffset = value - calculateCurrentStreak();
+  $("adminCurrentStreakInput").value = "";
+  saveState(); render(); setAdminStatus(`Displayed main streak set to ${value}.`, "good");
+}
+function clearCurrentStreakCorrection() {
+  state.adminOverrides.streakOffset = null;
+  saveState(); render(); setAdminStatus("Main streak now uses calculated history only.", "good");
+}
+function saveMissedOverrides() {
+  const counts = {};
+  for (const input of document.querySelectorAll(".admin-missed-count")) {
+    const value = Number(input.value);
+    if (!Number.isInteger(value) || value < 0 || value > 99) return setAdminStatus("Missed counts must be whole numbers from 0 to 99.", "bad");
+    if (value > 0) counts[input.dataset.taskId] = value;
   }
-
-  renderHistoryDetail();
+  state.adminOverrides.missedCounts = counts;
+  saveState(); render(); setAdminStatus("Missed-task numbers saved.", "good");
 }
-
-function renderHistoryDetail() {
-  const key = dateKey(selectedHistoryDate);
-  const stats = getDayStats(key, selectedHistoryDate);
-
-  $("historySelectedTitle").textContent = formatDate(selectedHistoryDate);
-
-  const detail = $("historyDetail");
-  detail.innerHTML = "";
-
-  const rows = [
-    ["Status", stats.perfect ? "Perfect day" : stats.failed.length ? "Had failures" : stats.unresolved ? "Unfinished" : "Completed"],
-    ["Completed", `${stats.done.length} / ${stats.tasks.length}`],
-    ["Failed", `${stats.failed.length}`],
-    ["Unresolved", `${stats.unresolved}`],
-    ["XP earned", `${stats.todayXp}`],
-    ["Completion", `${stats.completePercent}%`],
-  ];
-
-  rows.forEach(([label, value]) => {
-    const row = document.createElement("div");
-    row.className = "history-detail-row";
-    row.innerHTML = `<span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>`;
-    detail.appendChild(row);
-  });
+function clearMissedOverrides() { state.adminOverrides.missedCounts = {}; saveState(); render(); setAdminStatus("All displayed missed-task numbers reset to 0.", "good"); }
+function setAdminStatus(message, type = "") {
+  const el = $("adminStatus");
+  el.textContent = message;
+  el.classList.toggle("good", type === "good");
+  el.classList.toggle("bad", type === "bad");
 }
-
-function renderSettings() {
-  $("syncModeBadge").textContent = sb ? currentUser ? "Synced" : "Configured" : "Local";
-  $("syncModeBadge").className = `soft-badge ${currentUser ? "good" : sb ? "blue" : ""}`;
-}
-
-function buildDayTags(date) {
-  const day = normalizeDate(date).getDay();
-  const tags = ["Daily"];
-
-  if ([1, 3, 5].includes(day)) tags.push("Gym");
-  if ([3, 6].includes(day)) tags.push("Eyebrows");
-  if (day === 0 || day === 6) tags.push("Weekend");
-
-  return tags;
-}
-
-function addQuickTask() {
-  const title = $("quickTaskName").value.trim();
-  const section = $("quickTaskSection").value;
-
-  if (!title) {
-    toast("Type a quick task first.");
-    return;
-  }
-
-  const day = getDayState(dateKey());
-  const id = `quick_${safeId()}`;
-
-  day.quickTasks.push({
-    id,
-    title,
-    section,
-    xp: 8,
-    schedule: "once",
-    note: "Added from the planner for this selected day.",
-    icon: "＋",
-  });
-
-  $("quickTaskName").value = "";
-  saveState();
-  renderAll();
-  toast("Quick task added.");
-}
-
-function deleteQuickTask(id) {
-  const key = dateKey();
-  const day = getDayState(key);
-
-  day.quickTasks = day.quickTasks.filter((task) => task.id !== id);
-  delete day.completed[id];
-  delete day.failed[id];
-
-  saveState();
-  renderAll();
-  toast("Quick task deleted.");
-}
-
-function addCustomTask() {
-  const title = $("customTaskName").value.trim();
-  const section = $("customTaskSection").value;
-  const scheduleValue = $("customTaskSchedule").value;
-  const xp = Math.max(1, Number($("customTaskXp").value || 10));
-
-  if (!title) {
-    toast("Type a custom task name first.");
-    return;
-  }
-
-  let schedule = scheduleValue;
-  let days = [];
-
-  if (scheduleValue === "gym") {
-    schedule = "days";
-    days = [1, 3, 5];
-  }
-
-  if (scheduleValue === "weekend") {
-    schedule = "days";
-    days = [0, 6];
-  }
-
-  if (scheduleValue === "custom") {
-    schedule = "days";
-    days = [...document.querySelectorAll("#customDayPicker input:checked")].map((input) => Number(input.value));
-
-    if (!days.length) {
-      toast("Pick at least one custom day.");
-      return;
-    }
-  }
-
-  state.customTasks.push({
-    id: `custom_${safeId()}`,
-    title,
-    section,
-    schedule,
-    days,
-    xp,
-    note: "Custom recurring task.",
-    icon: "＋",
-  });
-
-  $("customTaskName").value = "";
-  $("customTaskXp").value = "10";
-  document.querySelectorAll("#customDayPicker input").forEach((input) => {
-    input.checked = false;
-  });
-
-  saveState();
-  renderAll();
-  toast("Custom recurring task created.");
-}
-
-function deleteCustomTask(id) {
-  if (!confirm("Delete this custom recurring task? Past completion records for this task will also be removed from visible tracking.")) {
-    return;
-  }
-
-  state.customTasks = state.customTasks.filter((task) => task.id !== id);
-
-  Object.values(state.days).forEach((day) => {
-    delete day.completed[id];
-    delete day.failed[id];
-  });
-
-  saveState();
-  renderAll();
-  toast("Custom task deleted.");
-}
-
-function saveNotes() {
-  const day = getDayState(dateKey());
-  day.notes = $("dailyNotes").value;
-  saveState();
-  toast("Notes saved.");
-}
-
-function changeDay(offset) {
-  selectedDate.setDate(selectedDate.getDate() + offset);
-  selectedDate = normalizeDate(selectedDate);
-  selectedHistoryDate = normalizeDate(selectedDate);
-  renderAll();
-}
-
-function jumpToday() {
-  selectedDate = normalizeDate(new Date());
-  selectedHistoryDate = normalizeDate(new Date());
-  renderAll();
-}
-
-function switchPage(page) {
-  document.querySelectorAll(".nav-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.page === page);
-  });
-
-  document.querySelectorAll(".page").forEach((pageEl) => {
-    pageEl.classList.toggle("active", pageEl.id === `page-${page}`);
-  });
-
-  renderHeader();
-}
-
-function exportBackup() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], {
-    type: "application/json",
-  });
-
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `accountability-os-backup-${dateKey(new Date())}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function importBackup(file) {
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      state = migrateState(parsed);
-      saveState();
-      renderAll();
-      toast("Backup imported.");
-    } catch {
-      toast("That backup file could not be read.");
-    }
-  };
-
-  reader.readAsText(file);
-}
-
-function resetEverything() {
-  if (!confirm("This will erase all local accountability data. Continue?")) return;
-
-  state = freshState();
-  saveState();
-  renderAll();
-  toast("Everything reset.");
-}
-
-function formatDays(days) {
-  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return days.map((day) => names[day]).join("/");
-}
-
-function safeId() {
-  if (crypto.randomUUID) return crypto.randomUUID();
-  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
 function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
-
-function escapeAttribute(value) {
-  return escapeHtml(value).replaceAll("`", "&#096;");
-}
-
 function toast(message) {
   const el = $("toast");
-
   el.textContent = message;
   el.classList.add("show");
-
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    el.classList.remove("show");
-  }, 3000);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+}
+function render() {
+  renderedDayKey = getTodayKey();
+  ensureDay();
+  renderTaskLists();
+  renderProgress();
+  renderPhoneLock();
+  renderRankAndReward();
+  renderLooks();
+  renderReview();
+  renderAdmin();
+}
+function showApp() { loginScreen.classList.add("hidden"); mainApp.classList.remove("hidden"); render(); }
+function showLogin() { mainApp.classList.add("hidden"); loginScreen.classList.remove("hidden"); setTimeout(() => passwordInput.focus(), 50); }
+async function unlock() {
+  if (passwordInput.value.trim() !== PASSWORD) { loginError.textContent = "Wrong password."; passwordInput.select(); return; }
+  loginError.textContent = ""; passwordInput.value = ""; showApp(); await loadSupabaseState();
+}
+function setupTabs() {
+  const tabs = [...document.querySelectorAll(".tab")];
+  const pages = [...document.querySelectorAll(".page")];
+  tabs.forEach(tab => tab.addEventListener("click", () => {
+    tabs.forEach(item => item.classList.remove("active"));
+    pages.forEach(page => page.classList.remove("active"));
+    tab.classList.add("active");
+    $(tab.dataset.tab).classList.add("active");
+    render();
+  }));
 }
 
-function scheduleSupabaseSync() {
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(syncToSupabase, 900);
-}
+unlockBtn.addEventListener("click", unlock);
+passwordInput.addEventListener("keydown", event => { if (event.key === "Enter") unlock(); });
+$("logoutBtn").addEventListener("click", showLogin);
+$("missedReasonBox").addEventListener("input", () => { ensureDay().missedReason = $("missedReasonBox").value; saveState(); });
+document.querySelectorAll("[data-water-add]").forEach(button => button.addEventListener("click", () => setWaterOz(ensureDay().waterOz + Number(button.dataset.waterAdd))));
+$("resetWaterBtn").addEventListener("click", () => setWaterOz(0));
+$("addCustomWaterBtn").addEventListener("click", () => {
+  const amount = Number($("waterCustomInput").value);
+  if (!Number.isFinite(amount) || amount <= 0) return $("waterCustomInput").focus();
+  setWaterOz(ensureDay().waterOz + amount);
+  $("waterCustomInput").value = "";
+});
+$("waterCustomInput").addEventListener("keydown", event => { if (event.key === "Enter") $("addCustomWaterBtn").click(); });
+$("adminSetCurrentStreakBtn").addEventListener("click", setCurrentStreakCorrection);
+$("adminClearCurrentStreakBtn").addEventListener("click", clearCurrentStreakCorrection);
+$("adminSaveMissedCountsBtn").addEventListener("click", saveMissedOverrides);
+$("adminClearMissedCountsBtn").addEventListener("click", clearMissedOverrides);
+document.addEventListener("click", event => {
+  document.querySelectorAll("details.task-menu[open]").forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+});
+setInterval(() => {
+  if (getTodayKey() !== renderedDayKey && !mainApp.classList.contains("hidden")) { normalizeState(); render(); }
+}, 60000);
 
-async function initSupabase() {
-  if (!sb) {
-    $("syncStatus").textContent = "Local mode active. Supabase not configured.";
-    renderSettings();
-    return;
-  }
-
-  const { data } = await sb.auth.getSession();
-  currentUser = data.session?.user || null;
-
-  if (currentUser) {
-    $("syncStatus").textContent = `Signed in as ${currentUser.email}.`;
-    await loadFromSupabase();
-  } else {
-    $("syncStatus").textContent = "Supabase configured. Sign in to sync.";
-  }
-
-  sb.auth.onAuthStateChange(async (_event, session) => {
-    currentUser = session?.user || null;
-
-    if (currentUser) {
-      $("syncStatus").textContent = `Signed in as ${currentUser.email}.`;
-      await loadFromSupabase();
-    } else {
-      $("syncStatus").textContent = "Signed out. Local mode active.";
-    }
-
-    renderSettings();
-  });
-}
-
-async function sendMagicLink() {
-  if (!sb) {
-    toast("Add your Supabase URL and anon key in app.js first.");
-    return;
-  }
-
-  const email = $("emailInput").value.trim();
-
-  if (!email) {
-    toast("Enter your email first.");
-    return;
-  }
-
-  const { error } = await sb.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: window.location.href,
-    },
-  });
-
-  if (error) {
-    toast(error.message);
-    return;
-  }
-
-  toast("Magic link sent. Check your email.");
-}
-
-async function loadFromSupabase() {
-  if (!sb || !currentUser) return;
-
-  $("syncStatus").textContent = "Loading cloud data...";
-
-  const { data, error } = await sb
-    .from("accountability_state")
-    .select("state, updated_at")
-    .eq("user_id", currentUser.id)
-    .maybeSingle();
-
-  if (error) {
-    $("syncStatus").textContent = `Load error: ${error.message}`;
-    return;
-  }
-
-  if (data?.state) {
-    const localUpdated = new Date(state.updatedAt || 0).getTime();
-    const remoteUpdated = new Date(data.state.updatedAt || data.updated_at || 0).getTime();
-
-    if (remoteUpdated > localUpdated) {
-      state = migrateState(data.state);
-      saveState({ sync: false });
-      renderAll();
-      $("syncStatus").textContent = "Cloud data loaded.";
-      return;
-    }
-  }
-
-  await syncToSupabase();
-}
-
-async function syncToSupabase() {
-  if (!sb || !currentUser) return;
-
-  const payload = {
-    user_id: currentUser.id,
-    state,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { error } = await sb
-    .from("accountability_state")
-    .upsert(payload, { onConflict: "user_id" });
-
-  if (error) {
-    $("syncStatus").textContent = `Sync error: ${error.message}`;
-    return;
-  }
-
-  $("syncStatus").textContent = `Synced at ${new Date().toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  })}.`;
-
-  renderSettings();
-}
-
-function bindEvents() {
-  document.querySelectorAll(".nav-item").forEach((item) => {
-    item.addEventListener("click", () => switchPage(item.dataset.page));
-  });
-
-  $("prevDayBtn").addEventListener("click", () => changeDay(-1));
-  $("nextDayBtn").addEventListener("click", () => changeDay(1));
-  $("dateChip").addEventListener("click", jumpToday);
-  $("todayBtn").addEventListener("click", jumpToday);
-
-  $("finishMorningBtn").addEventListener("click", failUnfinishedMorning);
-  $("completeAllVisibleBtn").addEventListener("click", completeAllVisibleCleanTasks);
-
-  $("saveNotesBtn").addEventListener("click", saveNotes);
-  $("dailyNotes").addEventListener("input", () => {
-    const day = getDayState(dateKey());
-    day.notes = $("dailyNotes").value;
-    saveState();
-  });
-
-  $("addQuickTaskBtn").addEventListener("click", addQuickTask);
-  $("quickTaskName").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") addQuickTask();
-  });
-
-  $("customTaskSchedule").addEventListener("change", renderPlanner);
-  $("addCustomTaskBtn").addEventListener("click", addCustomTask);
-
-  $("exportBtn").addEventListener("click", exportBackup);
-  $("importInput").addEventListener("change", (event) => importBackup(event.target.files[0]));
-  $("resetEverythingBtn").addEventListener("click", resetEverything);
-
-  $("loginBtn").addEventListener("click", sendMagicLink);
-  $("manualSyncBtn").addEventListener("click", () => {
-    if (!sb) {
-      toast("Supabase is not configured yet.");
-      return;
-    }
-
-    if (!currentUser) {
-      toast("Sign in first.");
-      return;
-    }
-
-    syncToSupabase();
-  });
-}
-
-bindEvents();
-renderAll();
-initSupabase();
+setupTabs();
+if (normalizeState()) saveLocalState();
+showLogin();
