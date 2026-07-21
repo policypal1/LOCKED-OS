@@ -91,6 +91,7 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 .section-header p { margin: 5px 0 0; color: var(--muted); font-weight: 750; line-height: 1.45; font-size: .92rem; }
 .checklist { display: grid; gap: 8px; padding: 12px; text-align: left; }
 .task-row { position: relative; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: stretch; }
+.task-row.no-menu { grid-template-columns: minmax(0,1fr); }
 .task-main {
   width: 100%; display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: center; text-align: left;
   padding: 14px; border: 1px solid var(--line); background: rgba(255,255,255,.42); border-radius: 18px;

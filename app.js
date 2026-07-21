@@ -5,8 +5,9 @@ const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
 const SUPABASE_ROW_ID = "samuel-main";
 const SUPABASE_TABLE = "locked_os_state_v2";
-const STORAGE_KEY = "locked_os_daily_checklist_v10";
+const STORAGE_KEY = "locked_os_daily_checklist_v11";
 const OLD_STORAGE_KEYS = [
+  "locked_os_daily_checklist_v10",
   "locked_os_daily_checklist_v9",
   "locked_os_daily_checklist_v8",
   "locked_os_daily_checklist_v7",
@@ -46,7 +47,7 @@ const MORNING_TASK_IDS = TASKS.filter(task => task.section === "morning").map(ta
 const LEGACY_TASK_ID_MAP = { "bed-ready": "plan-next-day", "no-shampoo": "conditional-shampoo" };
 
 const RANKS = [
-  { name: "Starter", days: 0, copy: "Resolve the full main checklist to start the streak." },
+  { name: "Starter", days: 0, copy: "Complete the full main checklist to start the streak." },
   { name: "Locked In", days: 3, copy: "Three straight main-checklist days. The system is sticking." },
   { name: "Disciplined", days: 7, copy: "Seven main-checklist days in a row. Reward unlocked." },
   { name: "Machine", days: 14, copy: "Two weeks. This is no longer random motivation." },
@@ -192,9 +193,8 @@ function saveLocalState() {
   OLD_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
 }
 function getResolvedSet(day, type = "main") {
-  const done = type === "main" ? day.done : day.looksDone;
-  const skipped = type === "main" ? day.skipped : day.looksSkipped;
-  return new Set([...(done || []), ...(skipped || [])]);
+  if (type === "main") return new Set(day.done || []);
+  return new Set([...(day.looksDone || []), ...(day.looksSkipped || [])]);
 }
 function syncWaterTask(day, dayKey) {
   const allowed = getLooksTaskIds(dayKey);
@@ -221,16 +221,15 @@ function normalizeState() {
     const normalized = {
       ...original,
       done: cleanList(original.done, TASK_IDS),
-      skipped: cleanList(original.skipped, TASK_IDS),
+      skipped: [],
       looksDone: cleanList(original.looksDone, allowedLooks),
       looksSkipped: cleanList(original.looksSkipped, allowedLooks),
       waterOz: Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(original.waterOz) || 0))),
       missedReason: typeof original.missedReason === "string" ? original.missedReason : ""
     };
-    normalized.skipped = normalized.skipped.filter(id => !normalized.done.includes(id));
     normalized.looksSkipped = normalized.looksSkipped.filter(id => !normalized.looksDone.includes(id));
     syncWaterTask(normalized, dayKey);
-    normalized.completed = getResolvedSet(normalized, "main").size === TASK_IDS.length;
+    normalized.completed = normalized.done.length === TASK_IDS.length;
     normalized.looksCompleted = getResolvedSet(normalized, "looks").size === allowedLooks.length;
     if (JSON.stringify(original) !== JSON.stringify(normalized)) { state.days[dayKey] = normalized; changed = true; }
   }
@@ -252,13 +251,13 @@ function ensureDay(dayKey = getTodayKey()) {
   if (!state.days[dayKey]) state.days[dayKey] = { done: [], skipped: [], looksDone: [], looksSkipped: [], waterOz: 0, completed: false, looksCompleted: false, missedReason: "" };
   const day = state.days[dayKey];
   day.done = cleanList(day.done, TASK_IDS);
-  day.skipped = cleanList(day.skipped, TASK_IDS).filter(id => !day.done.includes(id));
+  day.skipped = [];
   day.looksDone = cleanList(day.looksDone, getLooksTaskIds(dayKey));
   day.looksSkipped = cleanList(day.looksSkipped, getLooksTaskIds(dayKey)).filter(id => !day.looksDone.includes(id));
   day.waterOz = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(day.waterOz) || 0)));
   if (typeof day.missedReason !== "string") day.missedReason = "";
   syncWaterTask(day, dayKey);
-  day.completed = getResolvedSet(day, "main").size === TASK_IDS.length;
+  day.completed = day.done.length === TASK_IDS.length;
   day.looksCompleted = getResolvedSet(day, "looks").size === getLooksTaskIds(dayKey).length;
   return day;
 }
@@ -319,18 +318,14 @@ function calculateTaskStreak(taskId) {
 function getCurrentRank(streak) { return RANKS.reduce((current, rank) => streak >= rank.days ? rank : current, RANKS[0]); }
 function getNextRank(streak) { return RANKS.find(rank => rank.days > streak) || null; }
 
-function setMainStatus(taskId, status) {
+function toggleMainTask(taskId) {
   const day = ensureDay();
   const done = new Set(day.done);
-  const skipped = new Set(day.skipped);
-  if (status === "done") {
-    if (done.has(taskId)) done.delete(taskId); else { done.add(taskId); skipped.delete(taskId); }
-  } else if (status === "skipped") {
-    if (skipped.has(taskId)) skipped.delete(taskId); else { skipped.add(taskId); done.delete(taskId); }
-  }
+  if (done.has(taskId)) done.delete(taskId);
+  else done.add(taskId);
   day.done = [...done];
-  day.skipped = [...skipped];
-  day.completed = getResolvedSet(day, "main").size === TASK_IDS.length;
+  day.skipped = [];
+  day.completed = day.done.length === TASK_IDS.length;
   saveState();
   render();
 }
@@ -386,45 +381,47 @@ function createTaskRow(task, done, skipped, theme, onToggle, onSkip) {
   });
   popover.appendChild(skipButton);
   menu.append(summary, popover);
-  row.append(main, menu);
+  row.appendChild(main);
+  if (typeof onSkip === "function") {
+    row.appendChild(menu);
+  } else {
+    row.classList.add("no-menu");
+  }
   return row;
 }
 
 function renderTaskLists() {
   const day = ensureDay();
   const done = new Set(day.done);
-  const skipped = new Set(day.skipped);
   $("morningList").innerHTML = "";
   $("afternoonList").innerHTML = "";
   $("nightList").innerHTML = "";
   for (const task of TASKS) {
-    const row = createTaskRow(task, done.has(task.id), skipped.has(task.id), "", () => setMainStatus(task.id, "done"), () => setMainStatus(task.id, "skipped"));
+    const row = createTaskRow(task, done.has(task.id), false, "", () => toggleMainTask(task.id));
     $(`${task.section}List`).appendChild(row);
   }
 }
 function renderProgress() {
   const day = ensureDay();
   const done = day.done.length;
-  const skipped = day.skipped.length;
-  const resolved = done + skipped;
   const total = TASKS.length;
-  const percent = Math.round((resolved / total) * 100);
-  const left = total - resolved;
+  const percent = Math.round((done / total) * 100);
+  const left = total - done;
   $("percent").textContent = `${percent}%`;
-  $("doneCount").textContent = skipped ? `${done} done • ${skipped} skipped` : `${done} / ${total}`;
+  $("doneCount").textContent = `${done} / ${total}`;
   $("tasksLeft").textContent = left === 0
-    ? "Main checklist resolved. The streak updated immediately."
+    ? "Main checklist complete. The streak updated immediately."
     : `${left} main task${left === 1 ? "" : "s"} left today.`;
-  $("progressCircle").style.background = `conic-gradient(var(--green) ${Math.round((resolved / total) * 360)}deg, rgba(42,30,18,.09) 0deg)`;
+  $("progressCircle").style.background = `conic-gradient(var(--green) ${Math.round((done / total) * 360)}deg, rgba(42,30,18,.09) 0deg)`;
 }
 function renderPhoneLock() {
-  const resolved = getResolvedSet(ensureDay(), "main");
-  const remaining = MORNING_TASK_IDS.filter(id => !resolved.has(id)).length;
+  const done = new Set(ensureDay().done);
+  const remaining = MORNING_TASK_IDS.filter(id => !done.has(id)).length;
   const complete = remaining === 0;
   $("phoneLockCard").classList.toggle("locked", !complete);
   $("phoneLockCard").classList.toggle("unlocked", complete);
   $("phoneLockTitle").textContent = complete ? "Phone unlocked" : "Phone locked";
-  $("phoneLockText").textContent = complete ? "Morning list is resolved." : `${remaining} morning task${remaining === 1 ? "" : "s"} left.`;
+  $("phoneLockText").textContent = complete ? "Morning list is complete." : `${remaining} morning task${remaining === 1 ? "" : "s"} left.`;
   $("phoneLockBadge").textContent = complete ? "Unlocked" : "Locked";
 }
 function renderRankAndReward() {
@@ -454,7 +451,7 @@ function renderRankAndReward() {
   } else {
     const left = 7 - streak;
     $("rewardBadge").textContent = `${left} left`;
-    $("rewardText").textContent = `Resolve ${left} more main-checklist day${left === 1 ? "" : "s"} in a row.`;
+    $("rewardText").textContent = `Complete ${left} more main-checklist day${left === 1 ? "" : "s"} in a row.`;
   }
   renderRankLadder(streak);
 }
@@ -529,15 +526,15 @@ function getReviewDayKeys() {
   const active = getTodayKey();
   return Object.keys(state.days).filter(key => {
     const day = state.days[key];
-    const hasMainActivity = (day.done?.length || 0) + (day.skipped?.length || 0) > 0 || day.completed === true || day.missedReason?.trim();
+    const hasMainActivity = (day.done?.length || 0) > 0 || day.completed === true || day.missedReason?.trim();
     return hasMainActivity && !(key === active && day.completed !== true);
   }).sort().slice(-7);
 }
 function getCalculatedMissedCounts() {
   const counts = Object.fromEntries(TASKS.map(task => [task.id, 0]));
   for (const key of getReviewDayKeys()) {
-    const resolved = getResolvedSet(ensureDay(key), "main");
-    TASKS.forEach(task => { if (!resolved.has(task.id)) counts[task.id] += 1; });
+    const done = new Set(ensureDay(key).done);
+    TASKS.forEach(task => { if (!done.has(task.id)) counts[task.id] += 1; });
   }
   return counts;
 }
@@ -567,7 +564,7 @@ function renderAdmin() {
   const offset = Number.isInteger(state.adminOverrides?.streakOffset) ? state.adminOverrides.streakOffset : 0;
   $("adminCurrentInfo").textContent = offset
     ? `Calculated: ${calculated}. Correction: ${offset > 0 ? "+" : ""}${offset}. Displayed: ${displayed}. It will still update when today resolves.`
-    : `Current streak is calculated from resolved main-checklist days: ${calculated}.`;
+    : `Current streak is calculated from completed main-checklist days: ${calculated}.`;
   $("adminCurrentStreakInput").placeholder = `Current: ${displayed}`;
   $("missedOverrideBadge").textContent = state.adminOverrides?.missedCounts ? "Edited" : "Calculated";
   const list = $("adminMissedCountsList");
