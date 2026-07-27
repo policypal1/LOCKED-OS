@@ -5,8 +5,9 @@ const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
 const SUPABASE_ROW_ID = "samuel-main";
 const SUPABASE_TABLE = "locked_os_state_v2";
-const STORAGE_KEY = "locked_os_daily_checklist_v11";
+const STORAGE_KEY = "locked_os_daily_checklist_v12";
 const OLD_STORAGE_KEYS = [
+  "locked_os_daily_checklist_v11",
   "locked_os_daily_checklist_v10",
   "locked_os_daily_checklist_v9",
   "locked_os_daily_checklist_v8",
@@ -15,15 +16,28 @@ const OLD_STORAGE_KEYS = [
   "locked_os_daily_checklist_v5",
   "locked_os_daily_checklist_v4"
 ];
+
 const DAY_ROLLOVER_HOUR = 4;
 const WATER_MINIMUM_OZ = 100;
 const WATER_TARGET_OZ = 120;
 const WATER_MAX_OZ = 240;
+const MS_PER_DAY = 86_400_000;
+
+// July 25, 2026 is Chest + side delts. That makes July 27, 2026 Arms.
+const WORKOUT_ROTATION_ANCHOR = "2026-07-25";
+const WORKOUT_ROTATION = [
+  "Chest + side delts",
+  "Back + rear delts",
+  "Arms",
+  "Legs",
+  "Abs"
+];
 
 const hasSupabaseConfig =
   SUPABASE_URL.startsWith("https://") &&
   !SUPABASE_URL.includes("PASTE_") &&
   !SUPABASE_PUBLISHABLE_KEY.includes("PASTE_");
+
 const supabaseClient = hasSupabaseConfig && window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
@@ -42,9 +56,16 @@ const TASKS = [
   { id: "reading", section: "night", title: "Read for 10 minutes" },
   { id: "plan-next-day", section: "night", title: "Plan next day" }
 ];
+
 const TASK_IDS = TASKS.map(task => task.id);
-const MORNING_TASK_IDS = TASKS.filter(task => task.section === "morning").map(task => task.id);
-const LEGACY_TASK_ID_MAP = { "bed-ready": "plan-next-day", "no-shampoo": "conditional-shampoo" };
+const MORNING_TASK_IDS = TASKS
+  .filter(task => task.section === "morning")
+  .map(task => task.id);
+
+const LEGACY_TASK_ID_MAP = {
+  "bed-ready": "plan-next-day",
+  "no-shampoo": "conditional-shampoo"
+};
 
 const RANKS = [
   { name: "Starter", days: 0, copy: "Complete the full main checklist to start the streak." },
@@ -55,7 +76,7 @@ const RANKS = [
 ];
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const WEEK_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 const MORNING_BASE = [
   { id: "wake-water", title: "Wake up and chug 1 glass of water immediately", meta: "morningWater" },
   { id: "lukewarm-shower", title: "Take a lukewarm shower" },
@@ -76,6 +97,7 @@ const MORNING_BASE = [
   { id: "brush-eyebrows", title: "Brush eyebrows" },
   { id: "morning-teeth", title: "Floss and brush teeth" }
 ];
+
 const NIGHT_BASE = [
   { id: "no-phone", title: "No phone" },
   { id: "bed-nine", title: "Start getting ready for bed at 9:00 PM" },
@@ -87,52 +109,6 @@ const NIGHT_BASE = [
   { id: "night-teeth", title: "Floss and brush teeth" },
   { id: "whitening-strips", title: "Use Crest whitening strips" }
 ];
-const WORKOUTS = {
-  Monday: "Chest + side delts + neck exercises",
-  Tuesday: "Back + rear delts",
-  Wednesday: "Arms",
-  Thursday: "Legs",
-  Friday: "Cardio + abs + neck exercises",
-  Saturday: "Chest + side delts",
-  Sunday: "Back + rear delts"
-};
-
-function cloneTasks(tasks) { return tasks.map(task => ({ ...task })); }
-function makeMidday(dayName) {
-  const tasks = [
-    { id: "gym", title: `Gym: ${WORKOUTS[dayName]}` },
-    { id: "creatine", title: "Take creatine" },
-    { id: "low-sodium-potassium", title: "Low sodium + high potassium" }
-  ];
-  if (dayName === "Wednesday" || dayName === "Sunday") tasks.push({ id: "wash-bed-sheets", title: "Wash bed sheets" });
-  tasks.push({ id: "water-through-day", title: "Drink 100–120 oz of water throughout the day", subtitle: "Completes automatically at 100 oz.", meta: "waterTracked" });
-  return tasks;
-}
-function makeMorning(dayName) {
-  const tasks = cloneTasks(MORNING_BASE);
-  if (dayName === "Thursday") {
-    const index = tasks.findIndex(task => task.id === "cold-finish");
-    tasks.splice(index + 1, 0, { id: "shave-manage-brows", title: "Shave face/manage eyebrows" });
-  }
-  return tasks;
-}
-function makeNight(dayName) {
-  const tasks = cloneTasks(NIGHT_BASE);
-  const minoxidilIndex = tasks.findIndex(task => task.id === "night-minoxidil");
-  if (dayName === "Monday" || dayName === "Sunday") tasks.splice(minoxidilIndex, 0, { id: "microneedle-eyebrows", title: "Microneedle eyebrows" });
-  if (["Tuesday", "Thursday", "Saturday"].includes(dayName)) tasks.push({ id: "masseter-training", title: "Train masseter muscles" });
-  if (dayName === "Sunday") {
-    const whiteningIndex = tasks.findIndex(task => task.id === "whitening-strips");
-    tasks.splice(whiteningIndex, 0,
-      { id: "exfoliate-lips", title: "Exfoliate lips: sugar, coconut oil, and raw honey mix" },
-      { id: "vaseline-lips", title: "Apply Vaseline to lips" }
-    );
-  }
-  return tasks;
-}
-const LOOKS_ROUTINES = Object.fromEntries(WEEK_ORDER.map(dayName => [dayName, {
-  morning: makeMorning(dayName), midday: makeMidday(dayName), night: makeNight(dayName)
-}]));
 
 const $ = id => document.getElementById(id);
 const loginScreen = $("loginScreen");
@@ -141,6 +117,7 @@ const passwordInput = $("passwordInput");
 const unlockBtn = $("unlockBtn");
 const loginError = $("loginError");
 const syncStatus = $("syncStatus");
+
 let state = loadLocalState();
 let saveTimer = null;
 let toastTimer = null;
@@ -149,203 +126,542 @@ let renderedDayKey = getTodayKey();
 function formatDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
+
 function getTodayKey(date = new Date()) {
   const effectiveDate = new Date(date);
-  if (effectiveDate.getHours() < DAY_ROLLOVER_HOUR) effectiveDate.setDate(effectiveDate.getDate() - 1);
+  if (effectiveDate.getHours() < DAY_ROLLOVER_HOUR) {
+    effectiveDate.setDate(effectiveDate.getDate() - 1);
+  }
   return formatDateKey(effectiveDate);
 }
+
 function keyToLocalDate(key) {
   const [year, month, day] = key.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
+
+function keyToUtcDayNumber(key) {
+  const [year, month, day] = key.split("-").map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / MS_PER_DAY);
+}
+
+function isDateKey(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
 function addDays(date, days) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
 }
-function getRoutineDayName(dayKey = getTodayKey()) { return DAY_NAMES[keyToLocalDate(dayKey).getDay()]; }
-function getLooksRoutine(dayKey = getTodayKey()) { return LOOKS_ROUTINES[getRoutineDayName(dayKey)]; }
+
+function cloneTasks(tasks) {
+  return tasks.map(task => ({ ...task }));
+}
+
+function getRoutineDayName(dayKey = getTodayKey()) {
+  return DAY_NAMES[keyToLocalDate(dayKey).getDay()];
+}
+
+function getWorkoutName(dayKey = getTodayKey()) {
+  const daysFromAnchor = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(WORKOUT_ROTATION_ANCHOR);
+  const index = ((daysFromAnchor % WORKOUT_ROTATION.length) + WORKOUT_ROTATION.length) % WORKOUT_ROTATION.length;
+  const baseWorkout = WORKOUT_ROTATION[index];
+  const dayName = getRoutineDayName(dayKey);
+  const hasNeck = dayName === "Monday" || dayName === "Friday";
+  return hasNeck ? `${baseWorkout} + neck exercises` : baseWorkout;
+}
+
+function makeMorning(dayName) {
+  const tasks = cloneTasks(MORNING_BASE);
+  if (dayName === "Thursday") {
+    const index = tasks.findIndex(task => task.id === "cold-finish");
+    tasks.splice(index + 1, 0, {
+      id: "shave-manage-brows",
+      title: "Shave face/manage eyebrows"
+    });
+  }
+  return tasks;
+}
+
+function makeMidday(dayKey) {
+  const dayName = getRoutineDayName(dayKey);
+  const tasks = [
+    { id: "gym", title: `Gym: ${getWorkoutName(dayKey)}` },
+    { id: "creatine", title: "Take creatine" },
+    { id: "low-sodium-potassium", title: "Low sodium + high potassium" }
+  ];
+
+  if (dayName === "Wednesday" || dayName === "Sunday") {
+    tasks.push({ id: "wash-bed-sheets", title: "Wash bed sheets" });
+  }
+
+  tasks.push({
+    id: "water-through-day",
+    title: "Drink 100–120 oz of water throughout the day",
+    subtitle: "Completes automatically at 100 oz.",
+    meta: "waterTracked"
+  });
+
+  return tasks;
+}
+
+function makeNight(dayName) {
+  const tasks = cloneTasks(NIGHT_BASE);
+  const minoxidilIndex = tasks.findIndex(task => task.id === "night-minoxidil");
+
+  if (dayName === "Monday" || dayName === "Sunday") {
+    tasks.splice(minoxidilIndex, 0, {
+      id: "microneedle-eyebrows",
+      title: "Microneedle eyebrows"
+    });
+  }
+
+  if (["Tuesday", "Thursday", "Saturday"].includes(dayName)) {
+    tasks.push({ id: "masseter-training", title: "Train masseter muscles" });
+  }
+
+  if (dayName === "Sunday") {
+    const whiteningIndex = tasks.findIndex(task => task.id === "whitening-strips");
+    tasks.splice(
+      whiteningIndex,
+      0,
+      { id: "exfoliate-lips", title: "Exfoliate lips: sugar, coconut oil, and raw honey mix" },
+      { id: "vaseline-lips", title: "Apply Vaseline to lips" }
+    );
+  }
+
+  return tasks;
+}
+
+function getLooksRoutine(dayKey = getTodayKey()) {
+  const dayName = getRoutineDayName(dayKey);
+  return {
+    morning: makeMorning(dayName),
+    midday: makeMidday(dayKey),
+    night: makeNight(dayName)
+  };
+}
+
 function getLooksTasks(dayKey = getTodayKey()) {
   const routine = getLooksRoutine(dayKey);
   return [...routine.morning, ...routine.midday, ...routine.night];
 }
-function getLooksTaskIds(dayKey = getTodayKey()) { return getLooksTasks(dayKey).map(task => task.id); }
-function normalizeTaskId(taskId) { return LEGACY_TASK_ID_MAP[taskId] || taskId; }
+
+function getLooksTaskIds(dayKey = getTodayKey()) {
+  return getLooksTasks(dayKey).map(task => task.id);
+}
+
+function normalizeTaskId(taskId) {
+  return LEGACY_TASK_ID_MAP[taskId] || taskId;
+}
+
 function cleanList(values, allowedIds) {
   if (!Array.isArray(values)) return [];
   const allowed = new Set(allowedIds);
-  return [...new Set(values.map(normalizeTaskId).filter(id => typeof id === "string" && allowed.has(id)))];
+  return [...new Set(
+    values
+      .map(normalizeTaskId)
+      .filter(id => typeof id === "string" && allowed.has(id))
+  )];
 }
+
+function createDayRecord() {
+  return {
+    done: [],
+    skipped: [],
+    looksDone: [],
+    looksSkipped: [],
+    waterOz: 0,
+    completed: false,
+    looksCompleted: false,
+    missedReason: ""
+  };
+}
+
 function createEmptyState() {
-  return { days: {}, adminOverrides: { streakOffset: null, currentStreak: null, missedCounts: null } };
+  return {
+    days: {},
+    meta: { lastOpenedDayKey: null },
+    adminOverrides: {
+      streakOffset: null,
+      currentStreak: null,
+      missedCounts: null
+    }
+  };
 }
+
 function loadLocalState() {
   for (const key of [STORAGE_KEY, ...OLD_STORAGE_KEYS]) {
     try {
       const parsed = JSON.parse(localStorage.getItem(key));
       if (parsed && typeof parsed === "object") return parsed;
-    } catch { /* try next key */ }
+    } catch {
+      // Try the next saved version.
+    }
   }
   return createEmptyState();
 }
+
 function saveLocalState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   OLD_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
 }
+
 function getResolvedSet(day, type = "main") {
   if (type === "main") return new Set(day.done || []);
   return new Set([...(day.looksDone || []), ...(day.looksSkipped || [])]);
 }
+
 function syncWaterTask(day, dayKey) {
   const allowed = getLooksTaskIds(dayKey);
   const doneSet = new Set(cleanList(day.looksDone, allowed));
   const skippedSet = new Set(cleanList(day.looksSkipped, allowed));
+
   if (day.waterOz >= WATER_MINIMUM_OZ) {
     doneSet.add("water-through-day");
     skippedSet.delete("water-through-day");
   } else {
     doneSet.delete("water-through-day");
   }
+
   day.looksDone = [...doneSet];
   day.looksSkipped = [...skippedSet];
 }
+
+function normalizeDay(dayKey, original = {}) {
+  const allowedLooks = getLooksTaskIds(dayKey);
+  const normalized = {
+    ...createDayRecord(),
+    ...original,
+    done: cleanList(original.done, TASK_IDS),
+    skipped: [],
+    looksDone: cleanList(original.looksDone, allowedLooks),
+    looksSkipped: cleanList(original.looksSkipped, allowedLooks),
+    waterOz: Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(original.waterOz) || 0))),
+    missedReason: typeof original.missedReason === "string" ? original.missedReason : ""
+  };
+
+  normalized.looksSkipped = normalized.looksSkipped.filter(
+    id => !normalized.looksDone.includes(id)
+  );
+  syncWaterTask(normalized, dayKey);
+  normalized.completed = normalized.done.length === TASK_IDS.length;
+  normalized.looksCompleted =
+    getResolvedSet(normalized, "looks").size === allowedLooks.length;
+
+  return normalized;
+}
+
+function backfillMissingPastDays() {
+  const todayKey = getTodayKey();
+  const todayDate = keyToLocalDate(todayKey);
+  const pastKeys = Object.keys(state.days)
+    .filter(key => isDateKey(key) && key < todayKey)
+    .sort();
+
+  let anchorKey = state.meta.lastOpenedDayKey;
+  if (!isDateKey(anchorKey) || anchorKey >= todayKey) {
+    anchorKey = pastKeys.at(-1) || null;
+  }
+
+  let changed = false;
+
+  if (anchorKey && anchorKey < todayKey) {
+    // If the app was opened that day but nothing was checked, preserve it as a missed day.
+    if (!state.days[anchorKey]) {
+      state.days[anchorKey] = createDayRecord();
+      changed = true;
+    }
+
+    let cursor = addDays(keyToLocalDate(anchorKey), 1);
+    while (cursor < todayDate) {
+      const missingKey = formatDateKey(cursor);
+      if (!state.days[missingKey]) {
+        state.days[missingKey] = createDayRecord();
+        changed = true;
+      }
+      cursor = addDays(cursor, 1);
+    }
+  }
+
+  if (state.meta.lastOpenedDayKey !== todayKey) {
+    state.meta.lastOpenedDayKey = todayKey;
+    changed = true;
+  }
+
+  return changed;
+}
+
 function normalizeState() {
   let changed = false;
-  if (!state || typeof state !== "object") { state = createEmptyState(); changed = true; }
-  if (!state.days || typeof state.days !== "object") { state.days = {}; changed = true; }
-  if (!state.adminOverrides || typeof state.adminOverrides !== "object") { state.adminOverrides = {}; changed = true; }
+
+  if (!state || typeof state !== "object") {
+    state = createEmptyState();
+    changed = true;
+  }
+  if (!state.days || typeof state.days !== "object") {
+    state.days = {};
+    changed = true;
+  }
+  if (!state.meta || typeof state.meta !== "object") {
+    state.meta = { lastOpenedDayKey: state.lastOpenedDayKey || null };
+    changed = true;
+  }
+  if (!state.adminOverrides || typeof state.adminOverrides !== "object") {
+    state.adminOverrides = {};
+    changed = true;
+  }
 
   for (const dayKey of Object.keys(state.days)) {
+    if (!isDateKey(dayKey)) {
+      delete state.days[dayKey];
+      changed = true;
+      continue;
+    }
+
     const original = state.days[dayKey] || {};
-    const allowedLooks = getLooksTaskIds(dayKey);
-    const normalized = {
-      ...original,
-      done: cleanList(original.done, TASK_IDS),
-      skipped: [],
-      looksDone: cleanList(original.looksDone, allowedLooks),
-      looksSkipped: cleanList(original.looksSkipped, allowedLooks),
-      waterOz: Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(original.waterOz) || 0))),
-      missedReason: typeof original.missedReason === "string" ? original.missedReason : ""
-    };
-    normalized.looksSkipped = normalized.looksSkipped.filter(id => !normalized.looksDone.includes(id));
-    syncWaterTask(normalized, dayKey);
-    normalized.completed = normalized.done.length === TASK_IDS.length;
-    normalized.looksCompleted = getResolvedSet(normalized, "looks").size === allowedLooks.length;
-    if (JSON.stringify(original) !== JSON.stringify(normalized)) { state.days[dayKey] = normalized; changed = true; }
+    const normalized = normalizeDay(dayKey, original);
+    if (JSON.stringify(original) !== JSON.stringify(normalized)) {
+      state.days[dayKey] = normalized;
+      changed = true;
+    }
   }
+
+  if (backfillMissingPastDays()) changed = true;
 
   const override = state.adminOverrides;
   if (!Number.isInteger(override.streakOffset)) {
     if (Number.isInteger(override.currentStreak) && override.currentStreak >= 0) {
       override.streakOffset = override.currentStreak - calculateCurrentStreak();
-      changed = true;
     } else {
       override.streakOffset = null;
     }
+    changed = true;
   }
-  override.currentStreak = null;
-  if (override.missedCounts !== null && typeof override.missedCounts !== "object") { override.missedCounts = null; changed = true; }
+
+  if (override.currentStreak !== null) {
+    override.currentStreak = null;
+    changed = true;
+  }
+
+  if (override.missedCounts !== null && typeof override.missedCounts !== "object") {
+    override.missedCounts = null;
+    changed = true;
+  }
+
   return changed;
 }
+
 function ensureDay(dayKey = getTodayKey()) {
-  if (!state.days[dayKey]) state.days[dayKey] = { done: [], skipped: [], looksDone: [], looksSkipped: [], waterOz: 0, completed: false, looksCompleted: false, missedReason: "" };
-  const day = state.days[dayKey];
-  day.done = cleanList(day.done, TASK_IDS);
-  day.skipped = [];
-  day.looksDone = cleanList(day.looksDone, getLooksTaskIds(dayKey));
-  day.looksSkipped = cleanList(day.looksSkipped, getLooksTaskIds(dayKey)).filter(id => !day.looksDone.includes(id));
-  day.waterOz = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(day.waterOz) || 0)));
-  if (typeof day.missedReason !== "string") day.missedReason = "";
-  syncWaterTask(day, dayKey);
-  day.completed = day.done.length === TASK_IDS.length;
-  day.looksCompleted = getResolvedSet(day, "looks").size === getLooksTaskIds(dayKey).length;
-  return day;
+  if (!state.days[dayKey]) {
+    state.days[dayKey] = createDayRecord();
+  }
+  state.days[dayKey] = normalizeDay(dayKey, state.days[dayKey]);
+  return state.days[dayKey];
 }
-function saveState() { saveLocalState(); queueSupabaseSave(); }
+
+function mergeStateSnapshots(remoteState, localState) {
+  const remote = remoteState && typeof remoteState === "object"
+    ? remoteState
+    : createEmptyState();
+  const local = localState && typeof localState === "object"
+    ? localState
+    : createEmptyState();
+
+  return {
+    ...remote,
+    ...local,
+    days: {
+      ...(remote.days || {}),
+      ...(local.days || {})
+    },
+    meta: {
+      ...(remote.meta || {}),
+      ...(local.meta || {})
+    },
+    adminOverrides: {
+      ...(remote.adminOverrides || {}),
+      ...(local.adminOverrides || {})
+    }
+  };
+}
+
+function saveState() {
+  saveLocalState();
+  queueSupabaseSave();
+}
+
 function queueSupabaseSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveSupabaseState, 450);
 }
+
 async function loadSupabaseState() {
-  if (!supabaseClient) { syncStatus.textContent = "Saved locally. Supabase is not connected."; return; }
+  if (!supabaseClient) {
+    syncStatus.textContent = "Saved locally. Supabase is not connected.";
+    return;
+  }
+
   syncStatus.textContent = "Loading from Supabase…";
-  const { data, error } = await supabaseClient.from(SUPABASE_TABLE).select("state").eq("id", SUPABASE_ROW_ID).maybeSingle();
-  if (error) { console.error(error); syncStatus.textContent = "Supabase load failed. Using local save."; return; }
+  const { data, error } = await supabaseClient
+    .from(SUPABASE_TABLE)
+    .select("state")
+    .eq("id", SUPABASE_ROW_ID)
+    .maybeSingle();
+
+  if (error) {
+    console.error(error);
+    syncStatus.textContent = "Supabase load failed. Using local save.";
+    return;
+  }
+
   if (data?.state && typeof data.state === "object") {
-    state = data.state;
+    state = mergeStateSnapshots(data.state, state);
     normalizeState();
     saveLocalState();
     render();
+    await saveSupabaseState();
   } else {
     await saveSupabaseState();
   }
+
   syncStatus.textContent = "Synced with Supabase.";
 }
+
 async function saveSupabaseState() {
-  if (!supabaseClient) { syncStatus.textContent = "Saved locally. Supabase is not connected."; return; }
+  if (!supabaseClient) {
+    syncStatus.textContent = "Saved locally. Supabase is not connected.";
+    return;
+  }
+
   syncStatus.textContent = "Saving…";
-  const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert({ id: SUPABASE_ROW_ID, state, updated_at: new Date().toISOString() });
-  if (error) { console.error(error); syncStatus.textContent = "Supabase save failed. Saved locally only."; return; }
+  const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert({
+    id: SUPABASE_ROW_ID,
+    state,
+    updated_at: new Date().toISOString()
+  });
+
+  if (error) {
+    console.error(error);
+    syncStatus.textContent = "Supabase save failed. Saved locally only.";
+    return;
+  }
+
   syncStatus.textContent = "Saved to Supabase.";
 }
 
 function calculateStreak(completedField) {
   let date = keyToLocalDate(getTodayKey());
   let streak = 0;
-  if (state.days[getTodayKey()]?.[completedField] !== true) date = addDays(date, -1);
+
+  if (state.days[getTodayKey()]?.[completedField] !== true) {
+    date = addDays(date, -1);
+  }
+
   while (state.days[formatDateKey(date)]?.[completedField] === true) {
     streak += 1;
     date = addDays(date, -1);
   }
+
   return streak;
 }
-function calculateCurrentStreak() { return calculateStreak("completed"); }
-function calculateLooksStreak() { return calculateStreak("looksCompleted"); }
+
+function calculateCurrentStreak() {
+  return calculateStreak("completed");
+}
+
+function calculateLooksStreak() {
+  return calculateStreak("looksCompleted");
+}
+
 function getDisplayedCurrentStreak() {
-  const offset = Number.isInteger(state.adminOverrides?.streakOffset) ? state.adminOverrides.streakOffset : 0;
+  const offset = Number.isInteger(state.adminOverrides?.streakOffset)
+    ? state.adminOverrides.streakOffset
+    : 0;
   return Math.max(0, calculateCurrentStreak() + offset);
 }
+
 function calculateTaskStreak(taskId) {
   let date = keyToLocalDate(getTodayKey());
   let streak = 0;
-  if (!state.days[getTodayKey()]?.done?.includes(taskId)) date = addDays(date, -1);
+
+  if (!state.days[getTodayKey()]?.done?.includes(taskId)) {
+    date = addDays(date, -1);
+  }
+
   while (state.days[formatDateKey(date)]?.done?.includes(taskId)) {
     streak += 1;
     date = addDays(date, -1);
   }
+
   return streak;
 }
-function getCurrentRank(streak) { return RANKS.reduce((current, rank) => streak >= rank.days ? rank : current, RANKS[0]); }
-function getNextRank(streak) { return RANKS.find(rank => rank.days > streak) || null; }
+
+function getCurrentRank(streak) {
+  return RANKS.reduce(
+    (current, rank) => (streak >= rank.days ? rank : current),
+    RANKS[0]
+  );
+}
+
+function getNextRank(streak) {
+  return RANKS.find(rank => rank.days > streak) || null;
+}
 
 function toggleMainTask(taskId) {
   const day = ensureDay();
   const done = new Set(day.done);
+
   if (done.has(taskId)) done.delete(taskId);
   else done.add(taskId);
+
   day.done = [...done];
   day.skipped = [];
   day.completed = day.done.length === TASK_IDS.length;
   saveState();
   render();
 }
+
 function setLooksStatus(task, status) {
   const day = ensureDay();
   const done = new Set(day.looksDone);
   const skipped = new Set(day.looksSkipped);
+
   if (status === "done") {
-    if (done.has(task.id)) done.delete(task.id); else { done.add(task.id); skipped.delete(task.id); }
+    if (done.has(task.id)) {
+      done.delete(task.id);
+    } else {
+      done.add(task.id);
+      skipped.delete(task.id);
+    }
   } else if (status === "skipped") {
-    if (skipped.has(task.id)) skipped.delete(task.id); else { skipped.add(task.id); done.delete(task.id); }
+    if (skipped.has(task.id)) {
+      skipped.delete(task.id);
+    } else {
+      skipped.add(task.id);
+      done.delete(task.id);
+    }
   }
-  if (task.meta === "morningWater" && status === "done" && done.has(task.id) && day.waterOz < 8) day.waterOz = 8;
+
+  if (
+    task.meta === "morningWater" &&
+    status === "done" &&
+    done.has(task.id) &&
+    day.waterOz < 8
+  ) {
+    day.waterOz = 8;
+  }
+
   day.looksDone = [...done];
   day.looksSkipped = [...skipped];
   syncWaterTask(day, getTodayKey());
-  day.looksCompleted = getResolvedSet(day, "looks").size === getLooksTaskIds().length;
+  day.looksCompleted =
+    getResolvedSet(day, "looks").size === getLooksTaskIds().length;
   saveState();
   render();
 }
+
 function createTaskRow(task, done, skipped, theme, onToggle, onSkip) {
   const row = document.createElement("div");
   row.className = `task-row ${theme} ${done ? "done" : ""} ${skipped ? "skipped" : ""} ${task.meta === "waterTracked" ? "tracked" : ""}`;
@@ -358,78 +674,101 @@ function createTaskRow(task, done, skipped, theme, onToggle, onSkip) {
     <div class="task-copy">
       <div class="task-title">${escapeHtml(task.title)}</div>
       ${task.subtitle ? `<div class="task-subtitle">${escapeHtml(task.subtitle)}</div>` : ""}
-      ${skipped ? `<div class="task-status">Skipped today</div>` : ""}
+      ${skipped ? '<div class="task-status">Skipped today</div>' : ""}
     </div>`;
   main.addEventListener("click", onToggle);
 
-  const menu = document.createElement("details");
-  menu.className = "task-menu";
-  const summary = document.createElement("summary");
-  summary.setAttribute("aria-label", `Options for ${task.title}`);
-  summary.textContent = "⋯";
-  const popover = document.createElement("div");
-  popover.className = "task-menu-popover";
-  const skipButton = document.createElement("button");
-  skipButton.type = "button";
-  skipButton.className = "task-menu-action";
-  skipButton.textContent = skipped ? "Unskip task" : "Skip this task";
-  skipButton.addEventListener("click", event => {
-    event.stopPropagation();
-    menu.open = false;
-    onSkip();
-    toast(skipped ? "Task returned to today." : "Task skipped for today.");
-  });
-  popover.appendChild(skipButton);
-  menu.append(summary, popover);
   row.appendChild(main);
+
   if (typeof onSkip === "function") {
+    const menu = document.createElement("details");
+    menu.className = "task-menu";
+
+    const summary = document.createElement("summary");
+    summary.setAttribute("aria-label", `Options for ${task.title}`);
+    summary.textContent = "⋯";
+
+    const popover = document.createElement("div");
+    popover.className = "task-menu-popover";
+
+    const skipButton = document.createElement("button");
+    skipButton.type = "button";
+    skipButton.className = "task-menu-action";
+    skipButton.textContent = skipped ? "Unskip task" : "Skip this task";
+    skipButton.addEventListener("click", event => {
+      event.stopPropagation();
+      menu.open = false;
+      onSkip();
+      toast(skipped ? "Task returned to today." : "Task skipped for today.");
+    });
+
+    popover.appendChild(skipButton);
+    menu.append(summary, popover);
     row.appendChild(menu);
   } else {
     row.classList.add("no-menu");
   }
+
   return row;
 }
 
 function renderTaskLists() {
   const day = ensureDay();
   const done = new Set(day.done);
+
   $("morningList").innerHTML = "";
   $("afternoonList").innerHTML = "";
   $("nightList").innerHTML = "";
+
   for (const task of TASKS) {
-    const row = createTaskRow(task, done.has(task.id), false, "", () => toggleMainTask(task.id));
+    const row = createTaskRow(
+      task,
+      done.has(task.id),
+      false,
+      "",
+      () => toggleMainTask(task.id)
+    );
     $(`${task.section}List`).appendChild(row);
   }
 }
+
 function renderProgress() {
   const day = ensureDay();
   const done = day.done.length;
   const total = TASKS.length;
   const percent = Math.round((done / total) * 100);
   const left = total - done;
+
   $("percent").textContent = `${percent}%`;
   $("doneCount").textContent = `${done} / ${total}`;
   $("tasksLeft").textContent = left === 0
     ? "Main checklist complete. The streak updated immediately."
     : `${left} main task${left === 1 ? "" : "s"} left today.`;
-  $("progressCircle").style.background = `conic-gradient(var(--green) ${Math.round((done / total) * 360)}deg, rgba(42,30,18,.09) 0deg)`;
+  $("progressCircle").style.background =
+    `conic-gradient(var(--green) ${Math.round((done / total) * 360)}deg, rgba(42,30,18,.09) 0deg)`;
 }
+
 function renderPhoneLock() {
   const done = new Set(ensureDay().done);
   const remaining = MORNING_TASK_IDS.filter(id => !done.has(id)).length;
   const complete = remaining === 0;
+
   $("phoneLockCard").classList.toggle("locked", !complete);
   $("phoneLockCard").classList.toggle("unlocked", complete);
   $("phoneLockTitle").textContent = complete ? "Phone unlocked" : "Phone locked";
-  $("phoneLockText").textContent = complete ? "Morning list is complete." : `${remaining} morning task${remaining === 1 ? "" : "s"} left.`;
+  $("phoneLockText").textContent = complete
+    ? "Morning list is complete."
+    : `${remaining} morning task${remaining === 1 ? "" : "s"} left.`;
   $("phoneLockBadge").textContent = complete ? "Unlocked" : "Locked";
 }
+
 function renderRankAndReward() {
   const streak = getDisplayedCurrentStreak();
   const looksStreak = calculateLooksStreak();
   const gymStreak = calculateTaskStreak("gym");
   const currentRank = getCurrentRank(streak);
   const nextRank = getNextRank(streak);
+
   $("rankBadge").textContent = `Day ${streak}`;
   $("rankName").textContent = currentRank.name;
   $("rankCopy").textContent = currentRank.copy;
@@ -442,8 +781,13 @@ function renderRankAndReward() {
 
   if (nextRank) {
     const span = nextRank.days - currentRank.days;
-    $("rankProgress").style.width = `${Math.max(0, Math.min(100, ((streak - currentRank.days) / span) * 100))}%`;
-  } else $("rankProgress").style.width = "100%";
+    $("rankProgress").style.width = `${Math.max(
+      0,
+      Math.min(100, ((streak - currentRank.days) / span) * 100)
+    )}%`;
+  } else {
+    $("rankProgress").style.width = "100%";
+  }
 
   if (streak >= 7) {
     $("rewardBadge").textContent = "Unlocked";
@@ -451,41 +795,70 @@ function renderRankAndReward() {
   } else {
     const left = 7 - streak;
     $("rewardBadge").textContent = `${left} left`;
-    $("rewardText").textContent = `Complete ${left} more main-checklist day${left === 1 ? "" : "s"} in a row.`;
+    $("rewardText").textContent =
+      `Complete ${left} more main-checklist day${left === 1 ? "" : "s"} in a row.`;
   }
+
   renderRankLadder(streak);
 }
+
 function renderRankLadder(streak) {
   const ladder = $("rankLadder");
   ladder.innerHTML = "";
+
   for (const rank of RANKS) {
     const active = streak >= rank.days;
     const item = document.createElement("div");
     item.className = `ladder-item ${active ? "active" : ""}`;
-    item.innerHTML = `<div class="ladder-dot">${active ? "✓" : rank.days}</div><div><div class="ladder-name">${rank.name}</div><div class="ladder-days">${rank.days} main day${rank.days === 1 ? "" : "s"}</div></div><div class="badge">${active ? "Unlocked" : "Locked"}</div>`;
+    item.innerHTML = `
+      <div class="ladder-dot">${active ? "✓" : rank.days}</div>
+      <div>
+        <div class="ladder-name">${rank.name}</div>
+        <div class="ladder-days">${rank.days} main day${rank.days === 1 ? "" : "s"}</div>
+      </div>
+      <div class="badge">${active ? "Unlocked" : "Locked"}</div>`;
     ladder.appendChild(item);
   }
 }
+
 function renderLooksTaskList(element, tasks, day) {
   element.innerHTML = "";
   const done = new Set(day.looksDone);
   const skipped = new Set(day.looksSkipped);
+
   for (const task of tasks) {
     const toggle = () => {
-      if (task.meta === "waterTracked") { $("waterCard").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+      if (task.meta === "waterTracked") {
+        $("waterCard").scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
       setLooksStatus(task, "done");
     };
-    element.appendChild(createTaskRow(task, done.has(task.id), skipped.has(task.id), "looks-task", toggle, () => setLooksStatus(task, "skipped")));
+
+    element.appendChild(
+      createTaskRow(
+        task,
+        done.has(task.id),
+        skipped.has(task.id),
+        "looks-task",
+        toggle,
+        () => setLooksStatus(task, "skipped")
+      )
+    );
   }
 }
+
 function renderLooks() {
   const key = getTodayKey();
   const day = ensureDay(key);
   const dayName = getRoutineDayName(key);
   const routine = getLooksRoutine(key);
   const date = keyToLocalDate(key);
+
   $("looksDayName").textContent = `${dayName} routine`;
-  $("looksDateText").textContent = `${dayName}, ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
+  $("looksDateText").textContent =
+    `${dayName}, ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
+
   renderLooksTaskList($("looksMorningList"), routine.morning, day);
   renderLooksTaskList($("looksMiddayList"), routine.midday, day);
   renderLooksTaskList($("looksNightList"), routine.night, day);
@@ -496,125 +869,227 @@ function renderLooks() {
   const resolved = done + skipped;
   const left = total - resolved;
   const percent = total ? Math.round((resolved / total) * 100) : 0;
+
   $("looksPercent").textContent = `${percent}%`;
-  $("looksDoneCount").textContent = skipped ? `${done} done • ${skipped} skipped` : `${done} / ${total}`;
-  $("looksTasksLeft").textContent = left === 0 ? "Looksmaxxing routine resolved. Its separate streak updated." : `${left} looks task${left === 1 ? "" : "s"} left today.`;
-  $("looksProgressCircle").style.background = `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
-  $("workoutName").textContent = WORKOUTS[dayName];
+  $("looksDoneCount").textContent = skipped
+    ? `${done} done • ${skipped} skipped`
+    : `${done} / ${total}`;
+  $("looksTasksLeft").textContent = left === 0
+    ? "Looksmaxxing routine resolved. Its separate streak updated."
+    : `${left} looks task${left === 1 ? "" : "s"} left today.`;
+  $("looksProgressCircle").style.background =
+    `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
+  $("workoutName").textContent = getWorkoutName(key);
+
   renderWater();
 }
+
 function renderWater() {
   const waterOz = ensureDay().waterOz;
   const displayPercent = Math.round((waterOz / WATER_TARGET_OZ) * 100);
+
   $("waterAmount").innerHTML = `${waterOz} <span>oz / ${WATER_TARGET_OZ} oz</span>`;
   $("waterBadge").textContent = `${displayPercent}%`;
   $("waterFill").style.width = `${Math.max(0, Math.min(100, displayPercent))}%`;
-  if (waterOz < WATER_MINIMUM_OZ) $("waterStatus").textContent = `${WATER_MINIMUM_OZ - waterOz} oz until the daily minimum.`;
-  else if (waterOz < WATER_TARGET_OZ) $("waterStatus").textContent = `Minimum hit. ${WATER_TARGET_OZ - waterOz} oz until target.`;
-  else $("waterStatus").textContent = waterOz === WATER_TARGET_OZ ? "120 oz target complete." : `${waterOz - WATER_TARGET_OZ} oz above target.`;
+
+  if (waterOz < WATER_MINIMUM_OZ) {
+    $("waterStatus").textContent = `${WATER_MINIMUM_OZ - waterOz} oz until the daily minimum.`;
+  } else if (waterOz < WATER_TARGET_OZ) {
+    $("waterStatus").textContent = `Minimum hit. ${WATER_TARGET_OZ - waterOz} oz until target.`;
+  } else {
+    $("waterStatus").textContent = waterOz === WATER_TARGET_OZ
+      ? "120 oz target complete."
+      : `${waterOz - WATER_TARGET_OZ} oz above target.`;
+  }
 }
+
 function setWaterOz(value) {
   const day = ensureDay();
-  day.waterOz = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(value) || 0)));
+  day.waterOz = Math.max(
+    0,
+    Math.min(WATER_MAX_OZ, Math.round(Number(value) || 0))
+  );
   syncWaterTask(day, getTodayKey());
-  day.looksCompleted = getResolvedSet(day, "looks").size === getLooksTaskIds().length;
+  day.looksCompleted =
+    getResolvedSet(day, "looks").size === getLooksTaskIds().length;
   saveState();
   render();
 }
 
 function getReviewDayKeys() {
   const active = getTodayKey();
-  return Object.keys(state.days).filter(key => {
-    const day = state.days[key];
-    const hasMainActivity = (day.done?.length || 0) > 0 || day.completed === true || day.missedReason?.trim();
-    return hasMainActivity && !(key === active && day.completed !== true);
-  }).sort().slice(-7);
+  return Object.keys(state.days)
+    .filter(key => {
+      if (!isDateKey(key) || key > active) return false;
+      if (key < active) return true;
+      return state.days[key]?.completed === true;
+    })
+    .sort()
+    .slice(-7);
 }
+
 function getCalculatedMissedCounts() {
   const counts = Object.fromEntries(TASKS.map(task => [task.id, 0]));
+
   for (const key of getReviewDayKeys()) {
     const done = new Set(ensureDay(key).done);
-    TASKS.forEach(task => { if (!done.has(task.id)) counts[task.id] += 1; });
+    for (const task of TASKS) {
+      if (!done.has(task.id)) counts[task.id] += 1;
+    }
   }
+
   return counts;
 }
+
 function getDisplayedMissedCounts() {
   const override = state.adminOverrides?.missedCounts;
-  if (!override || typeof override !== "object") return getCalculatedMissedCounts();
-  return Object.fromEntries(TASKS.map(task => [task.id, Number.isInteger(Number(override[task.id])) ? Math.max(0, Number(override[task.id])) : 0]));
+  if (!override || typeof override !== "object") {
+    return getCalculatedMissedCounts();
+  }
+
+  return Object.fromEntries(
+    TASKS.map(task => {
+      const value = Number(override[task.id]);
+      return [task.id, Number.isInteger(value) ? Math.max(0, value) : 0];
+    })
+  );
 }
+
 function renderReview() {
   const day = ensureDay();
-  if (document.activeElement !== $("missedReasonBox")) $("missedReasonBox").value = day.missedReason;
-  const missed = TASKS.map(task => ({ ...task, missed: getDisplayedMissedCounts()[task.id] || 0 })).filter(task => task.missed > 0).sort((a,b) => b.missed - a.missed);
+
+  if (document.activeElement !== $("missedReasonBox")) {
+    $("missedReasonBox").value = day.missedReason;
+  }
+
+  const displayedCounts = getDisplayedMissedCounts();
+  const missed = TASKS
+    .map(task => ({ ...task, missed: displayedCounts[task.id] || 0 }))
+    .filter(task => task.missed > 0)
+    .sort((a, b) => b.missed - a.missed);
+
   const list = $("missedTasksList");
   list.innerHTML = "";
-  if (!missed.length) { list.innerHTML = `<div class="missed-item"><div class="missed-name">No missed-task data yet.</div></div>`; return; }
+
+  if (!missed.length) {
+    list.innerHTML = '<div class="missed-item"><div class="missed-name">No missed-task data yet.</div></div>';
+    return;
+  }
+
   const max = Math.max(...missed.map(task => task.missed), 1);
-  missed.slice(0,8).forEach(task => {
+  missed.slice(0, 8).forEach(task => {
     const item = document.createElement("div");
     item.className = "missed-item";
-    item.innerHTML = `<div class="missed-top"><div class="missed-name">${escapeHtml(task.title)}</div><div class="missed-count">${task.missed}x</div></div><div class="missed-bar"><span style="width:${Math.round((task.missed/max)*100)}%"></span></div>`;
+    item.innerHTML = `
+      <div class="missed-top">
+        <div class="missed-name">${escapeHtml(task.title)}</div>
+        <div class="missed-count">${task.missed}x</div>
+      </div>
+      <div class="missed-bar"><span style="width:${Math.round((task.missed / max) * 100)}%"></span></div>`;
     list.appendChild(item);
   });
 }
+
 function renderAdmin() {
   const calculated = calculateCurrentStreak();
   const displayed = getDisplayedCurrentStreak();
-  const offset = Number.isInteger(state.adminOverrides?.streakOffset) ? state.adminOverrides.streakOffset : 0;
+  const offset = Number.isInteger(state.adminOverrides?.streakOffset)
+    ? state.adminOverrides.streakOffset
+    : 0;
+
   $("adminCurrentInfo").textContent = offset
     ? `Calculated: ${calculated}. Correction: ${offset > 0 ? "+" : ""}${offset}. Displayed: ${displayed}. It will still update when today resolves.`
     : `Current streak is calculated from completed main-checklist days: ${calculated}.`;
+
   $("adminCurrentStreakInput").placeholder = `Current: ${displayed}`;
-  $("missedOverrideBadge").textContent = state.adminOverrides?.missedCounts ? "Edited" : "Calculated";
+  $("missedOverrideBadge").textContent = state.adminOverrides?.missedCounts
+    ? "Edited"
+    : "Calculated";
+
   const list = $("adminMissedCountsList");
   list.innerHTML = "";
   const counts = getDisplayedMissedCounts();
+
   TASKS.forEach(task => {
     const row = document.createElement("label");
     row.className = "missed-admin-row";
-    row.innerHTML = `<span>${escapeHtml(task.title)}</span><input class="admin-input admin-missed-count" type="number" min="0" max="99" inputmode="numeric" value="${counts[task.id] || 0}" data-task-id="${task.id}" />`;
+    row.innerHTML = `
+      <span>${escapeHtml(task.title)}</span>
+      <input class="admin-input admin-missed-count" type="number" min="0" max="99" inputmode="numeric" value="${counts[task.id] || 0}" data-task-id="${task.id}" />`;
     list.appendChild(row);
   });
 }
+
 function setCurrentStreakCorrection() {
   const value = Number($("adminCurrentStreakInput").value);
-  if (!Number.isInteger(value) || value < 0 || value > 365) return setAdminStatus("Enter a whole number from 0 to 365.", "bad");
+  if (!Number.isInteger(value) || value < 0 || value > 365) {
+    setAdminStatus("Enter a whole number from 0 to 365.", "bad");
+    return;
+  }
+
   state.adminOverrides.streakOffset = value - calculateCurrentStreak();
   $("adminCurrentStreakInput").value = "";
-  saveState(); render(); setAdminStatus(`Displayed main streak set to ${value}.`, "good");
+  saveState();
+  render();
+  setAdminStatus(`Displayed main streak set to ${value}.`, "good");
 }
+
 function clearCurrentStreakCorrection() {
   state.adminOverrides.streakOffset = null;
-  saveState(); render(); setAdminStatus("Main streak now uses calculated history only.", "good");
+  saveState();
+  render();
+  setAdminStatus("Main streak now uses calculated history only.", "good");
 }
+
 function saveMissedOverrides() {
   const counts = {};
+
   for (const input of document.querySelectorAll(".admin-missed-count")) {
     const value = Number(input.value);
-    if (!Number.isInteger(value) || value < 0 || value > 99) return setAdminStatus("Missed counts must be whole numbers from 0 to 99.", "bad");
+    if (!Number.isInteger(value) || value < 0 || value > 99) {
+      setAdminStatus("Missed counts must be whole numbers from 0 to 99.", "bad");
+      return;
+    }
     if (value > 0) counts[input.dataset.taskId] = value;
   }
+
   state.adminOverrides.missedCounts = counts;
-  saveState(); render(); setAdminStatus("Missed-task numbers saved.", "good");
+  saveState();
+  render();
+  setAdminStatus("Missed-task numbers saved.", "good");
 }
-function clearMissedOverrides() { state.adminOverrides.missedCounts = {}; saveState(); render(); setAdminStatus("All displayed missed-task numbers reset to 0.", "good"); }
+
+function clearMissedOverrides() {
+  state.adminOverrides.missedCounts = {};
+  saveState();
+  render();
+  setAdminStatus("All displayed missed-task numbers reset to 0.", "good");
+}
+
 function setAdminStatus(message, type = "") {
-  const el = $("adminStatus");
-  el.textContent = message;
-  el.classList.toggle("good", type === "good");
-  el.classList.toggle("bad", type === "bad");
+  const element = $("adminStatus");
+  element.textContent = message;
+  element.classList.toggle("good", type === "good");
+  element.classList.toggle("bad", type === "bad");
 }
+
 function escapeHtml(value) {
-  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
+
 function toast(message) {
-  const el = $("toast");
-  el.textContent = message;
-  el.classList.add("show");
+  const element = $("toast");
+  element.textContent = message;
+  element.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+  toastTimer = setTimeout(() => element.classList.remove("show"), 2200);
 }
+
 function render() {
   renderedDayKey = getTodayKey();
   ensureDay();
@@ -626,47 +1101,102 @@ function render() {
   renderReview();
   renderAdmin();
 }
-function showApp() { loginScreen.classList.add("hidden"); mainApp.classList.remove("hidden"); render(); }
-function showLogin() { mainApp.classList.add("hidden"); loginScreen.classList.remove("hidden"); setTimeout(() => passwordInput.focus(), 50); }
-async function unlock() {
-  if (passwordInput.value.trim() !== PASSWORD) { loginError.textContent = "Wrong password."; passwordInput.select(); return; }
-  loginError.textContent = ""; passwordInput.value = ""; showApp(); await loadSupabaseState();
+
+function showApp() {
+  loginScreen.classList.add("hidden");
+  mainApp.classList.remove("hidden");
+  render();
 }
+
+function showLogin() {
+  mainApp.classList.add("hidden");
+  loginScreen.classList.remove("hidden");
+  setTimeout(() => passwordInput.focus(), 50);
+}
+
+async function unlock() {
+  if (passwordInput.value.trim() !== PASSWORD) {
+    loginError.textContent = "Wrong password.";
+    passwordInput.select();
+    return;
+  }
+
+  loginError.textContent = "";
+  passwordInput.value = "";
+  showApp();
+  await loadSupabaseState();
+}
+
 function setupTabs() {
   const tabs = [...document.querySelectorAll(".tab")];
   const pages = [...document.querySelectorAll(".page")];
-  tabs.forEach(tab => tab.addEventListener("click", () => {
-    tabs.forEach(item => item.classList.remove("active"));
-    pages.forEach(page => page.classList.remove("active"));
-    tab.classList.add("active");
-    $(tab.dataset.tab).classList.add("active");
-    render();
-  }));
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabs.forEach(item => item.classList.remove("active"));
+      pages.forEach(page => page.classList.remove("active"));
+      tab.classList.add("active");
+      $(tab.dataset.tab).classList.add("active");
+      render();
+    });
+  });
 }
 
 unlockBtn.addEventListener("click", unlock);
-passwordInput.addEventListener("keydown", event => { if (event.key === "Enter") unlock(); });
+passwordInput.addEventListener("keydown", event => {
+  if (event.key === "Enter") unlock();
+});
 $("logoutBtn").addEventListener("click", showLogin);
-$("missedReasonBox").addEventListener("input", () => { ensureDay().missedReason = $("missedReasonBox").value; saveState(); });
-document.querySelectorAll("[data-water-add]").forEach(button => button.addEventListener("click", () => setWaterOz(ensureDay().waterOz + Number(button.dataset.waterAdd))));
+
+$("missedReasonBox").addEventListener("input", () => {
+  ensureDay().missedReason = $("missedReasonBox").value;
+  saveState();
+});
+
+document.querySelectorAll("[data-water-add]").forEach(button => {
+  button.addEventListener("click", () => {
+    setWaterOz(ensureDay().waterOz + Number(button.dataset.waterAdd));
+  });
+});
+
 $("resetWaterBtn").addEventListener("click", () => setWaterOz(0));
+
 $("addCustomWaterBtn").addEventListener("click", () => {
   const amount = Number($("waterCustomInput").value);
-  if (!Number.isFinite(amount) || amount <= 0) return $("waterCustomInput").focus();
+  if (!Number.isFinite(amount) || amount <= 0) {
+    $("waterCustomInput").focus();
+    return;
+  }
+
   setWaterOz(ensureDay().waterOz + amount);
   $("waterCustomInput").value = "";
 });
-$("waterCustomInput").addEventListener("keydown", event => { if (event.key === "Enter") $("addCustomWaterBtn").click(); });
+
+$("waterCustomInput").addEventListener("keydown", event => {
+  if (event.key === "Enter") $("addCustomWaterBtn").click();
+});
+
 $("adminSetCurrentStreakBtn").addEventListener("click", setCurrentStreakCorrection);
 $("adminClearCurrentStreakBtn").addEventListener("click", clearCurrentStreakCorrection);
 $("adminSaveMissedCountsBtn").addEventListener("click", saveMissedOverrides);
 $("adminClearMissedCountsBtn").addEventListener("click", clearMissedOverrides);
+
 document.addEventListener("click", event => {
-  document.querySelectorAll("details.task-menu[open]").forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+  document.querySelectorAll("details.task-menu[open]").forEach(menu => {
+    if (!menu.contains(event.target)) menu.open = false;
+  });
 });
+
 setInterval(() => {
-  if (getTodayKey() !== renderedDayKey && !mainApp.classList.contains("hidden")) { normalizeState(); render(); }
-}, 60000);
+  if (
+    getTodayKey() !== renderedDayKey &&
+    !mainApp.classList.contains("hidden")
+  ) {
+    normalizeState();
+    saveState();
+    render();
+  }
+}, 60_000);
 
 setupTabs();
 if (normalizeState()) saveLocalState();
