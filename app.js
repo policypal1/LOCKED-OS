@@ -51,7 +51,7 @@ const supabaseClient = hasSupabaseConfig && window.supabase
 
 const TASKS = [
   { id: "wake-up", section: "morning", title: "Wake up at planned time" },
-  { id: "water", section: "morning", title: "Chug one glass of water immediately after waking up" },
+  { id: "water", section: "morning", title: "Chug 2 glasses of water immediately after waking up" },
   { id: "clean-room", section: "morning", title: "Clean room" },
   { id: "dressed", section: "morning", title: "Get fully dressed and ready for the day" },
   { id: "real-world-good-morning", section: "morning", title: "Real World daily good morning" },
@@ -60,8 +60,7 @@ const TASKS = [
   { id: "breakfast", section: "morning", title: "Eat breakfast" },
   { id: "gym", section: "afternoon", title: "Go to gym" },
   { id: "creatine", section: "afternoon", title: "Take creatine" },
-  { id: "reading", section: "night", title: "Read for 10 minutes" },
-  { id: "plan-next-day", section: "night", title: "Plan next day" }
+  { id: "bed-ten", section: "night", title: "Go to bed by 10:00 PM — everything shut off" }
 ];
 
 const TASK_IDS = TASKS.map(task => task.id);
@@ -70,14 +69,15 @@ const MORNING_TASK_IDS = TASKS
   .map(task => task.id);
 
 const LEGACY_TASK_ID_MAP = {
-  "bed-ready": "plan-next-day",
+  "bed-ready": "bed-ten",
+  "plan-next-day": "bed-ten",
   "no-shampoo": "conditional-shampoo"
 };
 
 const RANKS = [
   { name: "Starter", days: 0, copy: "Complete the full main checklist to start the streak." },
   { name: "Locked In", days: 3, copy: "Three straight main-checklist days. The system is sticking." },
-  { name: "Disciplined", days: 7, copy: "Seven main-checklist days in a row. Reward unlocked." },
+  { name: "Disciplined", days: 7, copy: "Seven main-checklist days in a row." },
   { name: "Machine", days: 14, copy: "Two weeks. This is no longer random motivation." },
   { name: "Unbreakable", days: 30, copy: "Thirty days. This is identity-level discipline." }
 ];
@@ -244,19 +244,19 @@ function makeNight(dayName) {
     { id: "night-moisturizer", title: "Apply moisturizer" },
     { id: "night-minoxidil", title: "Apply minoxidil to eyebrows" },
     { id: "eyelash-serum", title: "Apply peptide eyelash growth serum" },
-    { id: "night-teeth", title: "Floss and brush teeth" },
-    { id: "whitening-strips", title: "Use Crest whitening strips" }
+    { id: "night-teeth", title: "Floss and brush teeth" }
   );
 
   if (dayName === "Sunday") {
-    const whiteningIndex = tasks.findIndex(task => task.id === "whitening-strips");
-    tasks.splice(
-      whiteningIndex,
-      0,
-      { id: "exfoliate-lips", title: "Scrub/exfoliate lips" },
-      { id: "vaseline-lips", title: "Apply Vaseline to lips" }
-    );
+    tasks.push({ id: "exfoliate-lips", title: "Scrub/exfoliate lips" });
+  } else {
+    tasks.push({ id: "brush-lips", title: "Brush lips" });
   }
+
+  tasks.push(
+    { id: "vaseline-lips", title: "Apply Vaseline to lips" },
+    { id: "whitening-strips", title: "Use Crest whitening strips" }
+  );
 
   return tasks;
 }
@@ -799,18 +799,12 @@ function renderPhoneLock() {
 function renderRankAndReward() {
   const streak = getDisplayedCurrentStreak();
   const looksStreak = calculateLooksStreak();
-  const gymStreak = calculateTaskStreak("gym");
   const currentRank = getCurrentRank(streak);
   const nextRank = getNextRank(streak);
 
   $("rankBadge").textContent = `Day ${streak}`;
   $("rankName").textContent = currentRank.name;
   $("rankCopy").textContent = currentRank.copy;
-  $("bigStreak").textContent = streak;
-  $("gameChecklistStreak").textContent = streak;
-  $("gameLooksStreak").textContent = looksStreak;
-  $("gameGymStreak").textContent = gymStreak;
-  $("gameRewardProgress").textContent = `${Math.min(streak, 7)} / 7`;
   $("looksStreak").textContent = looksStreak;
 
   if (nextRank) {
@@ -822,18 +816,6 @@ function renderRankAndReward() {
   } else {
     $("rankProgress").style.width = "100%";
   }
-
-  if (streak >= 7) {
-    $("rewardBadge").textContent = "Unlocked";
-    $("rewardText").textContent = "You earned it. Guts Racing seat cover unlocked.";
-  } else {
-    const left = 7 - streak;
-    $("rewardBadge").textContent = `${left} left`;
-    $("rewardText").textContent =
-      `Complete ${left} more main-checklist day${left === 1 ? "" : "s"} in a row.`;
-  }
-
-  renderRankLadder(streak);
 }
 
 function renderRankLadder(streak) {
@@ -1039,41 +1021,6 @@ function getDisplayedMissedCounts() {
   );
 }
 
-function renderReview() {
-  const day = ensureDay();
-
-  if (document.activeElement !== $("missedReasonBox")) {
-    $("missedReasonBox").value = day.missedReason;
-  }
-
-  const displayedCounts = getDisplayedMissedCounts();
-  const missed = TASKS
-    .map(task => ({ ...task, missed: displayedCounts[task.id] || 0 }))
-    .filter(task => task.missed > 0)
-    .sort((a, b) => b.missed - a.missed);
-
-  const list = $("missedTasksList");
-  list.innerHTML = "";
-
-  if (!missed.length) {
-    list.innerHTML = '<div class="missed-item"><div class="missed-name">No missed-task data yet.</div></div>';
-    return;
-  }
-
-  const max = Math.max(...missed.map(task => task.missed), 1);
-  missed.slice(0, 8).forEach(task => {
-    const item = document.createElement("div");
-    item.className = "missed-item";
-    item.innerHTML = `
-      <div class="missed-top">
-        <div class="missed-name">${escapeHtml(task.title)}</div>
-        <div class="missed-count">${task.missed}x</div>
-      </div>
-      <div class="missed-bar"><span style="width:${Math.round((task.missed / max) * 100)}%"></span></div>`;
-    list.appendChild(item);
-  });
-}
-
 function renderAdmin() {
   const calculated = calculateCurrentStreak();
   const displayed = getDisplayedCurrentStreak();
@@ -1182,7 +1129,6 @@ function render() {
   renderPhoneLock();
   renderRankAndReward();
   renderLooks();
-  renderReview();
   renderAdmin();
 }
 
@@ -1230,13 +1176,6 @@ unlockBtn.addEventListener("click", unlock);
 passwordInput.addEventListener("keydown", event => {
   if (event.key === "Enter") unlock();
 });
-$("logoutBtn").addEventListener("click", showLogin);
-
-$("missedReasonBox").addEventListener("input", () => {
-  ensureDay().missedReason = $("missedReasonBox").value;
-  saveState();
-});
-
 document.querySelectorAll("[data-water-add]").forEach(button => {
   button.addEventListener("click", () => {
     setWaterOz(ensureDay().waterOz + Number(button.dataset.waterAdd));

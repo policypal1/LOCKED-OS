@@ -31,8 +31,6 @@
         <nav class="tabs" aria-label="App tabs">
           <button class="tab active" data-tab="checklistPage" type="button">Checklist</button>
           <button class="tab" data-tab="looksPage" type="button">Looksmaxxing</button>
-          <button class="tab" data-tab="gamePage" type="button">Gamification</button>
-          <button class="tab" data-tab="reviewPage" type="button">Review</button>
           <button class="tab admin-tab" data-tab="adminPage" type="button">Admin</button>
         </nav>
       </header>
@@ -44,7 +42,7 @@
               <div id="progressCircle" class="circle">
                 <div class="circle-inner">
                   <div id="percent" class="percent">0%</div>
-                  <div id="doneCount" class="done-count">0 / 12</div>
+                  <div id="doneCount" class="done-count">0 / 11</div>
                 </div>
               </div>
               <div>
@@ -86,10 +84,6 @@
               <h2 id="rankName" class="rank-name">Starter</h2>
               <p id="rankCopy" class="rank-copy">Complete the entire main checklist to advance the streak.</p>
               <div class="bar"><span id="rankProgress"></span></div>
-            </section>
-            <section class="card panel-card">
-              <div class="panel-title"><h3>7-day reward</h3><span id="rewardBadge" class="badge">Locked</span></div>
-              <div class="reward"><strong>Guts Racing seat cover</strong><p id="rewardText">Complete 7 main-checklist days in a row.</p></div>
             </section>
           </aside>
         </div>
@@ -147,31 +141,6 @@
               </div>
             </section>
           </aside>
-        </div>
-      </section>
-
-      <section id="gamePage" class="page">
-        <div class="game-hero">
-          <section class="card game-title-card">
-            <p class="eyebrow">Gamification</p><h2>Make the boring stuff automatic.</h2>
-            <p>The main checklist and looksmaxxing now have completely separate streaks.</p>
-            <div class="actions"><button id="logoutBtn" class="btn secondary" type="button">Lock app</button></div>
-          </section>
-          <section class="card big-streak-card"><strong id="bigStreak">0</strong><span>main checklist streak</span></section>
-        </div>
-        <section class="game-grid">
-          <div class="card stat-card"><small>Main checklist</small><strong id="gameChecklistStreak">0</strong></div>
-          <div class="card stat-card"><small>Looksmaxxing</small><strong id="gameLooksStreak">0</strong></div>
-          <div class="card stat-card"><small>Gym task</small><strong id="gameGymStreak">0</strong></div>
-          <div class="card stat-card"><small>Reward progress</small><strong id="gameRewardProgress">0 / 7</strong></div>
-        </section>
-        <section class="card rank-ladder"><div class="panel-title"><h3>Main rank ladder</h3><span class="badge">Checklist only</span></div><div id="rankLadder" class="ladder-list"></div></section>
-      </section>
-
-      <section id="reviewPage" class="page">
-        <div class="review-grid">
-          <section class="card review-card"><p class="eyebrow">Missed day reason</p><h2>No excuses, just the real reason.</h2><p>If the day goes bad, record what happened so you can fix the pattern.</p><textarea id="missedReasonBox" class="missed-box" placeholder="Why did I miss today? What needs to change tomorrow?"></textarea></section>
-          <section class="card review-card"><p class="eyebrow">Weekly review</p><h2>Most missed main tasks</h2><p>This tracks main-checklist tasks that were not completed. Looksmaxxing skips stay separate.</p><div id="missedTasksList" class="missed-list"></div></section>
         </div>
       </section>
 
