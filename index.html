@@ -79,11 +79,10 @@
           </div>
 
           <aside class="mini-side">
-            <section class="card panel-card">
-              <div class="panel-title"><h3>Main checklist streak</h3><span id="rankBadge" class="badge">Day 0</span></div>
-              <h2 id="rankName" class="rank-name">Starter</h2>
-              <p id="rankCopy" class="rank-copy">Complete the entire main checklist to advance the streak.</p>
-              <div class="bar"><span id="rankProgress"></span></div>
+            <section class="card panel-card day-streak-card">
+              <div class="panel-title"><h3>Day streak</h3></div>
+              <div class="day-streak-value"><strong id="dayStreakNumber">0</strong><span id="dayStreakLabel">days</span></div>
+              <p class="rank-copy">Complete the daily checklist to keep the streak going.</p>
             </section>
           </aside>
         </div>
@@ -147,11 +146,11 @@
       <section id="adminPage" class="page">
         <div class="admin-grid">
           <section class="card admin-card admin-warning">
-            <p class="eyebrow">Admin panel</p><h2>Correct the main streak.</h2>
+            <p class="eyebrow">Admin panel</p><h2>Correct the day streak.</h2>
             <p>The correction remains dynamic. Completing today will still increase the displayed streak.</p>
             <div class="field-grid">
-              <div class="admin-note" id="adminCurrentInfo">Current streak is calculated from completed days.</div>
-              <div class="field-row"><label for="adminCurrentStreakInput">Set displayed main streak</label><input id="adminCurrentStreakInput" class="admin-input" type="number" min="0" max="365" inputmode="numeric" placeholder="Example: 7" /></div>
+              <div class="admin-note" id="adminCurrentInfo">Day streak is calculated from completed days.</div>
+              <div class="field-row"><label for="adminCurrentStreakInput">Set displayed day streak</label><input id="adminCurrentStreakInput" class="admin-input" type="number" min="0" max="365" inputmode="numeric" placeholder="Example: 7" /></div>
               <div class="actions"><button id="adminSetCurrentStreakBtn" class="btn green" type="button">Set correction</button><button id="adminClearCurrentStreakBtn" class="btn secondary" type="button">Use calculated streak</button></div>
               <div id="adminStatus" class="admin-status" aria-live="polite"></div>
             </div>

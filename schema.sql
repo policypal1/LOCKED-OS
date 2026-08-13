@@ -1,39 +1,48 @@
--- Accountability OS Supabase Schema
--- Run this in the Supabase SQL Editor.
+-- LOCKED OS - Supabase setup
+-- Run this entire file once in the Supabase SQL Editor.
 
-create table if not exists public.accountability_state (
-  user_id uuid primary key references auth.users(id) on delete cascade,
+create table if not exists public.locked_os_state_v2 (
+  id text primary key,
   state jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
-alter table public.accountability_state enable row level security;
+alter table public.locked_os_state_v2
+  drop constraint if exists locked_os_single_row;
 
-drop policy if exists "Users can read their own accountability state" on public.accountability_state;
-create policy "Users can read their own accountability state"
-on public.accountability_state
+alter table public.locked_os_state_v2
+  add constraint locked_os_single_row
+  check (id = 'samuel-main');
+
+alter table public.locked_os_state_v2 enable row level security;
+
+grant select, insert, update
+on table public.locked_os_state_v2
+to anon, authenticated;
+
+drop policy if exists "Locked OS can read state" on public.locked_os_state_v2;
+drop policy if exists "Locked OS can create state" on public.locked_os_state_v2;
+drop policy if exists "Locked OS can update state" on public.locked_os_state_v2;
+
+create policy "Locked OS can read state"
+on public.locked_os_state_v2
 for select
-to authenticated
-using (auth.uid() = user_id);
+to anon, authenticated
+using (id = 'samuel-main');
 
-drop policy if exists "Users can insert their own accountability state" on public.accountability_state;
-create policy "Users can insert their own accountability state"
-on public.accountability_state
+create policy "Locked OS can create state"
+on public.locked_os_state_v2
 for insert
-to authenticated
-with check (auth.uid() = user_id);
+to anon, authenticated
+with check (id = 'samuel-main');
 
-drop policy if exists "Users can update their own accountability state" on public.accountability_state;
-create policy "Users can update their own accountability state"
-on public.accountability_state
+create policy "Locked OS can update state"
+on public.locked_os_state_v2
 for update
-to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+to anon, authenticated
+using (id = 'samuel-main')
+with check (id = 'samuel-main');
 
-drop policy if exists "Users can delete their own accountability state" on public.accountability_state;
-create policy "Users can delete their own accountability state"
-on public.accountability_state
-for delete
-to authenticated
-using (auth.uid() = user_id);
+insert into public.locked_os_state_v2 (id, state, updated_at)
+values ('samuel-main', '{}'::jsonb, now())
+on conflict (id) do nothing;

@@ -239,3 +239,10 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
   .task-row { grid-template-columns: minmax(0,1fr) 40px; }
   .task-menu summary { width: 40px; }
 }
+
+
+/* Simplified checklist day streak */
+.day-streak-card { text-align: left; }
+.day-streak-value { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
+.day-streak-value strong { font-size: 3.25rem; line-height: 1; letter-spacing: -.06em; }
+.day-streak-value span { color: var(--muted); font-weight: 900; }

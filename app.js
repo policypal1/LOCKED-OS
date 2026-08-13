@@ -1,12 +1,13 @@
 "use strict";
 
 const PASSWORD = "2009";
-const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
+const SUPABASE_URL = "https://gadhelbceimeyhxvelsg.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_4tfNyod3-cr5Qz_IJYbiPw_qqIG7ECI";
 const SUPABASE_ROW_ID = "samuel-main";
 const SUPABASE_TABLE = "locked_os_state_v2";
-const STORAGE_KEY = "locked_os_daily_checklist_v13";
+const STORAGE_KEY = "locked_os_daily_checklist_v14";
 const OLD_STORAGE_KEYS = [
+  "locked_os_daily_checklist_v13",
   "locked_os_daily_checklist_v12",
   "locked_os_daily_checklist_v11",
   "locked_os_daily_checklist_v10",
@@ -71,16 +72,12 @@ const MORNING_TASK_IDS = TASKS
 const LEGACY_TASK_ID_MAP = {
   "bed-ready": "bed-ten",
   "plan-next-day": "bed-ten",
+  "brush-lips": "lip-care",
+  "vaseline-lips": "lip-care",
+  "exfoliate-lips": "lip-care",
   "no-shampoo": "conditional-shampoo"
 };
 
-const RANKS = [
-  { name: "Starter", days: 0, copy: "Complete the full main checklist to start the streak." },
-  { name: "Locked In", days: 3, copy: "Three straight main-checklist days. The system is sticking." },
-  { name: "Disciplined", days: 7, copy: "Seven main-checklist days in a row." },
-  { name: "Machine", days: 14, copy: "Two weeks. This is no longer random motivation." },
-  { name: "Unbreakable", days: 30, copy: "Thirty days. This is identity-level discipline." }
-];
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -247,16 +244,14 @@ function makeNight(dayName) {
     { id: "night-teeth", title: "Floss and brush teeth" }
   );
 
-  if (dayName === "Sunday") {
-    tasks.push({ id: "exfoliate-lips", title: "Scrub/exfoliate lips" });
-  } else {
-    tasks.push({ id: "brush-lips", title: "Brush lips" });
-  }
+  tasks.push({
+    id: "lip-care",
+    title: dayName === "Sunday"
+      ? "Scrub/exfoliate lips and apply Vaseline"
+      : "Brush lips and apply Vaseline"
+  });
 
-  tasks.push(
-    { id: "vaseline-lips", title: "Apply Vaseline to lips" },
-    { id: "whitening-strips", title: "Use Crest whitening strips" }
-  );
+  tasks.push({ id: "whitening-strips", title: "Use Crest whitening strips" });
 
   return tasks;
 }
@@ -633,17 +628,6 @@ function calculateTaskStreak(taskId) {
   return streak;
 }
 
-function getCurrentRank(streak) {
-  return RANKS.reduce(
-    (current, rank) => (streak >= rank.days ? rank : current),
-    RANKS[0]
-  );
-}
-
-function getNextRank(streak) {
-  return RANKS.find(rank => rank.days > streak) || null;
-}
-
 function toggleMainTask(taskId) {
   const day = ensureDay();
   const done = new Set(day.done);
@@ -796,45 +780,13 @@ function renderPhoneLock() {
   $("phoneLockBadge").textContent = complete ? "Unlocked" : "Locked";
 }
 
-function renderRankAndReward() {
+function renderDayStreak() {
   const streak = getDisplayedCurrentStreak();
   const looksStreak = calculateLooksStreak();
-  const currentRank = getCurrentRank(streak);
-  const nextRank = getNextRank(streak);
 
-  $("rankBadge").textContent = `Day ${streak}`;
-  $("rankName").textContent = currentRank.name;
-  $("rankCopy").textContent = currentRank.copy;
+  $("dayStreakNumber").textContent = streak;
+  $("dayStreakLabel").textContent = streak === 1 ? "day" : "days";
   $("looksStreak").textContent = looksStreak;
-
-  if (nextRank) {
-    const span = nextRank.days - currentRank.days;
-    $("rankProgress").style.width = `${Math.max(
-      0,
-      Math.min(100, ((streak - currentRank.days) / span) * 100)
-    )}%`;
-  } else {
-    $("rankProgress").style.width = "100%";
-  }
-}
-
-function renderRankLadder(streak) {
-  const ladder = $("rankLadder");
-  ladder.innerHTML = "";
-
-  for (const rank of RANKS) {
-    const active = streak >= rank.days;
-    const item = document.createElement("div");
-    item.className = `ladder-item ${active ? "active" : ""}`;
-    item.innerHTML = `
-      <div class="ladder-dot">${active ? "✓" : rank.days}</div>
-      <div>
-        <div class="ladder-name">${rank.name}</div>
-        <div class="ladder-days">${rank.days} main day${rank.days === 1 ? "" : "s"}</div>
-      </div>
-      <div class="badge">${active ? "Unlocked" : "Locked"}</div>`;
-    ladder.appendChild(item);
-  }
 }
 
 function renderLooksTaskList(element, tasks, day) {
@@ -1062,14 +1014,14 @@ function setCurrentStreakCorrection() {
   $("adminCurrentStreakInput").value = "";
   saveState();
   render();
-  setAdminStatus(`Displayed main streak set to ${value}.`, "good");
+  setAdminStatus(`Displayed day streak set to ${value}.`, "good");
 }
 
 function clearCurrentStreakCorrection() {
   state.adminOverrides.streakOffset = null;
   saveState();
   render();
-  setAdminStatus("Main streak now uses calculated history only.", "good");
+  setAdminStatus("Day streak now uses calculated history only.", "good");
 }
 
 function saveMissedOverrides() {
@@ -1127,7 +1079,7 @@ function render() {
   renderTaskLists();
   renderProgress();
   renderPhoneLock();
-  renderRankAndReward();
+  renderDayStreak();
   renderLooks();
   renderAdmin();
 }
