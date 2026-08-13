@@ -171,7 +171,7 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 .water-amount span { color: var(--muted); font-size: 1rem; letter-spacing: 0; }
 .water-track { position: relative; height: 18px; border-radius: 999px; background: rgba(37,132,184,.12); overflow: hidden; margin-top: 16px; border: 1px solid rgba(37,132,184,.12); }
 .water-fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg,var(--blue-dark),var(--blue)); border-radius: inherit; transition: width .2s ease; }
-.water-minimum-marker { position: absolute; top: 0; bottom: 0; left: 83.333%; width: 2px; background: rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(21,101,143,.25); }
+.water-minimum-marker { position: absolute; top: 0; bottom: 0; left: 80%; width: 2px; background: rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(21,101,143,.25); }
 .water-labels { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font-size: .72rem; font-weight: 900; }
 .water-status { margin: 12px 0 0; color: var(--blue-dark); font-weight: 900; line-height: 1.4; }
 .water-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }

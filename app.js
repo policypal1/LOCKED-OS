@@ -19,8 +19,8 @@ const OLD_STORAGE_KEYS = [
 ];
 
 const DAY_ROLLOVER_HOUR = 4;
-const WATER_MINIMUM_OZ = 100;
-const WATER_TARGET_OZ = 120;
+const WATER_MINIMUM_OZ = 80;
+const WATER_TARGET_OZ = 100;
 const WATER_MAX_OZ = 240;
 const LOOKS_MORNING_WATER_OZ = 16;
 const MS_PER_DAY = 86_400_000;
@@ -154,11 +154,8 @@ function getWorkoutIndex(dayKey = getTodayKey()) {
   return ((index % WORKOUT_ROTATION.length) + WORKOUT_ROTATION.length) % WORKOUT_ROTATION.length;
 }
 
-function formatWorkoutName(index, dayKey = getTodayKey()) {
-  const baseWorkout = WORKOUT_ROTATION[index];
-  const dayName = getRoutineDayName(dayKey);
-  const hasNeck = dayName === "Monday" || dayName === "Friday";
-  return hasNeck ? `${baseWorkout} + neck exercises` : baseWorkout;
+function formatWorkoutName(index) {
+  return WORKOUT_ROTATION[index];
 }
 
 function getWorkoutName(dayKey = getTodayKey()) {
@@ -214,8 +211,8 @@ function makeMidday(dayKey) {
 
   tasks.push({
     id: "water-through-day",
-    title: "Drink 100–120 oz of water throughout the day",
-    subtitle: "Completes automatically at 100 oz.",
+    title: "Drink 80–100 oz of water throughout the day",
+    subtitle: "Completes automatically at 80 oz.",
     meta: "waterTracked"
   });
 
@@ -256,7 +253,7 @@ function makeNight(dayName) {
     tasks.splice(
       whiteningIndex,
       0,
-      { id: "exfoliate-lips", title: "Exfoliate lips: sugar, coconut oil, and raw honey mix" },
+      { id: "exfoliate-lips", title: "Scrub/exfoliate lips" },
       { id: "vaseline-lips", title: "Apply Vaseline to lips" }
     );
   }
@@ -985,7 +982,7 @@ function renderWater() {
     $("waterStatus").textContent = `Minimum hit. ${WATER_TARGET_OZ - waterOz} oz until target.`;
   } else {
     $("waterStatus").textContent = waterOz === WATER_TARGET_OZ
-      ? "120 oz target complete."
+      ? `${WATER_TARGET_OZ} oz target complete.`
       : `${waterOz - WATER_TARGET_OZ} oz above target.`;
   }
 }
