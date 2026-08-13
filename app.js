@@ -5,8 +5,9 @@ const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
 const SUPABASE_ROW_ID = "samuel-main";
 const SUPABASE_TABLE = "locked_os_state_v2";
-const STORAGE_KEY = "locked_os_daily_checklist_v12";
+const STORAGE_KEY = "locked_os_daily_checklist_v13";
 const OLD_STORAGE_KEYS = [
+  "locked_os_daily_checklist_v12",
   "locked_os_daily_checklist_v11",
   "locked_os_daily_checklist_v10",
   "locked_os_daily_checklist_v9",
@@ -21,9 +22,10 @@ const DAY_ROLLOVER_HOUR = 4;
 const WATER_MINIMUM_OZ = 100;
 const WATER_TARGET_OZ = 120;
 const WATER_MAX_OZ = 240;
+const LOOKS_MORNING_WATER_OZ = 16;
 const MS_PER_DAY = 86_400_000;
 
-// July 25, 2026 is Chest + side delts. That makes July 27, 2026 Arms.
+// Original rotation anchor. A manual gym override creates a newer anchor in state.meta.
 const WORKOUT_ROTATION_ANCHOR = "2026-07-25";
 const WORKOUT_ROTATION = [
   "Chest + side delts",
@@ -32,6 +34,11 @@ const WORKOUT_ROTATION = [
   "Legs",
   "Abs"
 ];
+
+const TRETINOIN_DAYS = new Set(["Monday", "Wednesday", "Saturday"]);
+const SHAVE_DAYS = new Set(["Monday", "Thursday"]);
+const MICRONEEDLE_DAYS = new Set(["Wednesday", "Sunday"]);
+const MASSETER_DAYS = new Set(["Tuesday", "Thursday", "Saturday"]);
 
 const hasSupabaseConfig =
   SUPABASE_URL.startsWith("https://") &&
@@ -77,39 +84,6 @@ const RANKS = [
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const MORNING_BASE = [
-  { id: "wake-water", title: "Wake up and chug 1 glass of water immediately", meta: "morningWater" },
-  { id: "lukewarm-shower", title: "Take a lukewarm shower" },
-  { id: "conditional-shampoo", title: "Shampoo only if hair is dirty; otherwise, skip shampoo" },
-  { id: "conditioner-soap", title: "Use conditioner and soap" },
-  { id: "cold-finish", title: "Finish the shower with cold water" },
-  { id: "get-dressed", title: "Get fully dressed and ready for the day" },
-  { id: "scrunch-hair", title: "Lightly scrunch hair with a towel" },
-  { id: "gua-sha", title: "Gua sha" },
-  { id: "face-rinse", title: "Wash face only if oily; otherwise, rinse with lukewarm water" },
-  { id: "vitamin-c", title: "Apply vitamin C serum" },
-  { id: "morning-moisturizer", title: "Apply moisturizer" },
-  { id: "sunscreen", title: "Apply sunscreen" },
-  { id: "morning-minoxidil", title: "Apply minoxidil to eyebrows" },
-  { id: "sea-salt-spray", title: "Apply sea salt spray to hair" },
-  { id: "deodorant", title: "Apply deodorant" },
-  { id: "curl-eyelashes", title: "Curl eyelashes" },
-  { id: "brush-eyebrows", title: "Brush eyebrows" },
-  { id: "morning-teeth", title: "Floss and brush teeth" }
-];
-
-const NIGHT_BASE = [
-  { id: "no-phone", title: "No phone" },
-  { id: "bed-nine", title: "Start getting ready for bed at 9:00 PM" },
-  { id: "hydrating-cleanser", title: "Wash face with hydrating facial cleanser" },
-  { id: "azelaic-acid", title: "Apply azelaic acid" },
-  { id: "night-moisturizer", title: "Apply moisturizer" },
-  { id: "night-minoxidil", title: "Apply minoxidil to eyebrows" },
-  { id: "eyelash-serum", title: "Apply peptide eyelash growth serum" },
-  { id: "night-teeth", title: "Floss and brush teeth" },
-  { id: "whitening-strips", title: "Use Crest whitening strips" }
-];
-
 const $ = id => document.getElementById(id);
 const loginScreen = $("loginScreen");
 const mainApp = $("mainApp");
@@ -122,6 +96,8 @@ let state = loadLocalState();
 let saveTimer = null;
 let toastTimer = null;
 let renderedDayKey = getTodayKey();
+let workoutDraftIndex = null;
+let workoutDraftDirty = false;
 
 function formatDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -155,32 +131,73 @@ function addDays(date, days) {
   return next;
 }
 
-function cloneTasks(tasks) {
-  return tasks.map(task => ({ ...task }));
-}
-
 function getRoutineDayName(dayKey = getTodayKey()) {
   return DAY_NAMES[keyToLocalDate(dayKey).getDay()];
 }
 
-function getWorkoutName(dayKey = getTodayKey()) {
-  const daysFromAnchor = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(WORKOUT_ROTATION_ANCHOR);
-  const index = ((daysFromAnchor % WORKOUT_ROTATION.length) + WORKOUT_ROTATION.length) % WORKOUT_ROTATION.length;
+function getDefaultWorkoutIndex(dayKey = getTodayKey()) {
+  const daysFromAnchor =
+    keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(WORKOUT_ROTATION_ANCHOR);
+  return ((daysFromAnchor % WORKOUT_ROTATION.length) + WORKOUT_ROTATION.length) % WORKOUT_ROTATION.length;
+}
+
+function getWorkoutIndex(dayKey = getTodayKey()) {
+  const anchorKey = state?.meta?.workoutRotationAnchorKey;
+  const anchorIndex = state?.meta?.workoutRotationAnchorIndex;
+
+  if (!isDateKey(anchorKey) || !Number.isInteger(anchorIndex)) {
+    return getDefaultWorkoutIndex(dayKey);
+  }
+
+  const daysFromAnchor = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(anchorKey);
+  const index = anchorIndex + daysFromAnchor;
+  return ((index % WORKOUT_ROTATION.length) + WORKOUT_ROTATION.length) % WORKOUT_ROTATION.length;
+}
+
+function formatWorkoutName(index, dayKey = getTodayKey()) {
   const baseWorkout = WORKOUT_ROTATION[index];
   const dayName = getRoutineDayName(dayKey);
   const hasNeck = dayName === "Monday" || dayName === "Friday";
   return hasNeck ? `${baseWorkout} + neck exercises` : baseWorkout;
 }
 
+function getWorkoutName(dayKey = getTodayKey()) {
+  return formatWorkoutName(getWorkoutIndex(dayKey), dayKey);
+}
+
 function makeMorning(dayName) {
-  const tasks = cloneTasks(MORNING_BASE);
-  if (dayName === "Thursday") {
-    const index = tasks.findIndex(task => task.id === "cold-finish");
-    tasks.splice(index + 1, 0, {
-      id: "shave-manage-brows",
-      title: "Shave face/manage eyebrows"
+  const tasks = [
+    {
+      id: "wake-water",
+      title: "Wake up and chug 2 glasses of water immediately",
+      meta: "morningWater"
+    },
+    { id: "lukewarm-shower", title: "Take a lukewarm shower" },
+    { id: "conditional-shampoo", title: "Shampoo only if hair is dirty" },
+    { id: "conditioner-soap", title: "Use conditioner and soap" }
+  ];
+
+  if (MASSETER_DAYS.has(dayName)) {
+    tasks.push({
+      id: "masseter-training",
+      title: "Train masseter muscles while in the shower"
     });
   }
+
+  tasks.push(
+    { id: "cold-finish", title: "Finish the shower with cold water" },
+    { id: "scrunch-hair", title: "Lightly scrunch hair with a towel" },
+    { id: "face-rinse", title: "Wash face only if oily" },
+    { id: "vitamin-c", title: "Apply vitamin C serum" },
+    { id: "morning-moisturizer", title: "Apply moisturizer" },
+    { id: "morning-minoxidil", title: "Apply minoxidil to eyebrows" },
+    { id: "sea-salt-spray", title: "Apply sea salt spray to hair" },
+    { id: "deodorant", title: "Apply deodorant" },
+    { id: "curl-eyelashes", title: "Curl eyelashes" },
+    { id: "brush-eyebrows", title: "Brush eyebrows" },
+    { id: "morning-teeth", title: "Floss and brush teeth" }
+  );
+
   return tasks;
 }
 
@@ -188,8 +205,7 @@ function makeMidday(dayKey) {
   const dayName = getRoutineDayName(dayKey);
   const tasks = [
     { id: "gym", title: `Gym: ${getWorkoutName(dayKey)}` },
-    { id: "creatine", title: "Take creatine" },
-    { id: "low-sodium-potassium", title: "Low sodium + high potassium" }
+    { id: "creatine", title: "Take creatine" }
   ];
 
   if (dayName === "Wednesday" || dayName === "Sunday") {
@@ -207,19 +223,33 @@ function makeMidday(dayKey) {
 }
 
 function makeNight(dayName) {
-  const tasks = cloneTasks(NIGHT_BASE);
-  const minoxidilIndex = tasks.findIndex(task => task.id === "night-minoxidil");
+  const tasks = [
+    { id: "no-phone", title: "No phone" },
+    { id: "bed-nine", title: "Start getting ready for bed at 9:00 PM" },
+    { id: "hydrating-cleanser", title: "Wash face with hydrating facial cleanser" }
+  ];
 
-  if (dayName === "Monday" || dayName === "Sunday") {
-    tasks.splice(minoxidilIndex, 0, {
-      id: "microneedle-eyebrows",
-      title: "Microneedle eyebrows"
-    });
+  if (SHAVE_DAYS.has(dayName)) {
+    tasks.push({ id: "shave-manage-brows", title: "Shave face and manage eyebrows" });
   }
 
-  if (["Tuesday", "Thursday", "Saturday"].includes(dayName)) {
-    tasks.push({ id: "masseter-training", title: "Train masseter muscles" });
+  if (MICRONEEDLE_DAYS.has(dayName)) {
+    tasks.push({ id: "microneedle-eyebrows", title: "Microneedling" });
   }
+
+  if (TRETINOIN_DAYS.has(dayName)) {
+    tasks.push({ id: "tretinoin", title: "Apply tretinoin" });
+  } else {
+    tasks.push({ id: "azelaic-acid", title: "Apply azelaic acid" });
+  }
+
+  tasks.push(
+    { id: "night-moisturizer", title: "Apply moisturizer" },
+    { id: "night-minoxidil", title: "Apply minoxidil to eyebrows" },
+    { id: "eyelash-serum", title: "Apply peptide eyelash growth serum" },
+    { id: "night-teeth", title: "Floss and brush teeth" },
+    { id: "whitening-strips", title: "Use Crest whitening strips" }
+  );
 
   if (dayName === "Sunday") {
     const whiteningIndex = tasks.findIndex(task => task.id === "whitening-strips");
@@ -368,7 +398,6 @@ function backfillMissingPastDays() {
   let changed = false;
 
   if (anchorKey && anchorKey < todayKey) {
-    // If the app was opened that day but nothing was checked, preserve it as a missed day.
     if (!state.days[anchorKey]) {
       state.days[anchorKey] = createDayRecord();
       changed = true;
@@ -410,6 +439,15 @@ function normalizeState() {
   }
   if (!state.adminOverrides || typeof state.adminOverrides !== "object") {
     state.adminOverrides = {};
+    changed = true;
+  }
+
+  if (
+    state.meta.workoutRotationAnchorIndex !== undefined &&
+    !Number.isInteger(state.meta.workoutRotationAnchorIndex)
+  ) {
+    delete state.meta.workoutRotationAnchorIndex;
+    delete state.meta.workoutRotationAnchorKey;
     changed = true;
   }
 
@@ -648,9 +686,9 @@ function setLooksStatus(task, status) {
     task.meta === "morningWater" &&
     status === "done" &&
     done.has(task.id) &&
-    day.waterOz < 8
+    day.waterOz < LOOKS_MORNING_WATER_OZ
   ) {
-    day.waterOz = 8;
+    day.waterOz = LOOKS_MORNING_WATER_OZ;
   }
 
   day.looksDone = [...done];
@@ -677,7 +715,6 @@ function createTaskRow(task, done, skipped, theme, onToggle, onSkip) {
       ${skipped ? '<div class="task-status">Skipped today</div>' : ""}
     </div>`;
   main.addEventListener("click", onToggle);
-
   row.appendChild(main);
 
   if (typeof onSkip === "function") {
@@ -848,6 +885,55 @@ function renderLooksTaskList(element, tasks, day) {
   }
 }
 
+function renderWorkoutPicker() {
+  const key = getTodayKey();
+  const currentIndex = getWorkoutIndex(key);
+
+  if (!workoutDraftDirty || !Number.isInteger(workoutDraftIndex)) {
+    workoutDraftIndex = currentIndex;
+  }
+
+  const previewName = $("workoutPreviewName");
+  const status = $("workoutRotationStatus");
+
+  if (previewName) {
+    previewName.textContent = formatWorkoutName(workoutDraftIndex, key);
+  }
+
+  if (status) {
+    status.textContent = workoutDraftIndex === currentIndex
+      ? "This is the workout currently set for today."
+      : "Previewing a different point in the rotation. Hit Set to use it.";
+  }
+}
+
+function shiftWorkoutDraft(amount) {
+  const current = Number.isInteger(workoutDraftIndex)
+    ? workoutDraftIndex
+    : getWorkoutIndex(getTodayKey());
+
+  workoutDraftIndex =
+    ((current + amount) % WORKOUT_ROTATION.length + WORKOUT_ROTATION.length) %
+    WORKOUT_ROTATION.length;
+  workoutDraftDirty = true;
+  renderWorkoutPicker();
+}
+
+function setWorkoutRotationForToday() {
+  if (!Number.isInteger(workoutDraftIndex)) {
+    workoutDraftIndex = getWorkoutIndex(getTodayKey());
+  }
+
+  state.meta = state.meta || {};
+  state.meta.workoutRotationAnchorKey = getTodayKey();
+  state.meta.workoutRotationAnchorIndex = workoutDraftIndex;
+  workoutDraftDirty = false;
+
+  saveState();
+  render();
+  toast(`Gym rotation set to ${WORKOUT_ROTATION[workoutDraftIndex]}.`);
+}
+
 function renderLooks() {
   const key = getTodayKey();
   const day = ensureDay(key);
@@ -881,6 +967,7 @@ function renderLooks() {
     `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
   $("workoutName").textContent = getWorkoutName(key);
 
+  renderWorkoutPicker();
   renderWater();
 }
 
@@ -1176,6 +1263,10 @@ $("waterCustomInput").addEventListener("keydown", event => {
   if (event.key === "Enter") $("addCustomWaterBtn").click();
 });
 
+$("workoutPrevBtn")?.addEventListener("click", () => shiftWorkoutDraft(-1));
+$("workoutNextBtn")?.addEventListener("click", () => shiftWorkoutDraft(1));
+$("setWorkoutBtn")?.addEventListener("click", setWorkoutRotationForToday);
+
 $("adminSetCurrentStreakBtn").addEventListener("click", setCurrentStreakCorrection);
 $("adminClearCurrentStreakBtn").addEventListener("click", clearCurrentStreakCorrection);
 $("adminSaveMissedCountsBtn").addEventListener("click", saveMissedOverrides);
@@ -1194,6 +1285,7 @@ setInterval(() => {
   ) {
     normalizeState();
     saveState();
+    workoutDraftDirty = false;
     render();
   }
 }, 60_000);

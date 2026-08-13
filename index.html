@@ -114,7 +114,7 @@
         <div class="layout">
           <div>
             <section class="card section"><div class="section-header"><h3>Morning</h3><p>Hair, skin, grooming, and dental routine.</p></div><div id="looksMorningList" class="checklist"></div></section>
-            <section class="card section"><div class="section-header"><h3>Midday</h3><p>Training, nutrition basics, creatine, and hydration.</p></div><div id="looksMiddayList" class="checklist"></div></section>
+            <section class="card section"><div class="section-header"><h3>Midday</h3><p>Training, creatine, and hydration.</p></div><div id="looksMiddayList" class="checklist"></div></section>
             <section class="card section"><div class="section-header"><h3>Night</h3><p>Wind down and complete the correct rotating treatment tasks.</p></div><div id="looksNightList" class="checklist"></div></section>
           </div>
           <aside class="mini-side">
@@ -132,7 +132,20 @@
               </div>
               <div class="water-custom-row"><input id="waterCustomInput" class="water-input" type="number" min="1" max="240" inputmode="numeric" placeholder="Custom ounces" /><button id="addCustomWaterBtn" class="btn blue" type="button">Add</button></div>
             </section>
-            <section class="card workout-card"><div class="panel-title"><h3>Today's gym</h3></div><h2 id="workoutName" class="workout-name">Loading…</h2></section>
+            <section class="card workout-card">
+              <div class="panel-title"><h3>Today's gym</h3></div>
+              <h2 id="workoutName" class="workout-name">Loading…</h2>
+              <div class="workout-rotation">
+                <p class="workout-rotation-label">Change rotation position</p>
+                <div id="workoutPreviewName" class="workout-preview">Loading…</div>
+                <div class="workout-rotation-controls">
+                  <button id="workoutPrevBtn" class="workout-step-btn" type="button" aria-label="Previous workout">←</button>
+                  <button id="setWorkoutBtn" class="btn blue compact" type="button">Set this workout</button>
+                  <button id="workoutNextBtn" class="workout-step-btn" type="button" aria-label="Next workout">→</button>
+                </div>
+                <p id="workoutRotationStatus" class="workout-rotation-status">Choose a workout and hit Set.</p>
+              </div>
+            </section>
           </aside>
         </div>
       </section>
