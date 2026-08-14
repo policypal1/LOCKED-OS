@@ -218,7 +218,6 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 .workout-rotation-status { margin: 9px 0 0; color: var(--muted); font-size: .8rem; font-weight: 750; line-height: 1.4; }
 #setWorkoutBtn { width: 100%; }
 
-
 .tretinoin-admin-grid { grid-template-columns: minmax(0, 680px); }
 .tretinoin-admin-card { background: linear-gradient(145deg, rgba(255,250,241,.92), rgba(37,132,184,.06)); }
 .tret-frequency-control {
@@ -240,13 +239,52 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 .tret-day-pill { display: inline-flex; min-height: 32px; align-items: center; padding: 0 12px; border-radius: 999px; background: var(--blue-soft); color: var(--blue-dark); font-size: .8rem; font-weight: 950; }
 .tret-admin-note { margin-top: 14px !important; font-size: .9rem; }
 
+/* Weight tracker */
+.weight-grid { display: grid; grid-template-columns: minmax(280px,.72fr) minmax(0,1.28fr); gap: 18px; align-items: start; }
+.weight-log-card, .weight-chart-card, .weight-history-card { padding: 22px; }
+.weight-log-card { background: linear-gradient(145deg, rgba(255,250,241,.92), rgba(37,132,184,.06)); }
+.weight-log-card h2, .weight-chart-card h2 { margin: 0; font-size: clamp(1.7rem,4vw,2.5rem); letter-spacing: -.04em; line-height: 1.05; }
+.weight-log-card > p:not(.eyebrow), .weight-save-status { color: var(--muted); font-weight: 750; line-height: 1.5; }
+.weight-log-card > p:not(.eyebrow) { margin: 10px 0 0; }
+.weight-log-form { display: grid; gap: 12px; margin-top: 20px; }
+.weight-field { display: grid; gap: 7px; }
+.weight-field > span { color: var(--muted); font-size: .78rem; font-weight: 950; text-transform: uppercase; letter-spacing: .08em; }
+.weight-input { min-height: 48px; width: 100%; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.62); padding: 0 14px; color: var(--text); font-weight: 900; outline: none; }
+.weight-input:focus { border-color: rgba(37,132,184,.55); box-shadow: 0 0 0 4px var(--blue-soft); }
+.weight-save-btn { width: 100%; margin-top: 2px; }
+.weight-save-status { min-height: 22px; margin: 10px 0 0; font-size: .86rem; }
+.weight-save-status.good { color: var(--green-dark); }
+.weight-save-status.bad { color: var(--red); }
+.weight-chart-card { grid-column: 2; grid-row: 1 / span 2; }
+.weight-panel-title { align-items: flex-start; }
+.weight-panel-title .eyebrow { margin-bottom: 6px; }
+.weight-range-tabs { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
+.weight-range-btn { min-height: 36px; padding: 0 13px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.5); color: var(--muted); font-size: .8rem; font-weight: 950; }
+.weight-range-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+.weight-chart { min-height: 310px; border: 1px solid var(--line); border-radius: 20px; background: rgba(255,255,255,.44); overflow: hidden; }
+.weight-chart svg { display: block; width: 100%; height: 310px; }
+.weight-chart-empty { min-height: 310px; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); font-weight: 850; line-height: 1.45; }
+.weight-chart-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 12px; }
+.weight-chart-stats > div { padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.4); }
+.weight-chart-stats span { display: block; color: var(--muted); font-size: .72rem; font-weight: 950; text-transform: uppercase; letter-spacing: .07em; }
+.weight-chart-stats strong { display: block; margin-top: 5px; font-size: 1.2rem; }
+.weight-history-list { display: grid; gap: 8px; }
+.weight-history-card { grid-column: 1; }
+.weight-history-empty { color: var(--muted); font-weight: 800; line-height: 1.45; }
+.weight-history-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.44); }
+.weight-history-date { font-weight: 900; }
+.weight-history-value { font-weight: 950; color: var(--blue-dark); white-space: nowrap; }
+.weight-delete-btn { width: 34px; height: 34px; border-radius: 11px; background: var(--red-soft); color: var(--red); font-weight: 950; }
+.weight-delete-btn:hover { background: rgba(182,66,66,.16); }
+
 @media (max-width: 980px) { .game-grid { grid-template-columns: repeat(2,1fr); } }
 @media (max-width: 860px) {
   body { padding: 14px; }
   .top { align-items: stretch; flex-direction: column; }
   .tabs { width: 100%; overflow-x: auto; border-radius: 18px; }
   .tab { flex: 1; }
-  .layout, .game-hero, .looks-hero, .review-grid, .admin-grid { grid-template-columns: 1fr; }
+  .layout, .game-hero, .looks-hero, .review-grid, .admin-grid, .weight-grid { grid-template-columns: 1fr; }
+  .weight-chart-card, .weight-history-card { grid-column: 1; grid-row: auto; }
   .mini-side { position: static; }
   .summary { grid-template-columns: 1fr; text-align: left; }
   .phone-lock { align-items: flex-start; flex-direction: column; }
@@ -260,8 +298,11 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
   .water-custom-row { grid-template-columns: 1fr; }
   .task-row { grid-template-columns: minmax(0,1fr) 40px; }
   .task-menu summary { width: 40px; }
+  .weight-chart-stats { grid-template-columns: 1fr; }
+  .weight-history-row { grid-template-columns: 1fr auto; }
+  .weight-history-value { grid-column: 1; }
+  .weight-delete-btn { grid-column: 2; grid-row: 1 / span 2; }
 }
-
 
 /* Simplified checklist day streak */
 .day-streak-card { text-align: left; }

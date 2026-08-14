@@ -31,6 +31,7 @@
         <nav class="tabs" aria-label="App tabs">
           <button class="tab active" data-tab="checklistPage" type="button">Checklist</button>
           <button class="tab" data-tab="looksPage" type="button">Looksmaxxing</button>
+          <button class="tab" data-tab="weightPage" type="button">Weight</button>
           <button class="tab admin-tab" data-tab="adminPage" type="button">Admin</button>
         </nav>
       </header>
@@ -140,6 +141,59 @@
               </div>
             </section>
           </aside>
+        </div>
+      </section>
+
+      <section id="weightPage" class="page">
+        <div class="weight-grid">
+          <section class="card weight-log-card">
+            <p class="eyebrow blue">Daily log</p>
+            <h2>Weight tracker</h2>
+            <p>Log your weight once per day. Logging the same date again updates that day's entry.</p>
+
+            <div class="weight-log-form">
+              <label class="weight-field">
+                <span>Date</span>
+                <input id="weightDateInput" class="weight-input" type="date" />
+              </label>
+              <label class="weight-field">
+                <span>Weight (lb)</span>
+                <input id="weightValueInput" class="weight-input" type="number" min="50" max="500" step="0.1" inputmode="decimal" placeholder="165.0" />
+              </label>
+              <button id="saveWeightBtn" class="btn blue weight-save-btn" type="button">Log weight</button>
+            </div>
+            <p id="weightSaveStatus" class="weight-save-status" aria-live="polite"></p>
+          </section>
+
+          <section class="card weight-chart-card">
+            <div class="panel-title weight-panel-title">
+              <div>
+                <p class="eyebrow blue">Progress</p>
+                <h2>Weight graph</h2>
+              </div>
+              <span id="weightLatestBadge" class="badge blue">No entries</span>
+            </div>
+
+            <div class="weight-range-tabs" aria-label="Weight graph time range">
+              <button class="weight-range-btn" type="button" data-weight-range="7">7D</button>
+              <button class="weight-range-btn active" type="button" data-weight-range="30">30D</button>
+              <button class="weight-range-btn" type="button" data-weight-range="90">90D</button>
+              <button class="weight-range-btn" type="button" data-weight-range="365">1Y</button>
+              <button class="weight-range-btn" type="button" data-weight-range="all">All</button>
+            </div>
+
+            <div id="weightChart" class="weight-chart" role="img" aria-label="Weight progress chart"></div>
+            <div class="weight-chart-stats">
+              <div><span>First</span><strong id="weightFirstValue">—</strong></div>
+              <div><span>Latest</span><strong id="weightLatestValue">—</strong></div>
+              <div><span>Change</span><strong id="weightChangeValue">—</strong></div>
+            </div>
+          </section>
+
+          <section class="card weight-history-card">
+            <div class="panel-title"><h3>Recent entries</h3></div>
+            <div id="weightHistoryList" class="weight-history-list"></div>
+          </section>
         </div>
       </section>
 

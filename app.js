@@ -1,8 +1,8 @@
 "use strict";
 
 const PASSWORD = "2009";
-const SUPABASE_URL = "https://gadhelbceimeyhxvelsg.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_4tfNyod3-cr5Qz_IJYbiPw_qqIG7ECI";
+const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
 const SUPABASE_ROW_ID = "samuel-main";
 const SUPABASE_TABLE = "locked_os_state_v2";
 const STORAGE_KEY = "locked_os_daily_checklist_v15";
@@ -88,7 +88,6 @@ const LEGACY_TASK_ID_MAP = {
   "no-shampoo": "conditional-shampoo"
 };
 
-
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const $ = id => document.getElementById(id);
@@ -105,6 +104,7 @@ let toastTimer = null;
 let renderedDayKey = getTodayKey();
 let workoutDraftIndex = null;
 let workoutDraftDirty = false;
+let weightRange = "30";
 
 function formatDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -246,6 +246,7 @@ function makeMidday(dayKey) {
 
 function makeNight(dayName, dayKey) {
   const tasks = [
+    { id: "whitening-strips", title: "Use Crest 3D White Strips" },
     { id: "no-phone", title: "No phone" },
     { id: "bed-nine", title: "Start getting ready for bed at 9:00 PM" },
     { id: "hydrating-cleanser", title: "Wash face with hydrating facial cleanser" }
@@ -267,6 +268,7 @@ function makeNight(dayName, dayKey) {
 
   tasks.push(
     { id: "night-moisturizer", title: "Apply moisturizer" },
+    { id: "night-eyelash-serum", title: "Apply peptide eyelash growth serum" },
     { id: "night-minoxidil", title: "Apply minoxidil to eyebrows" },
     { id: "night-teeth", title: "Floss and brush teeth" }
   );
@@ -277,8 +279,6 @@ function makeNight(dayName, dayKey) {
       ? "Scrub/exfoliate lips and apply Vaseline"
       : "Brush lips and apply Vaseline"
   });
-
-  tasks.push({ id: "whitening-strips", title: "Use Crest whitening strips" });
 
   return tasks;
 }
@@ -331,6 +331,7 @@ function createDayRecord() {
 function createEmptyState() {
   return {
     days: {},
+    weights: {},
     meta: { lastOpenedDayKey: null, tretinoinScheduleChanges: [] },
     adminOverrides: {
       streakOffset: null,
@@ -402,6 +403,19 @@ function normalizeDay(dayKey, original = {}) {
   return normalized;
 }
 
+function normalizeWeights(original) {
+  const normalized = {};
+  if (!original || typeof original !== "object" || Array.isArray(original)) return normalized;
+
+  for (const [dayKey, rawWeight] of Object.entries(original)) {
+    const weight = Number(rawWeight);
+    if (!isDateKey(dayKey) || !Number.isFinite(weight) || weight < 50 || weight > 500) continue;
+    normalized[dayKey] = Math.round(weight * 10) / 10;
+  }
+
+  return normalized;
+}
+
 function backfillMissingPastDays() {
   const todayKey = getTodayKey();
   const todayDate = keyToLocalDate(todayKey);
@@ -454,6 +468,15 @@ function normalizeState() {
   }
   if (!state.meta || typeof state.meta !== "object") {
     state.meta = { lastOpenedDayKey: state.lastOpenedDayKey || null, tretinoinScheduleChanges: [] };
+    changed = true;
+  }
+
+  const normalizedWeights = normalizeWeights(state.weights);
+  if (JSON.stringify(state.weights || {}) !== JSON.stringify(normalizedWeights)) {
+    state.weights = normalizedWeights;
+    changed = true;
+  } else if (!state.weights || typeof state.weights !== "object" || Array.isArray(state.weights)) {
+    state.weights = {};
     changed = true;
   }
 
@@ -562,6 +585,10 @@ function mergeStateSnapshots(remoteState, localState) {
       ...(remote.days || {}),
       ...(local.days || {})
     },
+    weights: {
+      ...(remote.weights || {}),
+      ...(local.weights || {})
+    },
     meta: {
       ...(remote.meta || {}),
       ...(local.meta || {})
@@ -580,7 +607,7 @@ function saveState() {
 
 function queueSupabaseSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveSupabaseState, 450);
+  saveTimer = setTimeout(saveSupabaseState, 250);
 }
 
 async function loadSupabaseState() {
@@ -607,18 +634,16 @@ async function loadSupabaseState() {
     normalizeState();
     saveLocalState();
     render();
-    await saveSupabaseState();
-  } else {
-    await saveSupabaseState();
   }
 
-  syncStatus.textContent = "Synced with Supabase.";
+  const saved = await saveSupabaseState();
+  if (saved) syncStatus.textContent = "Synced with Supabase.";
 }
 
 async function saveSupabaseState() {
   if (!supabaseClient) {
     syncStatus.textContent = "Saved locally. Supabase is not connected.";
-    return;
+    return false;
   }
 
   syncStatus.textContent = "Saving…";
@@ -631,10 +656,11 @@ async function saveSupabaseState() {
   if (error) {
     console.error(error);
     syncStatus.textContent = "Supabase save failed. Saved locally only.";
-    return;
+    return false;
   }
 
   syncStatus.textContent = "Saved to Supabase.";
+  return true;
 }
 
 function calculateStreak(completedField) {
@@ -987,6 +1013,211 @@ function setWaterOz(value) {
   render();
 }
 
+function getWeightEntries() {
+  return Object.entries(state.weights || {})
+    .filter(([dayKey, weight]) => isDateKey(dayKey) && Number.isFinite(Number(weight)))
+    .map(([dayKey, weight]) => ({ dayKey, weight: Number(weight) }))
+    .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+}
+
+function getVisibleWeightEntries() {
+  const entries = getWeightEntries();
+  if (weightRange === "all") return entries;
+
+  const days = Number(weightRange);
+  if (!Number.isFinite(days) || days <= 0) return entries;
+
+  const cutoff = addDays(keyToLocalDate(getTodayKey()), -(days - 1));
+  const cutoffKey = formatDateKey(cutoff);
+  return entries.filter(entry => entry.dayKey >= cutoffKey);
+}
+
+function formatWeightDate(dayKey, options = {}) {
+  return keyToLocalDate(dayKey).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...options
+  });
+}
+
+function setWeightSaveStatus(message, type = "") {
+  const element = $("weightSaveStatus");
+  if (!element) return;
+  element.textContent = message;
+  element.classList.toggle("good", type === "good");
+  element.classList.toggle("bad", type === "bad");
+}
+
+function saveWeightEntry() {
+  const dateInput = $("weightDateInput");
+  const valueInput = $("weightValueInput");
+  const dayKey = dateInput.value;
+  const weight = Number(valueInput.value);
+
+  if (!isDateKey(dayKey)) {
+    setWeightSaveStatus("Choose a valid date.", "bad");
+    dateInput.focus();
+    return;
+  }
+
+  if (!Number.isFinite(weight) || weight < 50 || weight > 500) {
+    setWeightSaveStatus("Enter a weight from 50 to 500 lb.", "bad");
+    valueInput.focus();
+    return;
+  }
+
+  state.weights = state.weights || {};
+  state.weights[dayKey] = Math.round(weight * 10) / 10;
+  saveState();
+  renderWeightTracker();
+  valueInput.value = "";
+  setWeightSaveStatus(`Saved ${state.weights[dayKey].toFixed(1)} lb for ${formatWeightDate(dayKey)}.`, "good");
+  toast("Weight saved.");
+}
+
+function deleteWeightEntry(dayKey) {
+  if (!state.weights?.[dayKey]) return;
+  delete state.weights[dayKey];
+  saveState();
+  renderWeightTracker();
+  setWeightSaveStatus(`Removed the entry for ${formatWeightDate(dayKey)}.`, "good");
+}
+
+function renderWeightHistory(entries) {
+  const list = $("weightHistoryList");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const recent = [...entries].reverse().slice(0, 10);
+  if (!recent.length) {
+    list.innerHTML = '<div class="weight-history-empty">No weight entries yet.</div>';
+    return;
+  }
+
+  recent.forEach(entry => {
+    const row = document.createElement("div");
+    row.className = "weight-history-row";
+
+    const date = document.createElement("div");
+    date.className = "weight-history-date";
+    date.textContent = formatWeightDate(entry.dayKey, { year: "numeric" });
+
+    const value = document.createElement("div");
+    value.className = "weight-history-value";
+    value.textContent = `${entry.weight.toFixed(1)} lb`;
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "weight-delete-btn";
+    remove.setAttribute("aria-label", `Delete weight for ${entry.dayKey}`);
+    remove.textContent = "×";
+    remove.addEventListener("click", () => deleteWeightEntry(entry.dayKey));
+
+    row.append(date, value, remove);
+    list.appendChild(row);
+  });
+}
+
+function renderWeightChart(entries) {
+  const chart = $("weightChart");
+  if (!chart) return;
+
+  if (!entries.length) {
+    chart.innerHTML = '<div class="weight-chart-empty">No entries in this time range yet.</div>';
+    return;
+  }
+
+  const width = 800;
+  const height = 310;
+  const padding = { top: 24, right: 28, bottom: 42, left: 56 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const weights = entries.map(entry => entry.weight);
+  const rawMin = Math.min(...weights);
+  const rawMax = Math.max(...weights);
+  const spread = rawMax - rawMin;
+  const pad = spread === 0 ? 2 : Math.max(1, spread * 0.18);
+  const minWeight = Math.floor((rawMin - pad) * 2) / 2;
+  const maxWeight = Math.ceil((rawMax + pad) * 2) / 2;
+  const weightSpan = Math.max(1, maxWeight - minWeight);
+
+  const xForIndex = index => entries.length === 1
+    ? padding.left + plotWidth / 2
+    : padding.left + (index / (entries.length - 1)) * plotWidth;
+  const yForWeight = weight =>
+    padding.top + ((maxWeight - weight) / weightSpan) * plotHeight;
+
+  const gridLines = [0, 0.5, 1].map(ratio => {
+    const y = padding.top + ratio * plotHeight;
+    const value = maxWeight - ratio * weightSpan;
+    return `
+      <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(42,30,18,.10)" stroke-width="1" />
+      <text x="${padding.left - 10}" y="${y + 4}" text-anchor="end" fill="#7a6b59" font-size="12" font-weight="700">${value.toFixed(1)}</text>`;
+  }).join("");
+
+  const points = entries
+    .map((entry, index) => `${xForIndex(index)},${yForWeight(entry.weight)}`)
+    .join(" ");
+
+  const circles = entries.map((entry, index) => `
+    <circle cx="${xForIndex(index)}" cy="${yForWeight(entry.weight)}" r="4.5" fill="#2584b8" stroke="#fffaf1" stroke-width="2">
+      <title>${entry.dayKey}: ${entry.weight.toFixed(1)} lb</title>
+    </circle>`).join("");
+
+  const first = entries[0];
+  const last = entries.at(-1);
+  const firstX = xForIndex(0);
+  const lastX = xForIndex(entries.length - 1);
+
+  chart.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+      ${gridLines}
+      ${entries.length > 1 ? `<polyline points="${points}" fill="none" stroke="#2584b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />` : ""}
+      ${circles}
+      <text x="${firstX}" y="${height - 16}" text-anchor="${entries.length === 1 ? "middle" : "start"}" fill="#7a6b59" font-size="12" font-weight="700">${escapeHtml(formatWeightDate(first.dayKey))}</text>
+      ${entries.length > 1 ? `<text x="${lastX}" y="${height - 16}" text-anchor="end" fill="#7a6b59" font-size="12" font-weight="700">${escapeHtml(formatWeightDate(last.dayKey))}</text>` : ""}
+    </svg>`;
+}
+
+function renderWeightTracker() {
+  const allEntries = getWeightEntries();
+  const visibleEntries = getVisibleWeightEntries();
+  const dateInput = $("weightDateInput");
+
+  if (dateInput && !dateInput.value) dateInput.value = getTodayKey();
+
+  document.querySelectorAll(".weight-range-btn").forEach(button => {
+    button.classList.toggle("active", button.dataset.weightRange === weightRange);
+  });
+
+  renderWeightChart(visibleEntries);
+  renderWeightHistory(allEntries);
+
+  const latestBadge = $("weightLatestBadge");
+  const firstValue = $("weightFirstValue");
+  const latestValue = $("weightLatestValue");
+  const changeValue = $("weightChangeValue");
+
+  if (!visibleEntries.length) {
+    if (latestBadge) latestBadge.textContent = allEntries.length
+      ? `${allEntries.at(-1).weight.toFixed(1)} lb latest`
+      : "No entries";
+    if (firstValue) firstValue.textContent = "—";
+    if (latestValue) latestValue.textContent = "—";
+    if (changeValue) changeValue.textContent = "—";
+    return;
+  }
+
+  const first = visibleEntries[0];
+  const latest = visibleEntries.at(-1);
+  const change = Math.round((latest.weight - first.weight) * 10) / 10;
+
+  if (latestBadge) latestBadge.textContent = `${latest.weight.toFixed(1)} lb latest`;
+  if (firstValue) firstValue.textContent = `${first.weight.toFixed(1)} lb`;
+  if (latestValue) latestValue.textContent = `${latest.weight.toFixed(1)} lb`;
+  if (changeValue) changeValue.textContent = `${change > 0 ? "+" : ""}${change.toFixed(1)} lb`;
+}
+
 function renderAdmin() {
   const frequency = getTretinoinFrequency();
   const days = getTretinoinDays();
@@ -1068,6 +1299,7 @@ function render() {
   renderPhoneLock();
   renderDayStreak();
   renderLooks();
+  renderWeightTracker();
   renderAdmin();
 }
 
@@ -1145,11 +1377,32 @@ $("setWorkoutBtn")?.addEventListener("click", setWorkoutRotationForToday);
 $("tretinoinFrequencyDown")?.addEventListener("click", () => changeTretinoinFrequency(-1));
 $("tretinoinFrequencyUp")?.addEventListener("click", () => changeTretinoinFrequency(1));
 
+$("saveWeightBtn")?.addEventListener("click", saveWeightEntry);
+$("weightValueInput")?.addEventListener("keydown", event => {
+  if (event.key === "Enter") saveWeightEntry();
+});
+document.querySelectorAll(".weight-range-btn").forEach(button => {
+  button.addEventListener("click", () => {
+    weightRange = button.dataset.weightRange || "30";
+    renderWeightTracker();
+  });
+});
+
 document.addEventListener("click", event => {
   document.querySelectorAll("details.task-menu[open]").forEach(menu => {
     if (!menu.contains(event.target)) menu.open = false;
   });
 });
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    saveSupabaseState();
+  }
+});
+
+window.addEventListener("online", () => queueSupabaseSave());
 
 setInterval(() => {
   if (
