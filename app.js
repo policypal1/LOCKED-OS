@@ -5,8 +5,9 @@ const SUPABASE_URL = "https://gadhelbceimeyhxvelsg.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_4tfNyod3-cr5Qz_IJYbiPw_qqIG7ECI";
 const SUPABASE_ROW_ID = "samuel-main";
 const SUPABASE_TABLE = "locked_os_state_v2";
-const STORAGE_KEY = "locked_os_daily_checklist_v14";
+const STORAGE_KEY = "locked_os_daily_checklist_v15";
 const OLD_STORAGE_KEYS = [
+  "locked_os_daily_checklist_v14",
   "locked_os_daily_checklist_v13",
   "locked_os_daily_checklist_v12",
   "locked_os_daily_checklist_v11",
@@ -36,7 +37,16 @@ const WORKOUT_ROTATION = [
   "Abs"
 ];
 
-const TRETINOIN_DAYS = new Set(["Monday", "Wednesday", "Saturday"]);
+const DEFAULT_TRETINOIN_FREQUENCY = 3;
+const TRETINOIN_SCHEDULES = {
+  1: ["Monday"],
+  2: ["Monday", "Thursday"],
+  3: ["Monday", "Wednesday", "Saturday"],
+  4: ["Monday", "Wednesday", "Thursday", "Saturday"],
+  5: ["Monday", "Wednesday", "Thursday", "Saturday", "Sunday"],
+  6: ["Monday", "Tuesday", "Wednesday", "Thursday", "Saturday", "Sunday"],
+  7: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+};
 const SHAVE_DAYS = new Set(["Monday", "Thursday"]);
 const MICRONEEDLE_DAYS = new Set(["Wednesday", "Sunday"]);
 const MASSETER_DAYS = new Set(["Tuesday", "Thursday", "Saturday"]);
@@ -159,6 +169,23 @@ function getWorkoutName(dayKey = getTodayKey()) {
   return formatWorkoutName(getWorkoutIndex(dayKey), dayKey);
 }
 
+function getTretinoinFrequency(dayKey = getTodayKey()) {
+  const changes = Array.isArray(state?.meta?.tretinoinScheduleChanges)
+    ? state.meta.tretinoinScheduleChanges
+    : [];
+
+  let frequency = DEFAULT_TRETINOIN_FREQUENCY;
+  for (const change of changes) {
+    if (change.effectiveDayKey <= dayKey) frequency = change.frequency;
+    else break;
+  }
+  return frequency;
+}
+
+function getTretinoinDays(dayKey = getTodayKey()) {
+  return TRETINOIN_SCHEDULES[getTretinoinFrequency(dayKey)] || TRETINOIN_SCHEDULES[DEFAULT_TRETINOIN_FREQUENCY];
+}
+
 function makeMorning(dayName) {
   const tasks = [
     {
@@ -184,6 +211,7 @@ function makeMorning(dayName) {
     { id: "face-rinse", title: "Wash face only if oily" },
     { id: "vitamin-c", title: "Apply vitamin C serum" },
     { id: "morning-moisturizer", title: "Apply moisturizer" },
+    { id: "eyelash-serum", title: "Apply peptide eyelash growth serum" },
     { id: "morning-minoxidil", title: "Apply minoxidil to eyebrows" },
     { id: "sea-salt-spray", title: "Apply sea salt spray to hair" },
     { id: "deodorant", title: "Apply deodorant" },
@@ -216,7 +244,7 @@ function makeMidday(dayKey) {
   return tasks;
 }
 
-function makeNight(dayName) {
+function makeNight(dayName, dayKey) {
   const tasks = [
     { id: "no-phone", title: "No phone" },
     { id: "bed-nine", title: "Start getting ready for bed at 9:00 PM" },
@@ -231,7 +259,7 @@ function makeNight(dayName) {
     tasks.push({ id: "microneedle-eyebrows", title: "Microneedling" });
   }
 
-  if (TRETINOIN_DAYS.has(dayName)) {
+  if (getTretinoinDays(dayKey).includes(dayName)) {
     tasks.push({ id: "tretinoin", title: "Apply tretinoin" });
   } else {
     tasks.push({ id: "azelaic-acid", title: "Apply azelaic acid" });
@@ -240,7 +268,6 @@ function makeNight(dayName) {
   tasks.push(
     { id: "night-moisturizer", title: "Apply moisturizer" },
     { id: "night-minoxidil", title: "Apply minoxidil to eyebrows" },
-    { id: "eyelash-serum", title: "Apply peptide eyelash growth serum" },
     { id: "night-teeth", title: "Floss and brush teeth" }
   );
 
@@ -261,7 +288,7 @@ function getLooksRoutine(dayKey = getTodayKey()) {
   return {
     morning: makeMorning(dayName),
     midday: makeMidday(dayKey),
-    night: makeNight(dayName)
+    night: makeNight(dayName, dayKey)
   };
 }
 
@@ -304,7 +331,7 @@ function createDayRecord() {
 function createEmptyState() {
   return {
     days: {},
-    meta: { lastOpenedDayKey: null },
+    meta: { lastOpenedDayKey: null, tretinoinScheduleChanges: [] },
     adminOverrides: {
       streakOffset: null,
       currentStreak: null,
@@ -426,9 +453,38 @@ function normalizeState() {
     changed = true;
   }
   if (!state.meta || typeof state.meta !== "object") {
-    state.meta = { lastOpenedDayKey: state.lastOpenedDayKey || null };
+    state.meta = { lastOpenedDayKey: state.lastOpenedDayKey || null, tretinoinScheduleChanges: [] };
     changed = true;
   }
+
+  const originalTretChanges = Array.isArray(state.meta.tretinoinScheduleChanges)
+    ? state.meta.tretinoinScheduleChanges
+    : [];
+  const tretByDay = new Map();
+  for (const change of originalTretChanges) {
+    if (
+      change &&
+      isDateKey(change.effectiveDayKey) &&
+      Number.isInteger(change.frequency) &&
+      change.frequency >= 1 &&
+      change.frequency <= 7
+    ) {
+      tretByDay.set(change.effectiveDayKey, {
+        effectiveDayKey: change.effectiveDayKey,
+        frequency: change.frequency
+      });
+    }
+  }
+  const normalizedTretChanges = [...tretByDay.values()]
+    .sort((a, b) => a.effectiveDayKey.localeCompare(b.effectiveDayKey));
+  if (JSON.stringify(originalTretChanges) !== JSON.stringify(normalizedTretChanges)) {
+    state.meta.tretinoinScheduleChanges = normalizedTretChanges;
+    changed = true;
+  } else if (!Array.isArray(state.meta.tretinoinScheduleChanges)) {
+    state.meta.tretinoinScheduleChanges = [];
+    changed = true;
+  }
+
   if (!state.adminOverrides || typeof state.adminOverrides !== "object") {
     state.adminOverrides = {};
     changed = true;
@@ -606,10 +662,7 @@ function calculateLooksStreak() {
 }
 
 function getDisplayedCurrentStreak() {
-  const offset = Number.isInteger(state.adminOverrides?.streakOffset)
-    ? state.adminOverrides.streakOffset
-    : 0;
-  return Math.max(0, calculateCurrentStreak() + offset);
+  return calculateCurrentStreak();
 }
 
 function calculateTaskStreak(taskId) {
@@ -934,126 +987,60 @@ function setWaterOz(value) {
   render();
 }
 
-function getReviewDayKeys() {
-  const active = getTodayKey();
-  return Object.keys(state.days)
-    .filter(key => {
-      if (!isDateKey(key) || key > active) return false;
-      if (key < active) return true;
-      return state.days[key]?.completed === true;
-    })
-    .sort()
-    .slice(-7);
-}
-
-function getCalculatedMissedCounts() {
-  const counts = Object.fromEntries(TASKS.map(task => [task.id, 0]));
-
-  for (const key of getReviewDayKeys()) {
-    const done = new Set(ensureDay(key).done);
-    for (const task of TASKS) {
-      if (!done.has(task.id)) counts[task.id] += 1;
-    }
-  }
-
-  return counts;
-}
-
-function getDisplayedMissedCounts() {
-  const override = state.adminOverrides?.missedCounts;
-  if (!override || typeof override !== "object") {
-    return getCalculatedMissedCounts();
-  }
-
-  return Object.fromEntries(
-    TASKS.map(task => {
-      const value = Number(override[task.id]);
-      return [task.id, Number.isInteger(value) ? Math.max(0, value) : 0];
-    })
-  );
-}
-
 function renderAdmin() {
-  const calculated = calculateCurrentStreak();
-  const displayed = getDisplayedCurrentStreak();
-  const offset = Number.isInteger(state.adminOverrides?.streakOffset)
-    ? state.adminOverrides.streakOffset
-    : 0;
+  const frequency = getTretinoinFrequency();
+  const days = getTretinoinDays();
+  const value = $("tretinoinFrequencyValue");
+  const label = $("tretinoinFrequencyLabel");
+  const dayList = $("tretinoinDaysList");
+  const decrease = $("tretinoinFrequencyDown");
+  const increase = $("tretinoinFrequencyUp");
 
-  $("adminCurrentInfo").textContent = offset
-    ? `Calculated: ${calculated}. Correction: ${offset > 0 ? "+" : ""}${offset}. Displayed: ${displayed}. It will still update when today resolves.`
-    : `Current streak is calculated from completed main-checklist days: ${calculated}.`;
+  if (!value || !label || !dayList || !decrease || !increase) return;
 
-  $("adminCurrentStreakInput").placeholder = `Current: ${displayed}`;
-  $("missedOverrideBadge").textContent = state.adminOverrides?.missedCounts
-    ? "Edited"
-    : "Calculated";
+  value.textContent = `${frequency}×`;
+  label.textContent = frequency === 7
+    ? "Every day"
+    : `${frequency} days per week`;
 
-  const list = $("adminMissedCountsList");
-  list.innerHTML = "";
-  const counts = getDisplayedMissedCounts();
+  dayList.innerHTML = days
+    .map(day => `<span class="tret-day-pill">${escapeHtml(day.slice(0, 3))}</span>`)
+    .join("");
 
-  TASKS.forEach(task => {
-    const row = document.createElement("label");
-    row.className = "missed-admin-row";
-    row.innerHTML = `
-      <span>${escapeHtml(task.title)}</span>
-      <input class="admin-input admin-missed-count" type="number" min="0" max="99" inputmode="numeric" value="${counts[task.id] || 0}" data-task-id="${task.id}" />`;
-    list.appendChild(row);
-  });
+  decrease.disabled = frequency <= 1;
+  increase.disabled = frequency >= 7;
 }
 
-function setCurrentStreakCorrection() {
-  const value = Number($("adminCurrentStreakInput").value);
-  if (!Number.isInteger(value) || value < 0 || value > 365) {
-    setAdminStatus("Enter a whole number from 0 to 365.", "bad");
-    return;
+function setTretinoinFrequency(nextFrequency) {
+  const frequency = Math.max(1, Math.min(7, Math.round(Number(nextFrequency) || DEFAULT_TRETINOIN_FREQUENCY)));
+  const todayKey = getTodayKey();
+  const previousKey = formatDateKey(addDays(keyToLocalDate(todayKey), -1));
+  const previousFrequency = getTretinoinFrequency(previousKey);
+
+  if (!Array.isArray(state.meta.tretinoinScheduleChanges)) {
+    state.meta.tretinoinScheduleChanges = [];
   }
 
-  state.adminOverrides.streakOffset = value - calculateCurrentStreak();
-  $("adminCurrentStreakInput").value = "";
-  saveState();
-  render();
-  setAdminStatus(`Displayed day streak set to ${value}.`, "good");
-}
+  state.meta.tretinoinScheduleChanges = state.meta.tretinoinScheduleChanges
+    .filter(change => change.effectiveDayKey !== todayKey);
 
-function clearCurrentStreakCorrection() {
-  state.adminOverrides.streakOffset = null;
-  saveState();
-  render();
-  setAdminStatus("Day streak now uses calculated history only.", "good");
-}
-
-function saveMissedOverrides() {
-  const counts = {};
-
-  for (const input of document.querySelectorAll(".admin-missed-count")) {
-    const value = Number(input.value);
-    if (!Number.isInteger(value) || value < 0 || value > 99) {
-      setAdminStatus("Missed counts must be whole numbers from 0 to 99.", "bad");
-      return;
-    }
-    if (value > 0) counts[input.dataset.taskId] = value;
+  if (frequency !== previousFrequency) {
+    state.meta.tretinoinScheduleChanges.push({
+      effectiveDayKey: todayKey,
+      frequency
+    });
+    state.meta.tretinoinScheduleChanges.sort((a, b) =>
+      a.effectiveDayKey.localeCompare(b.effectiveDayKey)
+    );
   }
 
-  state.adminOverrides.missedCounts = counts;
   saveState();
   render();
-  setAdminStatus("Missed-task numbers saved.", "good");
+  toast(`Tretinoin set to ${frequency === 7 ? "every day" : `${frequency} days per week`}.`);
 }
 
-function clearMissedOverrides() {
-  state.adminOverrides.missedCounts = {};
-  saveState();
-  render();
-  setAdminStatus("All displayed missed-task numbers reset to 0.", "good");
-}
-
-function setAdminStatus(message, type = "") {
-  const element = $("adminStatus");
-  element.textContent = message;
-  element.classList.toggle("good", type === "good");
-  element.classList.toggle("bad", type === "bad");
+function changeTretinoinFrequency(amount) {
+  setTretinoinFrequency(getTretinoinFrequency() + amount);
 }
 
 function escapeHtml(value) {
@@ -1155,10 +1142,8 @@ $("workoutPrevBtn")?.addEventListener("click", () => shiftWorkoutDraft(-1));
 $("workoutNextBtn")?.addEventListener("click", () => shiftWorkoutDraft(1));
 $("setWorkoutBtn")?.addEventListener("click", setWorkoutRotationForToday);
 
-$("adminSetCurrentStreakBtn").addEventListener("click", setCurrentStreakCorrection);
-$("adminClearCurrentStreakBtn").addEventListener("click", clearCurrentStreakCorrection);
-$("adminSaveMissedCountsBtn").addEventListener("click", saveMissedOverrides);
-$("adminClearMissedCountsBtn").addEventListener("click", clearMissedOverrides);
+$("tretinoinFrequencyDown")?.addEventListener("click", () => changeTretinoinFrequency(-1));
+$("tretinoinFrequencyUp")?.addEventListener("click", () => changeTretinoinFrequency(1));
 
 document.addEventListener("click", event => {
   document.querySelectorAll("details.task-menu[open]").forEach(menu => {

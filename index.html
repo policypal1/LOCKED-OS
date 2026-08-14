@@ -144,22 +144,27 @@
       </section>
 
       <section id="adminPage" class="page">
-        <div class="admin-grid">
-          <section class="card admin-card admin-warning">
-            <p class="eyebrow">Admin panel</p><h2>Correct the day streak.</h2>
-            <p>The correction remains dynamic. Completing today will still increase the displayed streak.</p>
-            <div class="field-grid">
-              <div class="admin-note" id="adminCurrentInfo">Day streak is calculated from completed days.</div>
-              <div class="field-row"><label for="adminCurrentStreakInput">Set displayed day streak</label><input id="adminCurrentStreakInput" class="admin-input" type="number" min="0" max="365" inputmode="numeric" placeholder="Example: 7" /></div>
-              <div class="actions"><button id="adminSetCurrentStreakBtn" class="btn green" type="button">Set correction</button><button id="adminClearCurrentStreakBtn" class="btn secondary" type="button">Use calculated streak</button></div>
-              <div id="adminStatus" class="admin-status" aria-live="polite"></div>
+        <div class="admin-grid tretinoin-admin-grid">
+          <section class="card admin-card tretinoin-admin-card">
+            <p class="eyebrow blue">Admin</p>
+            <h2>Tretinoin frequency</h2>
+            <p>Change how many nights per week tretinoin appears in your Looksmaxxing routine. Your past days stay unchanged.</p>
+
+            <div class="tret-frequency-control">
+              <button id="tretinoinFrequencyDown" class="tret-frequency-btn" type="button" aria-label="Decrease tretinoin frequency">−</button>
+              <div class="tret-frequency-value-wrap">
+                <strong id="tretinoinFrequencyValue" class="tret-frequency-value">3×</strong>
+                <span id="tretinoinFrequencyLabel" class="tret-frequency-label">3 days per week</span>
+              </div>
+              <button id="tretinoinFrequencyUp" class="tret-frequency-btn" type="button" aria-label="Increase tretinoin frequency">+</button>
             </div>
-          </section>
-          <section class="card admin-card">
-            <div class="panel-title"><div><p class="eyebrow">Most missed tasks</p><h2>Edit the numbers.</h2></div><span id="missedOverrideBadge" class="badge">Calculated</span></div>
-            <p>These numbers apply only to the main checklist.</p>
-            <div id="adminMissedCountsList" class="missed-admin-list"></div>
-            <div class="actions"><button id="adminSaveMissedCountsBtn" class="btn green" type="button">Save missed numbers</button><button id="adminClearMissedCountsBtn" class="btn secondary" type="button">Reset all to 0</button></div>
+
+            <div class="tret-schedule-preview">
+              <span class="tret-schedule-title">Current tretinoin nights</span>
+              <div id="tretinoinDaysList" class="tret-days-list"></div>
+            </div>
+
+            <p class="tret-admin-note">Default is 3× per week: Monday, Wednesday, Saturday. At 7×, tretinoin appears every night.</p>
           </section>
         </div>
       </section>
