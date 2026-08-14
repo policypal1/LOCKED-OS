@@ -1,8 +1,8 @@
 "use strict";
 
 const PASSWORD = "2009";
-const SUPABASE_URL = "https://agphsqrglqdcckjdtlnk.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E";
+const SUPABASE_URL = "https://qihajayxjukppcnsrgpi.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NCPEc56HEwlcQroUnCtp2Q_Niz3sNH6";
 const SUPABASE_ROW_ID = "samuel-main";
 const SUPABASE_TABLE = "locked_os_state_v2";
 const STORAGE_KEY = "locked_os_daily_checklist_v15";
