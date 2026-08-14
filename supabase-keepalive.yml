@@ -14,8 +14,8 @@ jobs:
     steps:
       - name: Touch LOCKED OS state row
         env:
-          SUPABASE_URL: https://agphsqrglqdcckjdtlnk.supabase.co
-          SUPABASE_KEY: sb_publishable_NpZ-jwFT5soIiO8RakO8Mw_qEf6xy4E
+          SUPABASE_URL: https://qihajayxjukppcnsrgpi.supabase.co
+          SUPABASE_KEY: sb_publishable_NCPEc56HEwlcQroUnCtp2Q_Niz3sNH6
         run: |
           NOW="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 

@@ -100,6 +100,7 @@ const syncStatus = $("syncStatus");
 
 let state = loadLocalState();
 let saveTimer = null;
+let realtimeChannel = null;
 let toastTimer = null;
 let renderedDayKey = getTodayKey();
 let workoutDraftIndex = null;
@@ -570,34 +571,87 @@ function ensureDay(dayKey = getTodayKey()) {
   return state.days[dayKey];
 }
 
-function mergeStateSnapshots(remoteState, localState) {
-  const remote = remoteState && typeof remoteState === "object"
-    ? remoteState
-    : createEmptyState();
-  const local = localState && typeof localState === "object"
-    ? localState
-    : createEmptyState();
+function hasMeaningfulState(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return false;
 
-  return {
-    ...remote,
-    ...local,
-    days: {
-      ...(remote.days || {}),
-      ...(local.days || {})
-    },
-    weights: {
-      ...(remote.weights || {}),
-      ...(local.weights || {})
-    },
-    meta: {
-      ...(remote.meta || {}),
-      ...(local.meta || {})
-    },
-    adminOverrides: {
-      ...(remote.adminOverrides || {}),
-      ...(local.adminOverrides || {})
-    }
-  };
+  if (snapshot.weights && Object.keys(snapshot.weights).length > 0) return true;
+  if (Array.isArray(snapshot.meta?.tretinoinScheduleChanges) && snapshot.meta.tretinoinScheduleChanges.length > 0) return true;
+  if (Number.isInteger(snapshot.meta?.workoutRotationAnchorIndex)) return true;
+
+  return Object.values(snapshot.days || {}).some(day => {
+    if (!day || typeof day !== "object") return false;
+    return (
+      (Array.isArray(day.done) && day.done.length > 0) ||
+      (Array.isArray(day.looksDone) && day.looksDone.length > 0) ||
+      (Array.isArray(day.looksSkipped) && day.looksSkipped.length > 0) ||
+      Number(day.waterOz) > 0 ||
+      day.completed === true ||
+      day.looksCompleted === true ||
+      Boolean(day.missedReason)
+    );
+  });
+}
+
+function applyRemoteState(remoteState, statusMessage = "Updated from Supabase.") {
+  if (!remoteState || typeof remoteState !== "object") return false;
+
+  state = remoteState;
+  normalizeState();
+  saveLocalState();
+
+  if (!mainApp.classList.contains("hidden")) render();
+  if (syncStatus) syncStatus.textContent = statusMessage;
+  return true;
+}
+
+async function fetchSupabaseState({ silent = false } = {}) {
+  if (!supabaseClient) return null;
+
+  if (!silent) syncStatus.textContent = "Loading from Supabase…";
+  const { data, error } = await supabaseClient
+    .from(SUPABASE_TABLE)
+    .select("state, updated_at")
+    .eq("id", SUPABASE_ROW_ID)
+    .maybeSingle();
+
+  if (error) {
+    console.error(error);
+    if (!silent) syncStatus.textContent = "Supabase load failed. Using local save.";
+    return null;
+  }
+
+  return data || null;
+}
+
+function subscribeToSupabaseState() {
+  if (!supabaseClient || realtimeChannel) return;
+
+  realtimeChannel = supabaseClient
+    .channel(`locked-os-state-${SUPABASE_ROW_ID}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: SUPABASE_TABLE,
+        filter: `id=eq.${SUPABASE_ROW_ID}`
+      },
+      payload => {
+        const remoteState = payload?.new?.state;
+        if (!remoteState || typeof remoteState !== "object") return;
+        applyRemoteState(remoteState, "Updated live from Supabase.");
+      }
+    )
+    .subscribe((status, error) => {
+      if (status === "SUBSCRIBED") {
+        if (syncStatus && !syncStatus.textContent.includes("Saving")) {
+          syncStatus.textContent = "Live sync connected.";
+        }
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        console.error("Supabase Realtime error:", error);
+        if (syncStatus) syncStatus.textContent = "Saved with Supabase. Live updates are reconnecting…";
+      }
+    });
 }
 
 function saveState() {
@@ -616,28 +670,38 @@ async function loadSupabaseState() {
     return;
   }
 
-  syncStatus.textContent = "Loading from Supabase…";
-  const { data, error } = await supabaseClient
-    .from(SUPABASE_TABLE)
-    .select("state")
-    .eq("id", SUPABASE_ROW_ID)
-    .maybeSingle();
+  const localBeforeLoad = state;
+  const remoteRow = await fetchSupabaseState();
 
-  if (error) {
-    console.error(error);
-    syncStatus.textContent = "Supabase load failed. Using local save.";
-    return;
+  if (remoteRow?.state && typeof remoteRow.state === "object") {
+    const remoteHasData = hasMeaningfulState(remoteRow.state);
+    const localHasData = hasMeaningfulState(localBeforeLoad);
+
+    // Supabase is the source of truth. The one exception is a completely
+    // empty cloud row with meaningful local data, which lets an existing
+    // device repair/reseed a cloud row that was accidentally wiped.
+    if (remoteHasData || !localHasData) {
+      applyRemoteState(remoteRow.state, "Synced with Supabase.");
+    } else {
+      state = localBeforeLoad;
+      normalizeState();
+      saveLocalState();
+      await saveSupabaseState();
+      syncStatus.textContent = "Restored local data to Supabase.";
+    }
+  } else {
+    await saveSupabaseState();
   }
 
-  if (data?.state && typeof data.state === "object") {
-    state = mergeStateSnapshots(data.state, state);
-    normalizeState();
-    saveLocalState();
-    render();
-  }
+  subscribeToSupabaseState();
+}
 
-  const saved = await saveSupabaseState();
-  if (saved) syncStatus.textContent = "Synced with Supabase.";
+async function refreshSupabaseState() {
+  if (!supabaseClient || mainApp.classList.contains("hidden")) return;
+  const remoteRow = await fetchSupabaseState({ silent: true });
+  if (remoteRow?.state && typeof remoteRow.state === "object") {
+    applyRemoteState(remoteRow.state, "Synced with Supabase.");
+  }
 }
 
 async function saveSupabaseState() {
@@ -1399,10 +1463,16 @@ document.addEventListener("visibilitychange", () => {
     clearTimeout(saveTimer);
     saveTimer = null;
     saveSupabaseState();
+  } else if (document.visibilityState === "visible") {
+    refreshSupabaseState();
   }
 });
 
-window.addEventListener("online", () => queueSupabaseSave());
+window.addEventListener("focus", refreshSupabaseState);
+window.addEventListener("online", async () => {
+  await refreshSupabaseState();
+  queueSupabaseSave();
+});
 
 setInterval(() => {
   if (
