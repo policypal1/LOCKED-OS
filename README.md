@@ -1,65 +1,28 @@
-# Accountability OS
+# LOCKED OS
 
-Premium rebuild of the accountability tracker.
+Daily checklist and Looksmaxxing tracker with local + Supabase state sync.
 
-## Files
-- `index.html` - app shell
-- `styles.css` - premium cream UI
-- `app.js` - tracker logic
-- `schema.sql` - optional Supabase cloud sync table
+## Included files
+- `index.html` — app shell
+- `styles.css` — UI styles
+- `app.js` — tracker logic
+- `schema.sql` — Supabase state table setup
+- `supabase-keepalive.yml` — optional keep-alive workflow
 
-## Main changes
-- Cleaner premium cream design
-- Fake-page/tab layout:
-  - Today
-  - Planner
-  - Stats
-  - History
-  - Settings
-- Strict mode is permanent
-- Morning section is a gate
-- Afternoon/night are locked until morning is fully resolved
-- You can complete morning tasks or fail unfinished morning tasks
-- Better progress system:
-  - done count
-  - resolved count
-  - failures
-  - perfect days
-  - XP
-  - ranks
-  - achievements
-  - 21-day history
-- Quick-add tasks
-- Custom recurring tasks
-- Export/import backup
-- Optional Supabase sync
+## This version adds
+- Daily morning **Wash face** task in Looksmaxxing.
+- **Edit task** inside the existing three-dot menu on Looksmaxxing tasks.
+- Edited task names persist in local/Supabase state and carry forward to future days.
+- Existing **Skip task** option remains available.
+- New **Admin → Rotation calendar** showing the next 14 days of:
+  - tretinoin / azelaic acid
+  - microneedling
+  - masseter training
+  - shaving / eyebrow management
+  - bed-sheet wash days
+  - Sunday lip exfoliation
+  - gym rotation
+- Existing tretinoin frequency control still works and the calendar updates with it.
 
-## GitHub Pages setup
-Upload these files to your repository root:
-
-```text
-index.html
-styles.css
-app.js
-schema.sql
-README.md
-```
-
-Then go to:
-
-```text
-Settings → Pages → Deploy from branch → main → /root
-```
-
-## Supabase setup
-1. Create a Supabase project.
-2. Run `schema.sql` in the Supabase SQL Editor.
-3. Open `app.js`.
-4. Fill in:
-
-```js
-const SUPABASE_URL = "";
-const SUPABASE_ANON_KEY = "";
-```
-
-Use your Supabase project URL and anon/public key. Do not use a service role key in frontend code.
+## Replacing your current site
+You can replace the files in the repository root with the files from this folder. No database schema change is required for these updates.
