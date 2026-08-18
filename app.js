@@ -1275,12 +1275,34 @@ function renderWeightTracker() {
 
 function getWeeklyReviewKeys() {
   const today = keyToLocalDate(getTodayKey());
+  const sunday = addDays(today, -today.getDay());
   const keys = [];
-  for (let offset = 6; offset >= 0; offset -= 1) {
-    keys.push(formatDateKey(addDays(today, -offset)));
+  let cursor = new Date(sunday);
+
+  while (cursor <= today) {
+    keys.push(formatDateKey(cursor));
+    cursor = addDays(cursor, 1);
   }
+
   return keys;
 }
+
+const WEEKLY_REVIEW_MAJOR_TASK_IDS = new Set([
+  "face-rinse",
+  "hydrating-cleanser",
+  "vitamin-c",
+  "morning-moisturizer",
+  "night-moisturizer",
+  "tretinoin",
+  "azelaic-acid",
+  "microneedle-eyebrows",
+  "morning-teeth",
+  "night-teeth",
+  "water-through-day",
+  "gym",
+  "creatine",
+  "wash-bed-sheets"
+]);
 
 function getTaskByLooksId(taskId, dayKeys) {
   for (const dayKey of dayKeys) {
@@ -1288,6 +1310,16 @@ function getTaskByLooksId(taskId, dayKeys) {
     if (match) return match;
   }
   return null;
+}
+
+function getWeeklyGymStatus(dayKey, day) {
+  const done = new Set(day.looksDone || []);
+  const skipped = new Set(day.looksSkipped || []);
+
+  if (done.has("gym")) return "Done";
+  if (skipped.has("gym")) return "Skipped";
+  if (dayKey === getTodayKey()) return "Not yet";
+  return "Not logged";
 }
 
 function renderWeeklyReview() {
@@ -1305,46 +1337,59 @@ function renderWeeklyReview() {
     range.textContent = `${firstDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${lastDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
   }
 
-  let mainDone = 0;
   let looksDone = 0;
   let looksScheduled = 0;
   let totalWater = 0;
-  let gymDays = 0;
+  let gymDone = 0;
+  let gymSkipped = 0;
+  let gymNotLogged = 0;
+  let gymNotYet = 0;
   let totalSkipped = 0;
   const skipCounts = new Map();
 
   for (const dayKey of dayKeys) {
     const day = state.days?.[dayKey] || createDayRecord();
     const allowedLooks = getLooksTaskIds(dayKey);
-    const doneMain = cleanList(day.done, TASK_IDS);
     const doneLooks = cleanList(day.looksDone, allowedLooks);
     const skippedLooks = cleanList(day.looksSkipped, allowedLooks);
 
-    mainDone += doneMain.length;
     looksDone += doneLooks.length;
     looksScheduled += allowedLooks.length;
     totalWater += Math.max(0, Number(day.waterOz) || 0);
-    if (doneLooks.includes("gym")) gymDays += 1;
     totalSkipped += skippedLooks.length;
 
+    const gymStatus = getWeeklyGymStatus(dayKey, day);
+    if (gymStatus === "Done") gymDone += 1;
+    else if (gymStatus === "Skipped") gymSkipped += 1;
+    else if (gymStatus === "Not yet") gymNotYet += 1;
+    else gymNotLogged += 1;
+
     for (const taskId of skippedLooks) {
+      if (!WEEKLY_REVIEW_MAJOR_TASK_IDS.has(taskId)) continue;
       skipCounts.set(taskId, (skipCounts.get(taskId) || 0) + 1);
     }
   }
 
-  const mainTotal = TASKS.length * dayKeys.length;
-  const mainPercent = mainTotal ? Math.round((mainDone / mainTotal) * 100) : 0;
   const looksPercent = looksScheduled ? Math.round((looksDone / looksScheduled) * 100) : 0;
-  const averageWater = Math.round(totalWater / dayKeys.length);
+  const averageWater = dayKeys.length ? Math.round(totalWater / dayKeys.length) : 0;
 
-  $("weeklyMainCompletion").textContent = `${mainPercent}%`;
-  $("weeklyMainMeta").textContent = `${mainDone} of ${mainTotal} tasks completed`;
   $("weeklyLooksCompletion").textContent = `${looksPercent}%`;
-  $("weeklyLooksMeta").textContent = `${looksDone} completed • ${totalSkipped} skipped`;
+  $("weeklyLooksMeta").textContent = totalSkipped
+    ? `${looksDone} completed · ${totalSkipped} skipped`
+    : `${looksDone} tasks completed`;
   $("weeklyAverageWater").textContent = `${averageWater} oz`;
-  $("weeklyWaterMeta").textContent = averageWater >= WATER_MINIMUM_OZ ? "Average is at or above your minimum" : `${WATER_MINIMUM_OZ - averageWater} oz below your daily minimum`;
-  $("weeklyGymDays").textContent = `${gymDays}/7`;
-  $("weeklyGymMeta").textContent = gymDays === 7 ? "Gym completed every day" : `${7 - gymDays} day${7 - gymDays === 1 ? "" : "s"} not completed`;
+  $("weeklyWaterMeta").textContent = averageWater >= WATER_MINIMUM_OZ
+    ? "Average is at or above your minimum"
+    : `${WATER_MINIMUM_OZ - averageWater} oz below your daily minimum`;
+  $("weeklyGymDays").textContent = `${gymDone}/${dayKeys.length}`;
+
+  const gymParts = [];
+  if (gymSkipped) gymParts.push(`${gymSkipped} skipped`);
+  if (gymNotLogged) gymParts.push(`${gymNotLogged} not logged`);
+  if (gymNotYet) gymParts.push("today not yet");
+  $("weeklyGymMeta").textContent = gymParts.length
+    ? gymParts.join(" · ")
+    : "Gym completed each day so far";
 
   const weekWeights = getWeightEntries().filter(entry => entry.dayKey >= firstKey && entry.dayKey <= lastKey);
   const weightValue = $("weeklyWeightChange");
@@ -1355,10 +1400,10 @@ function renderWeeklyReview() {
     weightMeta.textContent = `${weekWeights[0].weight.toFixed(1)} → ${weekWeights.at(-1).weight.toFixed(1)} lb`;
   } else if (weekWeights.length === 1) {
     weightValue.textContent = `${weekWeights[0].weight.toFixed(1)} lb`;
-    weightMeta.textContent = "Only one weight entry this week";
+    weightMeta.textContent = "One weight entry this week";
   } else {
     weightValue.textContent = "No data";
-    weightMeta.textContent = "Log weight to see weekly change";
+    weightMeta.textContent = "Log weight to see this week's change";
   }
 
   const mostSkipped = [...skipCounts.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -1367,10 +1412,10 @@ function renderWeeklyReview() {
   if (mostSkipped) {
     const baseTask = getTaskByLooksId(mostSkipped[0], dayKeys);
     skippedValue.textContent = baseTask ? getLooksTaskTitle(baseTask) : mostSkipped[0];
-    skippedMeta.textContent = `Skipped ${mostSkipped[1]} time${mostSkipped[1] === 1 ? "" : "s"}`;
+    skippedMeta.textContent = `Skipped ${mostSkipped[1]} time${mostSkipped[1] === 1 ? "" : "s"} this week`;
   } else {
     skippedValue.textContent = "None";
-    skippedMeta.textContent = "No Looksmaxxing tasks skipped";
+    skippedMeta.textContent = "No major routine tasks skipped";
   }
 
   const list = $("weeklyDayList");
@@ -1378,12 +1423,11 @@ function renderWeeklyReview() {
   for (const dayKey of dayKeys) {
     const day = state.days?.[dayKey] || createDayRecord();
     const allowedLooks = getLooksTaskIds(dayKey);
-    const doneMain = cleanList(day.done, TASK_IDS).length;
     const doneLooks = cleanList(day.looksDone, allowedLooks).length;
     const skippedLooks = cleanList(day.looksSkipped, allowedLooks).length;
-    const mainDayPercent = Math.round((doneMain / TASKS.length) * 100);
     const looksDayPercent = allowedLooks.length ? Math.round((doneLooks / allowedLooks.length) * 100) : 0;
     const date = keyToLocalDate(dayKey);
+    const gymStatus = getWeeklyGymStatus(dayKey, day);
     const row = document.createElement("div");
     row.className = `weekly-day-row ${dayKey === getTodayKey() ? "today" : ""}`;
     row.innerHTML = `
@@ -1391,11 +1435,9 @@ function renderWeeklyReview() {
         <strong>${escapeHtml(getRoutineDayName(dayKey))}</strong>
         <span>${escapeHtml(date.toLocaleDateString(undefined, { month: "short", day: "numeric" }))}</span>
       </div>
-      <div class="weekly-day-metric"><span>Main</span><strong>${mainDayPercent}%</strong></div>
-      <div class="weekly-day-metric"><span>Looks</span><strong>${looksDayPercent}%</strong></div>
+      <div class="weekly-day-metric"><span>Looks</span><strong>${looksDayPercent}%</strong>${skippedLooks ? `<small>${skippedLooks} skipped</small>` : ""}</div>
       <div class="weekly-day-metric"><span>Water</span><strong>${Math.round(Number(day.waterOz) || 0)} oz</strong></div>
-      <div class="weekly-day-metric"><span>Gym</span><strong>${day.looksDone?.includes("gym") ? "Done" : "—"}</strong></div>
-      <div class="weekly-day-metric"><span>Skipped</span><strong>${skippedLooks}</strong></div>`;
+      <div class="weekly-day-metric gym-status ${gymStatus.toLowerCase().replaceAll(" ", "-")}"><span>Gym</span><strong>${escapeHtml(gymStatus)}</strong></div>`;
     list.appendChild(row);
   }
 }
