@@ -191,7 +191,7 @@ function makeMorning(dayName) {
   ];
 
   if (MASSETER_DAYS.has(dayName)) {
-    tasks.push({ id: "masseter-training", title: "Train masseter muscles while in the shower" });
+    tasks.push({ id: "masseter-training", title: "Train masseter muscles" });
   }
 
   tasks.push(
@@ -202,7 +202,7 @@ function makeMorning(dayName) {
     { id: "morning-moisturizer", title: "Apply moisturizer" },
     { id: "eyelash-serum", title: "Apply peptide eyelash growth serum" },
     { id: "morning-minoxidil", title: "Apply minoxidil to eyebrows" },
-    { id: "sea-salt-spray", title: "Apply sea salt spray to hair" },
+    { id: "sea-salt-spray", title: "Apply product/style hair" },
     { id: "deodorant", title: "Apply deodorant" },
     { id: "curl-eyelashes", title: "Curl eyelashes" },
     { id: "brush-eyebrows", title: "Brush eyebrows" },
@@ -758,18 +758,10 @@ function setLooksStatus(task, status) {
   render();
 }
 
-function editLooksTask(task) {
-  const currentTitle = getLooksTaskTitle(task);
-  const nextTitle = window.prompt(
-    "Edit this task. Leave it blank to reset it to the default name.",
-    currentTitle
-  );
-
-  if (nextTitle === null) return;
-
+function saveLooksTaskEdit(task, nextTitle) {
   state.meta = state.meta || {};
   state.meta.looksTaskEdits = state.meta.looksTaskEdits || {};
-  const cleaned = nextTitle.trim().slice(0, 160);
+  const cleaned = String(nextTitle ?? "").trim().slice(0, 160);
 
   if (!cleaned || cleaned === task.title) {
     delete state.meta.looksTaskEdits[task.id];
@@ -781,6 +773,85 @@ function editLooksTask(task) {
 
   saveState();
   render();
+}
+
+function startInlineTaskEdit(row, main, menu, task, onEdit) {
+  if (row.classList.contains("editing")) return;
+  row.classList.add("editing");
+
+  const editor = document.createElement("div");
+  editor.className = "task-inline-editor";
+
+  const field = document.createElement("div");
+  field.className = "task-inline-field";
+
+  const label = document.createElement("label");
+  label.textContent = "Edit task name";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "task-inline-input";
+  input.maxLength = 160;
+  input.value = task.title;
+  input.setAttribute("aria-label", `Edit ${task.title}`);
+
+  field.append(label, input);
+
+  const actions = document.createElement("div");
+  actions.className = "task-inline-actions";
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.className = "btn blue compact task-edit-save";
+  saveButton.textContent = "Save";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "btn secondary compact";
+  cancelButton.textContent = "Cancel";
+
+  const resetButton = document.createElement("button");
+  resetButton.type = "button";
+  resetButton.className = "task-edit-reset";
+  resetButton.textContent = "Reset default";
+  resetButton.hidden = !task.defaultTitle || task.title === task.defaultTitle;
+
+  const closeEditor = () => {
+    row.classList.remove("editing");
+    editor.remove();
+  };
+
+  const saveEditor = () => {
+    const cleaned = input.value.trim();
+    if (!cleaned) {
+      input.focus();
+      toast("Enter a task name or use Reset default.");
+      return;
+    }
+    onEdit(cleaned);
+  };
+
+  saveButton.addEventListener("click", saveEditor);
+  cancelButton.addEventListener("click", closeEditor);
+  resetButton.addEventListener("click", () => onEdit(task.defaultTitle || task.title));
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveEditor();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeEditor();
+    }
+  });
+
+  actions.append(saveButton, cancelButton, resetButton);
+  editor.append(field, actions);
+  row.appendChild(editor);
+
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
 }
 
 function createTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit) {
@@ -833,7 +904,7 @@ function createTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit) {
       editButton.addEventListener("click", event => {
         event.stopPropagation();
         menu.open = false;
-        onEdit();
+        startInlineTaskEdit(row, main, menu, task, onEdit);
       });
       popover.appendChild(editButton);
     }
@@ -902,7 +973,7 @@ function renderLooksTaskList(element, tasks, day) {
   const skipped = new Set(day.looksSkipped);
 
   for (const task of tasks) {
-    const displayTask = { ...task, title: getLooksTaskTitle(task) };
+    const displayTask = { ...task, title: getLooksTaskTitle(task), defaultTitle: task.title };
     const toggle = () => {
       if (task.meta === "waterTracked") {
         $("waterCard").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -919,7 +990,7 @@ function renderLooksTaskList(element, tasks, day) {
         "looks-task",
         toggle,
         () => setLooksStatus(task, "skipped"),
-        () => editLooksTask(task)
+        nextTitle => saveLooksTaskEdit(task, nextTitle)
       )
     );
   }
@@ -1202,6 +1273,133 @@ function renderWeightTracker() {
   if (changeValue) changeValue.textContent = `${change > 0 ? "+" : ""}${change.toFixed(1)} lb`;
 }
 
+function getWeeklyReviewKeys() {
+  const today = keyToLocalDate(getTodayKey());
+  const keys = [];
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    keys.push(formatDateKey(addDays(today, -offset)));
+  }
+  return keys;
+}
+
+function getTaskByLooksId(taskId, dayKeys) {
+  for (const dayKey of dayKeys) {
+    const match = getLooksTasks(dayKey).find(task => task.id === taskId);
+    if (match) return match;
+  }
+  return null;
+}
+
+function renderWeeklyReview() {
+  const page = $("weeklyPage");
+  if (!page) return;
+
+  const dayKeys = getWeeklyReviewKeys();
+  const firstKey = dayKeys[0];
+  const lastKey = dayKeys.at(-1);
+  const firstDate = keyToLocalDate(firstKey);
+  const lastDate = keyToLocalDate(lastKey);
+
+  const range = $("weeklyDateRange");
+  if (range) {
+    range.textContent = `${firstDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${lastDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+  }
+
+  let mainDone = 0;
+  let looksDone = 0;
+  let looksScheduled = 0;
+  let totalWater = 0;
+  let gymDays = 0;
+  let totalSkipped = 0;
+  const skipCounts = new Map();
+
+  for (const dayKey of dayKeys) {
+    const day = state.days?.[dayKey] || createDayRecord();
+    const allowedLooks = getLooksTaskIds(dayKey);
+    const doneMain = cleanList(day.done, TASK_IDS);
+    const doneLooks = cleanList(day.looksDone, allowedLooks);
+    const skippedLooks = cleanList(day.looksSkipped, allowedLooks);
+
+    mainDone += doneMain.length;
+    looksDone += doneLooks.length;
+    looksScheduled += allowedLooks.length;
+    totalWater += Math.max(0, Number(day.waterOz) || 0);
+    if (doneLooks.includes("gym")) gymDays += 1;
+    totalSkipped += skippedLooks.length;
+
+    for (const taskId of skippedLooks) {
+      skipCounts.set(taskId, (skipCounts.get(taskId) || 0) + 1);
+    }
+  }
+
+  const mainTotal = TASKS.length * dayKeys.length;
+  const mainPercent = mainTotal ? Math.round((mainDone / mainTotal) * 100) : 0;
+  const looksPercent = looksScheduled ? Math.round((looksDone / looksScheduled) * 100) : 0;
+  const averageWater = Math.round(totalWater / dayKeys.length);
+
+  $("weeklyMainCompletion").textContent = `${mainPercent}%`;
+  $("weeklyMainMeta").textContent = `${mainDone} of ${mainTotal} tasks completed`;
+  $("weeklyLooksCompletion").textContent = `${looksPercent}%`;
+  $("weeklyLooksMeta").textContent = `${looksDone} completed • ${totalSkipped} skipped`;
+  $("weeklyAverageWater").textContent = `${averageWater} oz`;
+  $("weeklyWaterMeta").textContent = averageWater >= WATER_MINIMUM_OZ ? "Average is at or above your minimum" : `${WATER_MINIMUM_OZ - averageWater} oz below your daily minimum`;
+  $("weeklyGymDays").textContent = `${gymDays}/7`;
+  $("weeklyGymMeta").textContent = gymDays === 7 ? "Gym completed every day" : `${7 - gymDays} day${7 - gymDays === 1 ? "" : "s"} not completed`;
+
+  const weekWeights = getWeightEntries().filter(entry => entry.dayKey >= firstKey && entry.dayKey <= lastKey);
+  const weightValue = $("weeklyWeightChange");
+  const weightMeta = $("weeklyWeightMeta");
+  if (weekWeights.length >= 2) {
+    const change = Math.round((weekWeights.at(-1).weight - weekWeights[0].weight) * 10) / 10;
+    weightValue.textContent = `${change > 0 ? "+" : ""}${change.toFixed(1)} lb`;
+    weightMeta.textContent = `${weekWeights[0].weight.toFixed(1)} → ${weekWeights.at(-1).weight.toFixed(1)} lb`;
+  } else if (weekWeights.length === 1) {
+    weightValue.textContent = `${weekWeights[0].weight.toFixed(1)} lb`;
+    weightMeta.textContent = "Only one weight entry this week";
+  } else {
+    weightValue.textContent = "No data";
+    weightMeta.textContent = "Log weight to see weekly change";
+  }
+
+  const mostSkipped = [...skipCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const skippedValue = $("weeklySkippedTask");
+  const skippedMeta = $("weeklySkippedMeta");
+  if (mostSkipped) {
+    const baseTask = getTaskByLooksId(mostSkipped[0], dayKeys);
+    skippedValue.textContent = baseTask ? getLooksTaskTitle(baseTask) : mostSkipped[0];
+    skippedMeta.textContent = `Skipped ${mostSkipped[1]} time${mostSkipped[1] === 1 ? "" : "s"}`;
+  } else {
+    skippedValue.textContent = "None";
+    skippedMeta.textContent = "No Looksmaxxing tasks skipped";
+  }
+
+  const list = $("weeklyDayList");
+  list.innerHTML = "";
+  for (const dayKey of dayKeys) {
+    const day = state.days?.[dayKey] || createDayRecord();
+    const allowedLooks = getLooksTaskIds(dayKey);
+    const doneMain = cleanList(day.done, TASK_IDS).length;
+    const doneLooks = cleanList(day.looksDone, allowedLooks).length;
+    const skippedLooks = cleanList(day.looksSkipped, allowedLooks).length;
+    const mainDayPercent = Math.round((doneMain / TASKS.length) * 100);
+    const looksDayPercent = allowedLooks.length ? Math.round((doneLooks / allowedLooks.length) * 100) : 0;
+    const date = keyToLocalDate(dayKey);
+    const row = document.createElement("div");
+    row.className = `weekly-day-row ${dayKey === getTodayKey() ? "today" : ""}`;
+    row.innerHTML = `
+      <div class="weekly-day-name">
+        <strong>${escapeHtml(getRoutineDayName(dayKey))}</strong>
+        <span>${escapeHtml(date.toLocaleDateString(undefined, { month: "short", day: "numeric" }))}</span>
+      </div>
+      <div class="weekly-day-metric"><span>Main</span><strong>${mainDayPercent}%</strong></div>
+      <div class="weekly-day-metric"><span>Looks</span><strong>${looksDayPercent}%</strong></div>
+      <div class="weekly-day-metric"><span>Water</span><strong>${Math.round(Number(day.waterOz) || 0)} oz</strong></div>
+      <div class="weekly-day-metric"><span>Gym</span><strong>${day.looksDone?.includes("gym") ? "Done" : "—"}</strong></div>
+      <div class="weekly-day-metric"><span>Skipped</span><strong>${skippedLooks}</strong></div>`;
+    list.appendChild(row);
+  }
+}
+
 function getRotationTasksForDay(dayKey) {
   const dayName = getRoutineDayName(dayKey);
   const items = [
@@ -1327,6 +1525,7 @@ function render() {
   renderDayStreak();
   renderLooks();
   renderWeightTracker();
+  renderWeeklyReview();
   renderAdmin();
 }
 

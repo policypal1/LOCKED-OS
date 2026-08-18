@@ -32,6 +32,7 @@
           <button class="tab active" data-tab="checklistPage" type="button">Checklist</button>
           <button class="tab" data-tab="looksPage" type="button">Looksmaxxing</button>
           <button class="tab" data-tab="weightPage" type="button">Weight</button>
+          <button class="tab" data-tab="weeklyPage" type="button">Weekly Review</button>
           <button class="tab admin-tab" data-tab="adminPage" type="button">Admin</button>
         </nav>
       </header>
@@ -193,6 +194,63 @@
           <section class="card weight-history-card">
             <div class="panel-title"><h3>Recent entries</h3></div>
             <div id="weightHistoryList" class="weight-history-list"></div>
+          </section>
+        </div>
+      </section>
+
+
+      <section id="weeklyPage" class="page">
+        <div class="weekly-review">
+          <section class="card weekly-hero-card">
+            <div>
+              <p class="eyebrow blue">Last 7 days</p>
+              <h2>Weekly review</h2>
+              <p id="weeklyDateRange" class="weekly-date-range">Loading…</p>
+            </div>
+            <p class="weekly-hero-copy">See what you actually completed, where you slipped, and what changed over the last seven days.</p>
+          </section>
+
+          <div class="weekly-stat-grid">
+            <section class="card weekly-stat-card">
+              <span>Main checklist</span>
+              <strong id="weeklyMainCompletion">0%</strong>
+              <p id="weeklyMainMeta">0 tasks completed</p>
+            </section>
+            <section class="card weekly-stat-card blue-accent">
+              <span>Looksmaxxing</span>
+              <strong id="weeklyLooksCompletion">0%</strong>
+              <p id="weeklyLooksMeta">0 tasks completed</p>
+            </section>
+            <section class="card weekly-stat-card">
+              <span>Average water</span>
+              <strong id="weeklyAverageWater">0 oz</strong>
+              <p id="weeklyWaterMeta">No water logged</p>
+            </section>
+            <section class="card weekly-stat-card">
+              <span>Gym days</span>
+              <strong id="weeklyGymDays">0/7</strong>
+              <p id="weeklyGymMeta">No gym days completed</p>
+            </section>
+            <section class="card weekly-stat-card">
+              <span>Weight change</span>
+              <strong id="weeklyWeightChange">No data</strong>
+              <p id="weeklyWeightMeta">Log weight to see change</p>
+            </section>
+            <section class="card weekly-stat-card skipped-card">
+              <span>Most skipped</span>
+              <strong id="weeklySkippedTask" class="weekly-skipped-name">None</strong>
+              <p id="weeklySkippedMeta">No skipped tasks</p>
+            </section>
+          </div>
+
+          <section class="card weekly-days-card">
+            <div class="panel-title weekly-days-heading">
+              <div>
+                <p class="eyebrow blue">Breakdown</p>
+                <h2>Day by day</h2>
+              </div>
+            </div>
+            <div id="weeklyDayList" class="weekly-day-list"></div>
           </section>
         </div>
       </section>
