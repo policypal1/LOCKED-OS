@@ -106,6 +106,9 @@ let renderedDayKey = getTodayKey();
 let workoutDraftIndex = null;
 let workoutDraftDirty = false;
 let weightRange = "30";
+const MK_CYCLE_WEEKS = 8;
+const MK_CYCLE_DAYS = MK_CYCLE_WEEKS * 7;
+const MK_SCHEDULED_DAYS = new Set([1, 2, 3, 4, 5]);
 
 function formatDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -310,10 +313,111 @@ function createDayRecord() {
   };
 }
 
+
+function createDefaultMk677State() {
+  return {
+    cycleStart: "",
+    currentDoseMg: 12.5,
+    logs: {},
+    labs: [],
+    thresholds: { fastingGlucoseMax: null, systolicMax: null, diastolicMax: null }
+  };
+}
+
+function optionalNumber(value, min = -Infinity, max = Infinity) {
+  if (value === "" || value === null || value === undefined) return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < min || number > max) return null;
+  return number;
+}
+
+function normalizeSeverity(value) {
+  const number = Math.round(Number(value) || 0);
+  return Math.max(0, Math.min(3, number));
+}
+
+function normalizeMk677Log(dayKey, original = {}) {
+  const scheduled = isMkScheduledDay(dayKey);
+  const allowedStatuses = new Set(["taken", "skipped", "off"]);
+  const status = allowedStatuses.has(original.status) ? original.status : (scheduled ? "taken" : "off");
+  return {
+    status,
+    doseMg: optionalNumber(original.doseMg, 0, 50),
+    time: /^\\d{2}:\\d{2}$/.test(String(original.time || "")) ? String(original.time) : "",
+    fastingGlucose: optionalNumber(original.fastingGlucose, 40, 600),
+    weight: optionalNumber(original.weight, 50, 500),
+    systolic: optionalNumber(original.systolic, 60, 260),
+    diastolic: optionalNumber(original.diastolic, 30, 180),
+    restingHr: optionalNumber(original.restingHr, 30, 220),
+    swelling: normalizeSeverity(original.swelling),
+    appetite: normalizeSeverity(original.appetite),
+    fatigue: normalizeSeverity(original.fatigue),
+    pain: normalizeSeverity(original.pain),
+    tingling: normalizeSeverity(original.tingling),
+    headacheVision: normalizeSeverity(original.headacheVision),
+    notes: String(original.notes || "").slice(0, 500)
+  };
+}
+
+function normalizeMk677State(original) {
+  const base = createDefaultMk677State();
+  if (!original || typeof original !== "object" || Array.isArray(original)) return base;
+  const normalized = { ...base };
+  normalized.cycleStart = isDateKey(original.cycleStart) ? original.cycleStart : "";
+  normalized.currentDoseMg = [12.5, 25].includes(Number(original.currentDoseMg)) ? Number(original.currentDoseMg) : 12.5;
+  normalized.logs = {};
+  if (original.logs && typeof original.logs === "object" && !Array.isArray(original.logs)) {
+    for (const [dayKey, log] of Object.entries(original.logs)) {
+      if (isDateKey(dayKey)) normalized.logs[dayKey] = normalizeMk677Log(dayKey, log);
+    }
+  }
+  normalized.thresholds = {
+    fastingGlucoseMax: optionalNumber(original.thresholds?.fastingGlucoseMax, 40, 600),
+    systolicMax: optionalNumber(original.thresholds?.systolicMax, 60, 260),
+    diastolicMax: optionalNumber(original.thresholds?.diastolicMax, 30, 180)
+  };
+  const labs = Array.isArray(original.labs) ? original.labs : [];
+  normalized.labs = labs
+    .filter(item => item && isDateKey(item.date))
+    .map(item => ({
+      id: String(item.id || `${item.date}-${Math.random().toString(36).slice(2, 8)}`),
+      date: item.date,
+      igf1: optionalNumber(item.igf1, 0),
+      a1c: optionalNumber(item.a1c, 0, 30),
+      glucose: optionalNumber(item.glucose, 0, 600),
+      ast: optionalNumber(item.ast, 0, 5000),
+      alt: optionalNumber(item.alt, 0, 5000),
+      insulin: optionalNumber(item.insulin, 0, 5000),
+      prolactin: optionalNumber(item.prolactin, 0, 5000),
+      notes: String(item.notes || "").slice(0, 300)
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  return normalized;
+}
+
+function isMkScheduledDay(dayKey = getTodayKey()) {
+  return MK_SCHEDULED_DAYS.has(keyToLocalDate(dayKey).getDay());
+}
+
+function getMkCycleDay(dayKey = getTodayKey()) {
+  const start = state?.mk677?.cycleStart;
+  if (!isDateKey(start)) return null;
+  const diff = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(start);
+  if (diff < 0 || diff >= MK_CYCLE_DAYS) return null;
+  return diff + 1;
+}
+
+function getMkCycleEndKey() {
+  const start = state?.mk677?.cycleStart;
+  if (!isDateKey(start)) return "";
+  return formatDateKey(addDays(keyToLocalDate(start), MK_CYCLE_DAYS - 1));
+}
+
 function createEmptyState() {
   return {
     days: {},
     weights: {},
+    mk677: createDefaultMk677State(),
     meta: {
       lastOpenedDayKey: null,
       tretinoinScheduleChanges: [],
@@ -467,6 +571,15 @@ function normalizeState() {
     changed = true;
   }
 
+  const normalizedMk677 = normalizeMk677State(state.mk677);
+  if (JSON.stringify(state.mk677 || {}) !== JSON.stringify(normalizedMk677)) {
+    state.mk677 = normalizedMk677;
+    changed = true;
+  } else if (!state.mk677 || typeof state.mk677 !== "object" || Array.isArray(state.mk677)) {
+    state.mk677 = normalizedMk677;
+    changed = true;
+  }
+
   const originalTretChanges = Array.isArray(state.meta.tretinoinScheduleChanges)
     ? state.meta.tretinoinScheduleChanges
     : [];
@@ -557,6 +670,13 @@ function ensureDay(dayKey = getTodayKey()) {
 function hasMeaningfulState(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return false;
   if (snapshot.weights && Object.keys(snapshot.weights).length > 0) return true;
+  if (snapshot.mk677 && (
+    snapshot.mk677.cycleStart ||
+    Number(snapshot.mk677.currentDoseMg) !== 12.5 ||
+    Object.keys(snapshot.mk677.logs || {}).length > 0 ||
+    (Array.isArray(snapshot.mk677.labs) && snapshot.mk677.labs.length > 0) ||
+    Object.values(snapshot.mk677.thresholds || {}).some(value => value !== null && value !== "")
+  )) return true;
   if (Array.isArray(snapshot.meta?.tretinoinScheduleChanges) && snapshot.meta.tretinoinScheduleChanges.length > 0) return true;
   if (snapshot.meta?.looksTaskEdits && Object.keys(snapshot.meta.looksTaskEdits).length > 0) return true;
   if (Number.isInteger(snapshot.meta?.workoutRotationAnchorIndex)) return true;
@@ -1273,6 +1393,330 @@ function renderWeightTracker() {
   if (changeValue) changeValue.textContent = `${change > 0 ? "+" : ""}${change.toFixed(1)} lb`;
 }
 
+
+function setMkStatus(elementId, message, type = "") {
+  const element = $(elementId);
+  if (!element) return;
+  element.textContent = message;
+  element.classList.toggle("good", type === "good");
+  element.classList.toggle("bad", type === "bad");
+}
+
+function formatMkDate(dayKey) {
+  return keyToLocalDate(dayKey).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function saveMkPlan() {
+  const start = $("mkCycleStartInput")?.value || "";
+  const dose = Number($("mkDoseSelect")?.value || 12.5);
+  if (start && !isDateKey(start)) {
+    setMkStatus("mkPlanStatus", "Choose a valid cycle start date.", "bad");
+    return;
+  }
+  if (![12.5, 25].includes(dose)) {
+    setMkStatus("mkPlanStatus", "Choose one of the recorded dose options.", "bad");
+    return;
+  }
+  state.mk677 = normalizeMk677State(state.mk677);
+  state.mk677.cycleStart = start;
+  state.mk677.currentDoseMg = dose;
+  saveState();
+  renderMk677();
+  setMkStatus("mkPlanStatus", start ? `Plan saved. Eight-week window ends ${formatMkDate(getMkCycleEndKey())}.` : "Plan saved. Set a start date when the cycle begins.", "good");
+  toast("MK-677 plan saved.");
+}
+
+function syncMkLogFormToDate({ preserveExisting = false } = {}) {
+  const dateInput = $("mkLogDate");
+  if (!dateInput) return;
+  const dayKey = dateInput.value || getTodayKey();
+  if (!isDateKey(dayKey)) return;
+  const existing = state.mk677?.logs?.[dayKey];
+  const scheduled = isMkScheduledDay(dayKey);
+  const badge = $("mkLogScheduleBadge");
+  if (badge) badge.textContent = scheduled ? "Scheduled night" : "Planned off day";
+  if (existing) {
+    $("mkLogStatus").value = existing.status;
+    $("mkLogDose").value = existing.doseMg ?? "";
+    $("mkLogTime").value = existing.time || "";
+    $("mkGlucose").value = existing.fastingGlucose ?? "";
+    $("mkWeight").value = existing.weight ?? "";
+    $("mkHeartRate").value = existing.restingHr ?? "";
+    $("mkBpSys").value = existing.systolic ?? "";
+    $("mkBpDia").value = existing.diastolic ?? "";
+    $("mkNotes").value = existing.notes || "";
+    $("mkSwelling").value = String(existing.swelling || 0);
+    $("mkAppetite").value = String(existing.appetite || 0);
+    $("mkFatigue").value = String(existing.fatigue || 0);
+    $("mkPain").value = String(existing.pain || 0);
+    $("mkTingling").value = String(existing.tingling || 0);
+    $("mkHeadacheVision").value = String(existing.headacheVision || 0);
+  } else if (!preserveExisting) {
+    $("mkLogStatus").value = scheduled ? "taken" : "off";
+    $("mkLogDose").value = scheduled ? String(state.mk677?.currentDoseMg ?? 12.5) : "0";
+    $("mkLogTime").value = "";
+    $("mkGlucose").value = "";
+    $("mkWeight").value = state.weights?.[dayKey] ?? "";
+    $("mkHeartRate").value = "";
+    $("mkBpSys").value = "";
+    $("mkBpDia").value = "";
+    $("mkNotes").value = "";
+    ["mkSwelling", "mkAppetite", "mkFatigue", "mkPain", "mkTingling", "mkHeadacheVision"].forEach(id => { $(id).value = "0"; });
+  }
+}
+
+function saveMkDailyLog() {
+  const dayKey = $("mkLogDate")?.value || "";
+  if (!isDateKey(dayKey)) {
+    setMkStatus("mkLogSaveStatus", "Choose a valid date.", "bad");
+    return;
+  }
+  const status = $("mkLogStatus").value;
+  const rawDose = $("mkLogDose").value;
+  const dose = rawDose === "" ? null : Number(rawDose);
+  if (dose !== null && (!Number.isFinite(dose) || dose < 0 || dose > 50)) {
+    setMkStatus("mkLogSaveStatus", "Enter a valid recorded dose from 0 to 50 mg.", "bad");
+    return;
+  }
+  const log = normalizeMk677Log(dayKey, {
+    status,
+    doseMg: dose,
+    time: $("mkLogTime").value,
+    fastingGlucose: $("mkGlucose").value,
+    weight: $("mkWeight").value,
+    restingHr: $("mkHeartRate").value,
+    systolic: $("mkBpSys").value,
+    diastolic: $("mkBpDia").value,
+    swelling: $("mkSwelling").value,
+    appetite: $("mkAppetite").value,
+    fatigue: $("mkFatigue").value,
+    pain: $("mkPain").value,
+    tingling: $("mkTingling").value,
+    headacheVision: $("mkHeadacheVision").value,
+    notes: $("mkNotes").value
+  });
+  state.mk677.logs[dayKey] = log;
+  if (log.weight !== null) {
+    state.weights = state.weights || {};
+    state.weights[dayKey] = Math.round(log.weight * 10) / 10;
+  }
+  saveState();
+  renderMk677();
+  renderWeightTracker();
+  setMkStatus("mkLogSaveStatus", `Saved ${formatMkDate(dayKey)}.`, "good");
+  toast("MK-677 daily log saved.");
+}
+
+function deleteMkLog(dayKey) {
+  if (!state.mk677?.logs?.[dayKey]) return;
+  delete state.mk677.logs[dayKey];
+  saveState();
+  renderMk677();
+}
+
+function saveMkThresholds() {
+  state.mk677.thresholds = {
+    fastingGlucoseMax: optionalNumber($("mkThresholdGlucose")?.value, 40, 600),
+    systolicMax: optionalNumber($("mkThresholdSys")?.value, 60, 260),
+    diastolicMax: optionalNumber($("mkThresholdDia")?.value, 30, 180)
+  };
+  saveState();
+  renderMk677();
+  toast("Clinician thresholds saved.");
+}
+
+function getMkLogs() {
+  return Object.entries(state.mk677?.logs || {})
+    .filter(([dayKey]) => isDateKey(dayKey))
+    .map(([dayKey, log]) => ({ dayKey, ...normalizeMk677Log(dayKey, log) }))
+    .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+}
+
+function renderMkSchedule() {
+  const container = $("mkWeekSchedule");
+  if (!container) return;
+  const todayName = getRoutineDayName();
+  const ordered = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  container.innerHTML = ordered.map(name => {
+    const on = !["Saturday", "Sunday"].includes(name);
+    return `<div class="mk-day ${on ? "on" : "off"} ${name === todayName ? "today" : ""}"><strong>${name.slice(0, 3)}</strong><span>${on ? "Night" : "Off"}</span></div>`;
+  }).join("");
+  const badge = $("mkTodayPlanBadge");
+  if (badge) badge.textContent = isMkScheduledDay() ? `Tonight · ${state.mk677.currentDoseMg} mg` : "Today · off";
+}
+
+function renderMkTrends(logs) {
+  const recentStart = formatDateKey(addDays(keyToLocalDate(getTodayKey()), -6));
+  const recent = logs.filter(log => log.dayKey >= recentStart && log.dayKey <= getTodayKey());
+  const glucose = recent.map(log => log.fastingGlucose).filter(Number.isFinite);
+  const avgGlucose = glucose.length ? Math.round(glucose.reduce((a, b) => a + b, 0) / glucose.length) : null;
+  $("mkAvgGlucose").textContent = avgGlucose === null ? "—" : `${avgGlucose} mg/dL`;
+
+  const weights = logs.filter(log => Number.isFinite(log.weight));
+  if (weights.length >= 2) {
+    const change = Math.round((weights.at(-1).weight - weights[0].weight) * 10) / 10;
+    $("mkWeightChange").textContent = `${change > 0 ? "+" : ""}${change.toFixed(1)} lb`;
+  } else {
+    $("mkWeightChange").textContent = weights.length ? `${weights[0].weight.toFixed(1)} lb` : "—";
+  }
+
+  const bp = recent.filter(log => Number.isFinite(log.systolic) && Number.isFinite(log.diastolic));
+  if (bp.length) {
+    const sys = Math.round(bp.reduce((sum, log) => sum + log.systolic, 0) / bp.length);
+    const dia = Math.round(bp.reduce((sum, log) => sum + log.diastolic, 0) / bp.length);
+    $("mkAvgBp").textContent = `${sys}/${dia}`;
+  } else $("mkAvgBp").textContent = "—";
+
+  const symptomKeys = ["swelling", "appetite", "fatigue", "pain", "tingling", "headacheVision"];
+  const flags = recent.reduce((count, log) => count + symptomKeys.filter(key => Number(log[key]) >= 2).length, 0);
+  $("mkSymptomFlags").textContent = String(flags);
+}
+
+function renderMkThresholdAlert(logs) {
+  const element = $("mkThresholdAlert");
+  if (!element) return;
+  const threshold = state.mk677.thresholds || {};
+  const latest = logs.at(-1);
+  if (!latest) {
+    element.classList.add("hidden");
+    element.textContent = "";
+    return;
+  }
+  const alerts = [];
+  if (Number.isFinite(threshold.fastingGlucoseMax) && Number.isFinite(latest.fastingGlucose) && latest.fastingGlucose > threshold.fastingGlucoseMax) alerts.push(`fasting glucose ${latest.fastingGlucose} is above your saved limit of ${threshold.fastingGlucoseMax}`);
+  if (Number.isFinite(threshold.systolicMax) && Number.isFinite(latest.systolic) && latest.systolic > threshold.systolicMax) alerts.push(`systolic BP ${latest.systolic} is above your saved limit of ${threshold.systolicMax}`);
+  if (Number.isFinite(threshold.diastolicMax) && Number.isFinite(latest.diastolic) && latest.diastolic > threshold.diastolicMax) alerts.push(`diastolic BP ${latest.diastolic} is above your saved limit of ${threshold.diastolicMax}`);
+  const severeSymptoms = [latest.swelling, latest.fatigue, latest.pain, latest.tingling, latest.headacheVision].some(value => Number(value) >= 3);
+  if (severeSymptoms) alerts.push("a severe symptom score was logged");
+  if (!alerts.length) {
+    element.classList.add("hidden");
+    element.textContent = "";
+    return;
+  }
+  element.classList.remove("hidden");
+  element.textContent = `Review with your clinician: ${alerts.join("; ")}.`;
+}
+
+function renderMkHistory(logs) {
+  const list = $("mkHistoryList");
+  if (!list) return;
+  list.innerHTML = "";
+  const recent = [...logs].reverse().slice(0, 12);
+  if (!recent.length) {
+    list.innerHTML = '<div class="mk-history-empty">No daily logs yet.</div>';
+    return;
+  }
+  for (const log of recent) {
+    const row = document.createElement("div");
+    row.className = "mk-history-row";
+    const symptomMax = Math.max(log.swelling, log.appetite, log.fatigue, log.pain, log.tingling, log.headacheVision);
+    row.innerHTML = `
+      <div class="mk-history-cell"><span>Date</span><strong>${escapeHtml(formatMkDate(log.dayKey))}</strong></div>
+      <div class="mk-history-cell"><span>Status</span><strong class="mk-history-status ${log.status}">${escapeHtml(log.status === "off" ? "Off day" : log.status[0].toUpperCase() + log.status.slice(1))}</strong></div>
+      <div class="mk-history-cell"><span>Dose</span><strong>${Number.isFinite(log.doseMg) ? `${log.doseMg} mg` : "—"}</strong></div>
+      <div class="mk-history-cell"><span>Glucose</span><strong>${Number.isFinite(log.fastingGlucose) ? `${log.fastingGlucose} mg/dL` : "—"}</strong></div>
+      <div class="mk-history-cell"><span>BP</span><strong>${Number.isFinite(log.systolic) && Number.isFinite(log.diastolic) ? `${log.systolic}/${log.diastolic}` : "—"}</strong></div>
+      <div class="mk-history-cell"><span>Max symptom</span><strong>${symptomMax}/3</strong></div>
+      <button class="mk-delete-btn" type="button" aria-label="Delete MK-677 log for ${escapeHtml(log.dayKey)}">×</button>`;
+    row.querySelector("button").addEventListener("click", () => deleteMkLog(log.dayKey));
+    list.appendChild(row);
+  }
+}
+
+function saveMkLab() {
+  const date = $("mkLabDate")?.value || "";
+  if (!isDateKey(date)) {
+    setMkStatus("mkLabSaveStatus", "Choose a valid lab date.", "bad");
+    return;
+  }
+  const result = {
+    id: `${date}-${Date.now().toString(36)}`,
+    date,
+    igf1: optionalNumber($("mkLabIgf1")?.value, 0),
+    a1c: optionalNumber($("mkLabA1c")?.value, 0, 30),
+    glucose: optionalNumber($("mkLabGlucose")?.value, 0, 600),
+    ast: optionalNumber($("mkLabAst")?.value, 0, 5000),
+    alt: optionalNumber($("mkLabAlt")?.value, 0, 5000),
+    insulin: optionalNumber($("mkLabInsulin")?.value, 0, 5000),
+    prolactin: optionalNumber($("mkLabProlactin")?.value, 0, 5000),
+    notes: String($("mkLabNotes")?.value || "").slice(0, 300)
+  };
+  state.mk677.labs.push(result);
+  state.mk677.labs.sort((a, b) => a.date.localeCompare(b.date));
+  saveState();
+  renderMk677();
+  ["mkLabIgf1", "mkLabA1c", "mkLabGlucose", "mkLabAst", "mkLabAlt", "mkLabInsulin", "mkLabProlactin", "mkLabNotes"].forEach(id => { if ($(id)) $(id).value = ""; });
+  setMkStatus("mkLabSaveStatus", `Saved lab results for ${formatMkDate(date)}.`, "good");
+  toast("Lab result saved.");
+}
+
+function deleteMkLab(id) {
+  state.mk677.labs = (state.mk677.labs || []).filter(item => item.id !== id);
+  saveState();
+  renderMk677();
+}
+
+function renderMkLabHistory() {
+  const list = $("mkLabHistory");
+  if (!list) return;
+  const labs = [...(state.mk677?.labs || [])].sort((a, b) => b.date.localeCompare(a.date));
+  list.innerHTML = "";
+  if (!labs.length) {
+    list.innerHTML = '<div class="mk-history-empty">No lab results logged yet.</div>';
+    return;
+  }
+  for (const lab of labs) {
+    const row = document.createElement("div");
+    row.className = "mk-lab-row";
+    const values = [
+      ["IGF-1", lab.igf1], ["A1c", lab.a1c], ["Glucose", lab.glucose], ["AST", lab.ast], ["ALT", lab.alt], ["Insulin", lab.insulin], ["Prolactin", lab.prolactin]
+    ].filter(([, value]) => Number.isFinite(value));
+    row.innerHTML = `<div class="mk-lab-row-head"><strong>${escapeHtml(formatMkDate(lab.date))}</strong><button class="mk-lab-delete" type="button">Delete</button></div><div class="mk-lab-row-values">${values.map(([label, value]) => `<span><b>${label}</b> ${value}</span>`).join("") || "No numeric values"}${lab.notes ? `<span>${escapeHtml(lab.notes)}</span>` : ""}</div>`;
+    row.querySelector("button").addEventListener("click", () => deleteMkLab(lab.id));
+    list.appendChild(row);
+  }
+}
+
+function renderMk677() {
+  const page = $("mk677Page");
+  if (!page) return;
+  state.mk677 = normalizeMk677State(state.mk677);
+  const todayKey = getTodayKey();
+  const cycleDay = getMkCycleDay(todayKey);
+  const cycleEnd = getMkCycleEndKey();
+  const cycleLabel = $("mkCycleDay");
+  if (cycleLabel) {
+    if (!state.mk677.cycleStart) cycleLabel.textContent = "Not started";
+    else if (todayKey < state.mk677.cycleStart) cycleLabel.textContent = `Starts ${formatMkDate(state.mk677.cycleStart)}`;
+    else if (cycleDay) cycleLabel.textContent = `Day ${cycleDay} / ${MK_CYCLE_DAYS}`;
+    else if (cycleEnd && todayKey > cycleEnd) cycleLabel.textContent = "Cycle complete";
+    else cycleLabel.textContent = "Outside cycle";
+  }
+  $("mkCurrentDoseDisplay").textContent = `${state.mk677.currentDoseMg} mg`;
+  $("mkCycleStartInput").value = state.mk677.cycleStart || "";
+  $("mkDoseSelect").value = String(state.mk677.currentDoseMg);
+  renderMkSchedule();
+
+  const logDate = $("mkLogDate");
+  const logDateWasBlank = Boolean(logDate && !logDate.value);
+  if (logDateWasBlank) logDate.value = todayKey;
+  syncMkLogFormToDate({ preserveExisting: !logDateWasBlank });
+
+  const threshold = state.mk677.thresholds || {};
+  $("mkThresholdGlucose").value = threshold.fastingGlucoseMax ?? "";
+  $("mkThresholdSys").value = threshold.systolicMax ?? "";
+  $("mkThresholdDia").value = threshold.diastolicMax ?? "";
+
+  const labDate = $("mkLabDate");
+  if (labDate && !labDate.value) labDate.value = todayKey;
+
+  const logs = getMkLogs();
+  renderMkTrends(logs);
+  renderMkThresholdAlert(logs);
+  renderMkHistory(logs);
+  renderMkLabHistory();
+}
+
 function getWeeklyReviewKeys() {
   const today = keyToLocalDate(getTodayKey());
   const sunday = addDays(today, -today.getDay());
@@ -1568,6 +2012,7 @@ function render() {
   renderLooks();
   renderWeightTracker();
   renderWeeklyReview();
+  renderMk677();
   renderAdmin();
 }
 
@@ -1650,6 +2095,13 @@ document.querySelectorAll(".weight-range-btn").forEach(button => {
     renderWeightTracker();
   });
 });
+
+
+$("saveMkPlanBtn")?.addEventListener("click", saveMkPlan);
+$("mkLogDate")?.addEventListener("change", () => syncMkLogFormToDate());
+$("saveMkLogBtn")?.addEventListener("click", saveMkDailyLog);
+$("saveMkThresholdsBtn")?.addEventListener("click", saveMkThresholds);
+$("saveMkLabBtn")?.addEventListener("click", saveMkLab);
 
 document.addEventListener("click", event => {
   document.querySelectorAll("details.task-menu[open]").forEach(menu => {
