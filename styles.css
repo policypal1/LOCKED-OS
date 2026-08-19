@@ -626,3 +626,19 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
   .mk-settings-bottom-form { grid-template-columns: 1fr; }
   .mk-settings-bottom-form .btn { grid-column: auto; }
 }
+
+/* MK-677 compact regimen + monitoring layout */
+.mk677-simple-page { gap: 14px; }
+.mk-compact-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 14px; align-items: start; }
+.mk-notes-card, .mk-monitor-card { padding: 20px; }
+.mk-notes-card h3, .mk-monitor-card h3 { margin: 0; font-size: 1.28rem; letter-spacing: -.025em; }
+.mk-note-list { display: grid; gap: 8px; margin-top: 14px; }
+.mk-note-list > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.4); }
+.mk-note-list strong { font-size: .78rem; }
+.mk-note-list span { color: var(--muted); font-size: .78rem; font-weight: 750; line-height: 1.45; }
+.mk-monitor-form { display: grid; gap: 12px; margin-top: 14px; }
+@media (max-width: 900px) { .mk-compact-grid { grid-template-columns: 1fr; } }
+@media (max-width: 620px) {
+  .mk-notes-card, .mk-monitor-card { padding: 16px; }
+  .mk-note-list > div { grid-template-columns: 1fr; gap: 4px; }
+}

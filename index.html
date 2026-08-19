@@ -253,83 +253,54 @@
 
 
       <section id="mk677Page" class="page">
-        <div class="mk677-page">
+        <div class="mk677-page mk677-simple-page">
           <section class="card mk-hero-card">
             <div class="mk-hero-copy">
-              <p class="eyebrow blue">Cycle log</p>
-              <h2>MK-677 cycle tracker</h2>
-              <p>Keep the weekly plan, current dose, and simple daily check-ins together in one place.</p>
+              <p class="eyebrow blue">Regimen</p>
+              <h2>MK-677</h2>
+              <p>A simple place for the weekly plan, personal notes, and basic monitoring.</p>
             </div>
             <div class="mk-cycle-status">
               <div><span>Cycle</span><strong id="mkCycleDay">Not started</strong></div>
               <div><span>Current dose</span><strong id="mkCurrentDoseDisplay">12.5 mg</strong></div>
-              <div><span>Schedule</span><strong>Mon–Fri · night</strong></div>
-              <div><span>Length</span><strong>8 weeks</strong></div>
+              <div><span>Schedule</span><strong>Mon–Fri</strong></div>
+              <div><span>Weekend</span><strong>Off</strong></div>
             </div>
           </section>
 
           <section class="card mk-plan-card">
             <div class="panel-title">
-              <div><p class="eyebrow blue">Regimen</p><h3>Weekly plan</h3></div>
+              <div><p class="eyebrow blue">Weekly plan</p><h3>5 days on · 2 days off</h3></div>
               <span id="mkTodayPlanBadge" class="badge blue">Loading…</span>
             </div>
             <div id="mkWeekSchedule" class="mk-week-schedule"></div>
-            <div class="mk-plan-note">
-              <strong>Recorded plan</strong>
-              <span>Monday through Friday at night. Saturday and Sunday off.</span>
-            </div>
           </section>
 
-          <div class="mk-grid mk-main-grid mk-simple-main-grid">
-            <section class="card mk-log-card">
-              <div class="panel-title">
-                <div><p class="eyebrow blue">Daily check-in</p><h3>Daily log</h3></div>
-                <span id="mkLogScheduleBadge" class="badge blue">Scheduled</span>
-              </div>
-
-              <div class="mk-log-form">
-                <div class="mk-field-grid three">
-                  <label class="mk-field"><span>Date</span><input id="mkLogDate" type="date" /></label>
-                  <label class="mk-field"><span>Status</span>
-                    <select id="mkLogStatus">
-                      <option value="taken">Taken</option>
-                      <option value="skipped">Skipped</option>
-                      <option value="off">Off day</option>
-                    </select>
-                  </label>
-                  <label class="mk-field"><span>Dose taken (mg)</span><input id="mkLogDose" type="number" min="0" max="50" step="0.5" inputmode="decimal" /></label>
-                </div>
-
-                <div class="mk-field-grid three">
-                  <label class="mk-field"><span>Time</span><input id="mkLogTime" type="time" /></label>
-                  <label class="mk-field"><span>Weight</span><div class="mk-input-unit"><input id="mkWeight" type="number" min="50" max="500" step="0.1" inputmode="decimal" placeholder="Optional" /><span>lb</span></div></label>
-                  <label class="mk-field"><span>Resting heart rate</span><div class="mk-input-unit"><input id="mkHeartRate" type="number" min="30" max="220" step="1" inputmode="numeric" placeholder="Optional" /><span>bpm</span></div></label>
-                </div>
-
-                <label class="mk-field"><span>Notes</span><input id="mkNotes" type="text" maxlength="500" placeholder="Anything worth remembering from today…" /></label>
-
-                <button id="saveMkLogBtn" class="btn blue mk-save-log-btn" type="button">Save daily log</button>
-                <p id="mkLogSaveStatus" class="mk-save-status" aria-live="polite"></p>
+          <div class="mk-compact-grid">
+            <section class="card mk-notes-card">
+              <div class="panel-title"><div><p class="eyebrow blue">Personal notes</p><h3>Keep it simple</h3></div></div>
+              <div class="mk-note-list">
+                <div><strong>Night</strong><span>Preferred timing if I want to avoid extra daytime hunger.</span></div>
+                <div><strong>Morning</strong><span>Preferred timing if I want more daytime hunger and my clinician says timing can be shifted.</span></div>
+                <div><strong>Schedule</strong><span>Monday through Friday. Saturday and Sunday off.</span></div>
+                <div><strong>Cycle length</strong><span>Follow the cycle limit set by my clinician.</span></div>
               </div>
             </section>
 
-            <aside class="mk-side-stack">
-              <section class="card mk-trends-card">
-                <div class="panel-title"><div><p class="eyebrow blue">Overview</p><h3>Recent tracking</h3></div></div>
-                <div class="mk-trend-grid">
-                  <div><span>7-day avg heart rate</span><strong id="mkAvgHeartRate">—</strong></div>
-                  <div><span>Weight change</span><strong id="mkWeightChange">—</strong></div>
-                  <div><span>Logs this week</span><strong id="mkWeekLogs">0</strong></div>
-                  <div><span>Taken this week</span><strong id="mkWeekTaken">0</strong></div>
+            <section class="card mk-monitor-card">
+              <div class="panel-title"><div><p class="eyebrow blue">Monitoring</p><h3>Basic check-in</h3></div><span id="mkMonitorSavedBadge" class="badge">Not saved</span></div>
+              <div class="mk-monitor-form">
+                <label class="mk-field"><span>Date</span><input id="mkMonitorDate" type="date" /></label>
+                <div class="mk-field-grid two">
+                  <label class="mk-field"><span>Weight</span><div class="mk-input-unit"><input id="mkMonitorWeight" type="number" min="50" max="500" step="0.1" inputmode="decimal" placeholder="Optional" /><span>lb</span></div></label>
+                  <label class="mk-field"><span>Resting heart rate</span><div class="mk-input-unit"><input id="mkMonitorHeartRate" type="number" min="30" max="220" step="1" inputmode="numeric" placeholder="Optional" /><span>bpm</span></div></label>
                 </div>
-              </section>
-            </aside>
+                <label class="mk-field"><span>Notes</span><input id="mkMonitorNotes" type="text" maxlength="500" placeholder="Anything worth remembering…" /></label>
+                <button id="saveMkMonitoringBtn" class="btn blue" type="button">Save monitoring</button>
+                <p id="mkMonitoringStatus" class="mk-save-status" aria-live="polite"></p>
+              </div>
+            </section>
           </div>
-
-          <section class="card mk-history-card">
-            <div class="panel-title"><div><p class="eyebrow blue">History</p><h3>Recent daily logs</h3></div></div>
-            <div id="mkHistoryList" class="mk-history-list"></div>
-          </section>
 
           <section class="card mk-settings-card mk-settings-bottom">
             <p class="eyebrow blue">Cycle setup</p>
@@ -345,7 +316,6 @@
               <button id="saveMkPlanBtn" class="btn blue" type="button">Save plan</button>
             </div>
             <p id="mkPlanStatus" class="mk-save-status" aria-live="polite"></p>
-            <p class="mk-muted-note">Dose changes are manual. The tracker will not change the recorded dose automatically.</p>
           </section>
         </div>
       </section>

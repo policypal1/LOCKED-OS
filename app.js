@@ -318,6 +318,7 @@ function createDefaultMk677State() {
   return {
     cycleStart: "",
     currentDoseMg: 12.5,
+    monitoring: { date: "", weight: null, restingHr: null, notes: "" },
     logs: {},
     labs: [],
     thresholds: { fastingGlucoseMax: null, systolicMax: null, diastolicMax: null }
@@ -365,6 +366,12 @@ function normalizeMk677State(original) {
   const normalized = { ...base };
   normalized.cycleStart = isDateKey(original.cycleStart) ? original.cycleStart : "";
   normalized.currentDoseMg = [12.5, 25].includes(Number(original.currentDoseMg)) ? Number(original.currentDoseMg) : 12.5;
+  normalized.monitoring = {
+    date: isDateKey(original.monitoring?.date) ? original.monitoring.date : "",
+    weight: optionalNumber(original.monitoring?.weight, 50, 500),
+    restingHr: optionalNumber(original.monitoring?.restingHr, 30, 220),
+    notes: String(original.monitoring?.notes || "").slice(0, 500)
+  };
   normalized.logs = {};
   if (original.logs && typeof original.logs === "object" && !Array.isArray(original.logs)) {
     for (const [dayKey, log] of Object.entries(original.logs)) {
@@ -1659,6 +1666,39 @@ function renderMkLabHistory() {
   }
 }
 
+function saveMkMonitoring() {
+  state.mk677 = normalizeMk677State(state.mk677);
+  const date = $("mkMonitorDate")?.value || getTodayKey();
+  if (!isDateKey(date)) {
+    setMkStatus("mkMonitoringStatus", "Choose a valid date.", "bad");
+    return;
+  }
+  const weight = optionalNumber($("mkMonitorWeight")?.value, 50, 500);
+  const restingHr = optionalNumber($("mkMonitorHeartRate")?.value, 30, 220);
+  const notes = String($("mkMonitorNotes")?.value || "").trim().slice(0, 500);
+  state.mk677.monitoring = { date, weight, restingHr, notes };
+  if (Number.isFinite(weight)) state.weights[date] = weight;
+  saveState();
+  renderMk677();
+  renderWeightTracker();
+  setMkStatus("mkMonitoringStatus", `Saved ${formatMkDate(date)}.`, "good");
+  toast("MK-677 monitoring saved.");
+}
+
+function renderMkMonitoring() {
+  const monitor = state.mk677?.monitoring || {};
+  const dateEl = $("mkMonitorDate");
+  const weightEl = $("mkMonitorWeight");
+  const heartEl = $("mkMonitorHeartRate");
+  const notesEl = $("mkMonitorNotes");
+  if (dateEl) dateEl.value = monitor.date || getTodayKey();
+  if (weightEl) weightEl.value = Number.isFinite(monitor.weight) ? String(monitor.weight) : "";
+  if (heartEl) heartEl.value = Number.isFinite(monitor.restingHr) ? String(monitor.restingHr) : "";
+  if (notesEl) notesEl.value = monitor.notes || "";
+  const badge = $("mkMonitorSavedBadge");
+  if (badge) badge.textContent = monitor.date ? `Saved ${formatMkDate(monitor.date)}` : "Not saved";
+}
+
 function renderMk677() {
   const page = $("mk677Page");
   if (!page) return;
@@ -1681,15 +1721,7 @@ function renderMk677() {
   const doseSelect = $("mkDoseSelect");
   if (doseSelect) doseSelect.value = String(state.mk677.currentDoseMg);
   renderMkSchedule();
-
-  const logDate = $("mkLogDate");
-  const logDateWasBlank = Boolean(logDate && !logDate.value);
-  if (logDateWasBlank) logDate.value = todayKey;
-  syncMkLogFormToDate({ preserveExisting: !logDateWasBlank });
-
-  const logs = getMkLogs();
-  renderMkTrends(logs);
-  renderMkHistory(logs);
+  renderMkMonitoring();
 }
 
 
@@ -2074,8 +2106,7 @@ document.querySelectorAll(".weight-range-btn").forEach(button => {
 
 
 $("saveMkPlanBtn")?.addEventListener("click", saveMkPlan);
-$("mkLogDate")?.addEventListener("change", () => syncMkLogFormToDate());
-$("saveMkLogBtn")?.addEventListener("click", saveMkDailyLog);
+$("saveMkMonitoringBtn")?.addEventListener("click", saveMkMonitoring);
 
 document.addEventListener("click", event => {
   document.querySelectorAll("details.task-menu[open]").forEach(menu => {
