@@ -256,9 +256,9 @@
         <div class="mk677-page">
           <section class="card mk-hero-card">
             <div class="mk-hero-copy">
-              <p class="eyebrow blue">Clinician-supervised log</p>
+              <p class="eyebrow blue">Cycle log</p>
               <h2>MK-677 cycle tracker</h2>
-              <p>Track the plan you were given, daily measurements, symptoms, and lab results in one place. This page records your regimen; it does not decide when to change your dose.</p>
+              <p>Keep the weekly plan, current dose, and simple daily check-ins together in one place.</p>
             </div>
             <div class="mk-cycle-status">
               <div><span>Cycle</span><strong id="mkCycleDay">Not started</strong></div>
@@ -268,53 +268,22 @@
             </div>
           </section>
 
-          <section class="card mk-safety-card">
-            <div>
-              <p class="eyebrow">Safety note</p>
-              <strong>Use this as a health log, not as dosing guidance.</strong>
-              <p>Ibutamoren (MK-677) is not FDA-approved. FDA identifies appetite increase, water retention, fatigue, muscle pain, altered glucose metabolism/insulin sensitivity, and a potential congestive-heart-failure signal as important safety concerns. Use the limits your clinician gave you.</p>
+          <section class="card mk-plan-card">
+            <div class="panel-title">
+              <div><p class="eyebrow blue">Regimen</p><h3>Weekly plan</h3></div>
+              <span id="mkTodayPlanBadge" class="badge blue">Loading…</span>
             </div>
-            <div class="mk-redflag-list">
-              <span>Contact your clinician promptly for severe or worsening symptoms.</span>
-              <span>Seek urgent care for chest pain, severe shortness of breath, fainting, or other emergency symptoms.</span>
+            <div id="mkWeekSchedule" class="mk-week-schedule"></div>
+            <div class="mk-plan-note">
+              <strong>Recorded plan</strong>
+              <span>Monday through Friday at night. Saturday and Sunday off.</span>
             </div>
           </section>
 
-          <div class="mk-grid mk-plan-grid">
-            <section class="card mk-plan-card">
-              <div class="panel-title">
-                <div><p class="eyebrow blue">Regimen</p><h3>Weekly plan</h3></div>
-                <span id="mkTodayPlanBadge" class="badge blue">Loading…</span>
-              </div>
-              <div id="mkWeekSchedule" class="mk-week-schedule"></div>
-              <div class="mk-plan-note">
-                <strong>Recorded plan</strong>
-                <span>Monday through Friday at night. Saturday and Sunday off.</span>
-              </div>
-            </section>
-
-            <section class="card mk-settings-card">
-              <p class="eyebrow blue">Cycle setup</p>
-              <h3>Clinician-set plan</h3>
-              <div class="mk-settings-form">
-                <label class="mk-field"><span>Cycle start date</span><input id="mkCycleStartInput" type="date" /></label>
-                <label class="mk-field"><span>Current dose (mg)</span>
-                  <select id="mkDoseSelect">
-                    <option value="12.5">12.5 mg</option>
-                    <option value="25">25 mg</option>
-                  </select>
-                </label>
-                <button id="saveMkPlanBtn" class="btn blue" type="button">Save plan</button>
-              </div>
-              <p id="mkPlanStatus" class="mk-save-status" aria-live="polite"></p>
-              <p class="mk-muted-note">The 25 mg option is available only as a manual update. The app will never increase the dose automatically.</p>
-            </section>
-          </div>
-
-          <div class="mk-grid mk-main-grid">
+          <div class="mk-grid mk-main-grid mk-simple-main-grid">
             <section class="card mk-log-card">
               <div class="panel-title">
-                <div><p class="eyebrow blue">Daily check-in</p><h3>Health log</h3></div>
+                <div><p class="eyebrow blue">Daily check-in</p><h3>Daily log</h3></div>
                 <span id="mkLogScheduleBadge" class="badge blue">Scheduled</span>
               </div>
 
@@ -331,29 +300,13 @@
                   <label class="mk-field"><span>Dose taken (mg)</span><input id="mkLogDose" type="number" min="0" max="50" step="0.5" inputmode="decimal" /></label>
                 </div>
 
-                <div class="mk-field-grid four">
+                <div class="mk-field-grid three">
                   <label class="mk-field"><span>Time</span><input id="mkLogTime" type="time" /></label>
-                  <label class="mk-field"><span>Fasting glucose</span><div class="mk-input-unit"><input id="mkGlucose" type="number" min="40" max="600" step="1" inputmode="decimal" placeholder="Optional" /><span>mg/dL</span></div></label>
                   <label class="mk-field"><span>Weight</span><div class="mk-input-unit"><input id="mkWeight" type="number" min="50" max="500" step="0.1" inputmode="decimal" placeholder="Optional" /><span>lb</span></div></label>
                   <label class="mk-field"><span>Resting heart rate</span><div class="mk-input-unit"><input id="mkHeartRate" type="number" min="30" max="220" step="1" inputmode="numeric" placeholder="Optional" /><span>bpm</span></div></label>
                 </div>
 
-                <div class="mk-field-grid two">
-                  <label class="mk-field"><span>Blood pressure</span><div class="mk-bp-row"><input id="mkBpSys" type="number" min="60" max="260" step="1" inputmode="numeric" placeholder="SYS" /><span>/</span><input id="mkBpDia" type="number" min="30" max="180" step="1" inputmode="numeric" placeholder="DIA" /></div></label>
-                  <label class="mk-field"><span>Notes</span><input id="mkNotes" type="text" maxlength="500" placeholder="Sleep, unusual symptoms, doctor notes…" /></label>
-                </div>
-
-                <div class="mk-symptoms">
-                  <div class="mk-symptoms-heading"><strong>Symptoms</strong><span>0 none · 1 mild · 2 moderate · 3 severe</span></div>
-                  <div class="mk-symptom-grid">
-                    <label><span>Water retention / swelling</span><select id="mkSwelling"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
-                    <label><span>Appetite increase</span><select id="mkAppetite"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
-                    <label><span>Fatigue</span><select id="mkFatigue"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
-                    <label><span>Muscle / joint pain</span><select id="mkPain"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
-                    <label><span>Numbness / tingling</span><select id="mkTingling"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
-                    <label><span>Headache / vision symptoms</span><select id="mkHeadacheVision"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
-                  </div>
-                </div>
+                <label class="mk-field"><span>Notes</span><input id="mkNotes" type="text" maxlength="500" placeholder="Anything worth remembering from today…" /></label>
 
                 <button id="saveMkLogBtn" class="btn blue mk-save-log-btn" type="button">Save daily log</button>
                 <p id="mkLogSaveStatus" class="mk-save-status" aria-live="polite"></p>
@@ -362,26 +315,13 @@
 
             <aside class="mk-side-stack">
               <section class="card mk-trends-card">
-                <div class="panel-title"><div><p class="eyebrow blue">Trends</p><h3>Recent overview</h3></div></div>
+                <div class="panel-title"><div><p class="eyebrow blue">Overview</p><h3>Recent tracking</h3></div></div>
                 <div class="mk-trend-grid">
-                  <div><span>7-day glucose avg</span><strong id="mkAvgGlucose">—</strong></div>
+                  <div><span>7-day avg heart rate</span><strong id="mkAvgHeartRate">—</strong></div>
                   <div><span>Weight change</span><strong id="mkWeightChange">—</strong></div>
-                  <div><span>7-day BP avg</span><strong id="mkAvgBp">—</strong></div>
-                  <div><span>Symptom flags</span><strong id="mkSymptomFlags">0</strong></div>
+                  <div><span>Logs this week</span><strong id="mkWeekLogs">0</strong></div>
+                  <div><span>Taken this week</span><strong id="mkWeekTaken">0</strong></div>
                 </div>
-              </section>
-
-              <section class="card mk-threshold-card">
-                <p class="eyebrow blue">Doctor limits</p>
-                <h3>Your alert thresholds</h3>
-                <p>Enter only the limits your clinician gave you. Leave blank if you were not given a number.</p>
-                <div class="mk-field-grid three compact-grid">
-                  <label class="mk-field"><span>Fasting glucose max</span><input id="mkThresholdGlucose" type="number" min="40" max="600" step="1" placeholder="mg/dL" /></label>
-                  <label class="mk-field"><span>Systolic max</span><input id="mkThresholdSys" type="number" min="60" max="260" step="1" placeholder="mmHg" /></label>
-                  <label class="mk-field"><span>Diastolic max</span><input id="mkThresholdDia" type="number" min="30" max="180" step="1" placeholder="mmHg" /></label>
-                </div>
-                <button id="saveMkThresholdsBtn" class="btn secondary compact" type="button">Save thresholds</button>
-                <div id="mkThresholdAlert" class="mk-threshold-alert hidden"></div>
               </section>
             </aside>
           </div>
@@ -391,31 +331,22 @@
             <div id="mkHistoryList" class="mk-history-list"></div>
           </section>
 
-          <div class="mk-grid mk-lab-grid">
-            <section class="card mk-lab-card">
-              <p class="eyebrow blue">Labs</p>
-              <h3>Log lab results</h3>
-              <p>Use the exact values and units shown on your lab report. Reference ranges vary by lab, so this tracker does not label results high or low.</p>
-              <div class="mk-field-grid three">
-                <label class="mk-field"><span>Date</span><input id="mkLabDate" type="date" /></label>
-                <label class="mk-field"><span>IGF-1</span><input id="mkLabIgf1" type="number" step="0.1" min="0" placeholder="Value" /></label>
-                <label class="mk-field"><span>HbA1c (%)</span><input id="mkLabA1c" type="number" step="0.1" min="0" max="30" placeholder="Value" /></label>
-                <label class="mk-field"><span>Fasting glucose</span><input id="mkLabGlucose" type="number" step="1" min="0" placeholder="mg/dL" /></label>
-                <label class="mk-field"><span>AST</span><input id="mkLabAst" type="number" step="1" min="0" placeholder="U/L" /></label>
-                <label class="mk-field"><span>ALT</span><input id="mkLabAlt" type="number" step="1" min="0" placeholder="U/L" /></label>
-                <label class="mk-field"><span>Fasting insulin</span><input id="mkLabInsulin" type="number" step="0.1" min="0" placeholder="Optional" /></label>
-                <label class="mk-field"><span>Prolactin</span><input id="mkLabProlactin" type="number" step="0.1" min="0" placeholder="Optional" /></label>
-                <label class="mk-field"><span>Lab / units notes</span><input id="mkLabNotes" type="text" maxlength="300" placeholder="Units or reference-range notes" /></label>
-              </div>
-              <button id="saveMkLabBtn" class="btn blue" type="button">Save lab result</button>
-              <p id="mkLabSaveStatus" class="mk-save-status" aria-live="polite"></p>
-            </section>
-
-            <section class="card mk-lab-history-card">
-              <div class="panel-title"><h3>Lab history</h3></div>
-              <div id="mkLabHistory" class="mk-lab-history"></div>
-            </section>
-          </div>
+          <section class="card mk-settings-card mk-settings-bottom">
+            <p class="eyebrow blue">Cycle setup</p>
+            <h3>Clinician-set plan</h3>
+            <div class="mk-settings-form mk-settings-bottom-form">
+              <label class="mk-field"><span>Cycle start date</span><input id="mkCycleStartInput" type="date" /></label>
+              <label class="mk-field"><span>Current dose (mg)</span>
+                <select id="mkDoseSelect">
+                  <option value="12.5">12.5 mg</option>
+                  <option value="25">25 mg</option>
+                </select>
+              </label>
+              <button id="saveMkPlanBtn" class="btn blue" type="button">Save plan</button>
+            </div>
+            <p id="mkPlanStatus" class="mk-save-status" aria-live="polite"></p>
+            <p class="mk-muted-note">Dose changes are manual. The tracker will not change the recorded dose automatically.</p>
+          </section>
         </div>
       </section>
 

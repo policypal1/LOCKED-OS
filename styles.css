@@ -609,3 +609,20 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
   .mk-history-row { grid-template-columns: repeat(2,minmax(0,1fr)) 40px; }
   .mk-history-row .mk-history-cell:first-child { grid-column: 1 / -2; }
 }
+
+
+/* MK-677 simplified tracker */
+.mk-simple-main-grid { grid-template-columns: minmax(0, 1.45fr) minmax(280px, .55fr); }
+.mk-settings-bottom { padding: 20px; }
+.mk-settings-bottom-form { grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; }
+.mk-settings-bottom-form .btn { min-height: 44px; }
+@media (max-width: 900px) {
+  .mk-simple-main-grid { grid-template-columns: 1fr; }
+  .mk-settings-bottom-form { grid-template-columns: 1fr 1fr; }
+  .mk-settings-bottom-form .btn { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .mk-settings-bottom, .mk-plan-card, .mk-log-card, .mk-trends-card, .mk-history-card { padding: 16px; }
+  .mk-settings-bottom-form { grid-template-columns: 1fr; }
+  .mk-settings-bottom-form .btn { grid-column: auto; }
+}

@@ -1,6 +1,6 @@
 # LOCKED OS
 
-Daily checklist and Looksmaxxing tracker with local + Supabase state sync.
+Daily checklist, Looksmaxxing, weight, weekly review, and MK-677 tracking with local + Supabase state sync.
 
 ## Included files
 - `index.html` — app shell
@@ -10,19 +10,13 @@ Daily checklist and Looksmaxxing tracker with local + Supabase state sync.
 - `supabase-keepalive.yml` — optional keep-alive workflow
 
 ## This version adds
-- Daily morning **Wash face** task in Looksmaxxing.
-- **Edit task** inside the existing three-dot menu on Looksmaxxing tasks.
-- Edited task names persist in local/Supabase state and carry forward to future days.
-- Existing **Skip task** option remains available.
-- New **Admin → Rotation calendar** showing the next 14 days of:
-  - tretinoin / azelaic acid
-  - microneedling
-  - masseter training
-  - shaving / eyebrow management
-  - bed-sheet wash days
-  - Sunday lip exfoliation
-  - gym rotation
-- Existing tretinoin frequency control still works and the calendar updates with it.
+- New **MK-677** tab.
+- Records an 8-week plan with Monday-Friday nights and Saturday-Sunday off.
+- Current dose starts at **12.5 mg** and can be manually changed to **25 mg** only when you choose to update the clinician-set plan. The app never auto-escalates.
+- Simplified daily logger for date, status, dose, time, weight, resting heart rate, and notes.
+- Simple recent overview for resting heart rate, weight change, weekly logs, and taken days.
+- Weekly regimen stays prominent, with the clinician-set cycle start and dose controls moved lower on the page.
+- All MK-677 data is stored in the existing JSON state and syncs through the same Supabase row.
 
-## Replacing your current site
-You can replace the files in the repository root with the files from this folder. No database schema change is required for these updates.
+## Database
+No schema change is required. The existing `state` JSONB column stores the new tracker data.
