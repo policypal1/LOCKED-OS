@@ -1,11 +1,12 @@
-LOCKED OS — GHK-Cu tab update
+LOCKED OS update
 
-Upload these 3 files to the ROOT of your existing LOCKED-OS repository and replace index.html when prompted:
+Replace your existing index.html with the index.html in this folder.
+Add/replace ghk-cu.css and ghk-cu.js in the same folder as index.html.
+Keep your existing app.js, styles.css, schema.sql, README.md, and Supabase workflow files unchanged.
 
-1. index.html
-2. ghk-cu.js
-3. ghk-cu.css
-
-Do not replace app.js or styles.css. They stay exactly as they are.
-
-The new index.html loads the two new GHK-Cu files automatically.
+Changes in this build:
+- Daily Checklist is hidden from navigation but preserved in index.html for easy restoration.
+- Weight is moved inside MK-677.
+- Weekly Review is moved into Admin as a second sub-tab.
+- GHK-Cu daily monitoring form/history is removed.
+- GHK-Cu now has a simple weekday morning planner plus the reference/storage sections.
