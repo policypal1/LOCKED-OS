@@ -7,8 +7,10 @@
   <title>Locked OS</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M69 10 84 25 40 69 25 54 69 10Z' fill='%23f4d28b'/%3E%3Cpath d='M20 59 41 38 48 45 27 66 20 59Z' fill='%23fff8ec'/%3E%3Cpath d='M18 68 32 54 46 68 32 82 18 68Z' fill='%232f8f56'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="ghk-cu.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js" defer></script>
+  <script src="ghk-cu.js" defer></script>
 </head>
 <body>
   <main class="app">
@@ -34,6 +36,7 @@
           <button class="tab" data-tab="weightPage" type="button">Weight</button>
           <button class="tab" data-tab="weeklyPage" type="button">Weekly Review</button>
           <button class="tab mk-tab" data-tab="mk677Page" type="button">MK-677</button>
+          <button class="tab ghk-tab" data-tab="ghkCuPage" type="button">GHK-Cu</button>
           <button class="tab admin-tab" data-tab="adminPage" type="button">Admin</button>
         </nav>
       </header>
@@ -199,7 +202,6 @@
         </div>
       </section>
 
-
       <section id="weeklyPage" class="page">
         <div class="weekly-review">
           <section class="card weekly-hero-card">
@@ -250,7 +252,6 @@
           </section>
         </div>
       </section>
-
 
       <section id="mk677Page" class="page">
         <div class="mk677-page mk677-simple-page">
@@ -316,6 +317,131 @@
               <button id="saveMkPlanBtn" class="btn blue" type="button">Save plan</button>
             </div>
             <p id="mkPlanStatus" class="mk-save-status" aria-live="polite"></p>
+          </section>
+        </div>
+      </section>
+
+      <section id="ghkCuPage" class="page">
+        <div class="ghk-page">
+          <section class="card ghk-hero-card">
+            <div>
+              <p class="eyebrow blue">Reference + monitoring</p>
+              <h2>GHK-Cu</h2>
+              <p>Keep supplies, storage checks, vial appearance, and symptom notes in one place.</p>
+            </div>
+            <div class="ghk-hero-badge">Copper peptide</div>
+          </section>
+
+          <div class="ghk-top-grid">
+            <section class="card ghk-reference-card">
+              <div class="panel-title">
+                <div><p class="eyebrow blue">What you need</p><h3>Supplies</h3></div>
+              </div>
+              <div class="ghk-reference-list">
+                <div><strong>Peptide vial</strong><span>Lyophilized (freeze-dried) GHK-Cu powder.</span></div>
+                <div><strong>Bacteriostatic water</strong><span>Sterile diluent containing benzyl alcohol for multi-dose vial use.</span></div>
+                <div><strong>Alcohol prep pads</strong><span>For disinfecting vial stoppers and skin when directed by a clinician.</span></div>
+                <div><strong>Sharps container</strong><span>For safe disposal of used needles and syringes.</span></div>
+                <div><strong>Syringes</strong><span>Use the exact syringe and needle sizes recommended by a pharmacist or clinician for your product.</span></div>
+              </div>
+            </section>
+
+            <section class="card ghk-reference-card">
+              <div class="panel-title">
+                <div><p class="eyebrow blue">Storage</p><h3>Keep it stable</h3></div>
+              </div>
+              <div class="ghk-reference-list">
+                <div><strong>Freeze-dried vial</strong><span>Follow the product label for room-temperature and refrigeration limits.</span></div>
+                <div><strong>Bacteriostatic water</strong><span>Store unopened as labeled, away from direct sunlight and excessive heat.</span></div>
+                <div><strong>After reconstitution</strong><span>Refrigerate if the product instructions require it and protect from light.</span></div>
+                <div><strong>28-day rule</strong><span>Multi-dose bacteriostatic-water vials are commonly discarded 28 days after first entry unless the manufacturer says otherwise. Peptide stability can be different.</span></div>
+              </div>
+            </section>
+          </div>
+
+          <section class="card ghk-check-card">
+            <div class="panel-title">
+              <div><p class="eyebrow blue">Visual check</p><h3>Before using a reconstituted vial</h3></div>
+              <span class="badge blue">Appearance only</span>
+            </div>
+            <div class="ghk-check-grid">
+              <div class="good"><strong>Expected</strong><span>Appearance consistent with the product instructions, typically clear and free of visible particles.</span></div>
+              <div><strong>Cloudiness or haze</strong><span>Do not use until a pharmacist or clinician confirms it is expected.</span></div>
+              <div><strong>Particles or chunks</strong><span>Do not use.</span></div>
+              <div><strong>Discoloration</strong><span>Do not use unless the labeled product specifically says that color is expected.</span></div>
+              <div><strong>Persistent unusual foam or gel</strong><span>Do not use until the product is evaluated.</span></div>
+            </div>
+            <p class="ghk-fine-print">A normal-looking vial does not prove purity or sterility. Reconstitution and injection technique should follow product-specific instructions from a licensed clinician or pharmacist.</p>
+          </section>
+
+          <div class="ghk-monitor-grid">
+            <section class="card ghk-monitor-card">
+              <div class="panel-title">
+                <div><p class="eyebrow blue">Daily check-in</p><h3>Monitor GHK-Cu</h3></div>
+                <span id="ghkSavedBadge" class="badge">Not saved</span>
+              </div>
+
+              <div class="ghk-form">
+                <div class="ghk-field-grid two">
+                  <label class="ghk-field"><span>Date</span><input id="ghkDate" type="date" /></label>
+                  <label class="ghk-field"><span>Weight (optional)</span><input id="ghkWeight" type="number" min="50" max="500" step="0.1" inputmode="decimal" placeholder="lb" /></label>
+                </div>
+
+                <div class="ghk-field-grid two">
+                  <label class="ghk-field"><span>Vial appearance</span>
+                    <select id="ghkVialAppearance">
+                      <option value="clear">Clear / expected</option>
+                      <option value="cloudy">Cloudy</option>
+                      <option value="hazy">Hazy</option>
+                      <option value="particles">Visible particles</option>
+                      <option value="discolored">Discolored</option>
+                      <option value="other">Other / unsure</option>
+                    </select>
+                  </label>
+                  <label class="ghk-field"><span>Injection-site reaction</span>
+                    <select id="ghkSiteReaction">
+                      <option value="none">None</option>
+                      <option value="mild">Mild</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="severe">Severe</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="ghk-symptom-grid">
+                  <label class="ghk-field"><span>Facial puffiness</span><select id="ghkFacialPuffiness"><option value="0">None</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
+                  <label class="ghk-field"><span>Bruising</span><select id="ghkBruising"><option value="0">None</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
+                  <label class="ghk-field"><span>Headache / dizziness</span><select id="ghkHeadacheDizziness"><option value="0">None</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
+                  <label class="ghk-field"><span>Nausea</span><select id="ghkNausea"><option value="0">None</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
+                  <label class="ghk-field"><span>Rash / hives</span><select id="ghkRashHives"><option value="0">None</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
+                </div>
+
+                <label class="ghk-field"><span>Notes</span><textarea id="ghkNotes" maxlength="500" rows="4" placeholder="Storage issue, skin reaction, anything unusual…"></textarea></label>
+                <button id="saveGhkLogBtn" class="btn blue" type="button">Save GHK-Cu check-in</button>
+                <p id="ghkSaveStatus" class="ghk-save-status" aria-live="polite"></p>
+              </div>
+            </section>
+
+            <aside class="ghk-side-stack">
+              <section class="card ghk-alert-card">
+                <p class="eyebrow">Stop and get help</p>
+                <h3>Red flags</h3>
+                <p>Seek urgent medical care for trouble breathing, fainting, severe swelling, rapidly spreading redness/warmth, high fever, or a severe allergic reaction.</p>
+              </section>
+              <section class="card ghk-note-card">
+                <p class="eyebrow blue">About appearance changes</p>
+                <h3>Track what you actually see</h3>
+                <p>Instead of relying on internet labels such as “copper uglies,” log the specific change: puffiness, rash, bruising, discoloration, or another symptom.</p>
+              </section>
+            </aside>
+          </div>
+
+          <section class="card ghk-history-card">
+            <div class="panel-title">
+              <div><p class="eyebrow blue">History</p><h3>Recent monitoring</h3></div>
+              <span id="ghkEntryCount" class="badge blue">0 entries</span>
+            </div>
+            <div id="ghkHistoryList" class="ghk-history-list"></div>
           </section>
         </div>
       </section>

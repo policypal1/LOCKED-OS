@@ -1,0 +1,11 @@
+LOCKED OS — GHK-Cu tab update
+
+Upload these 3 files to the ROOT of your existing LOCKED-OS repository and replace index.html when prompted:
+
+1. index.html
+2. ghk-cu.js
+3. ghk-cu.css
+
+Do not replace app.js or styles.css. They stay exactly as they are.
+
+The new index.html loads the two new GHK-Cu files automatically.
