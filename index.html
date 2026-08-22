@@ -404,5 +404,117 @@
 </section>
 </main>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
+<script>
+"use strict";
+
+window.addEventListener("DOMContentLoaded", () => {
+  const WORKOUT_ROTATION_V2_START = "2026-08-23";
+  const WORKOUT_ROTATION_V2 = [
+    "Chest + side delts",
+    "Back + rear delts",
+    "Arms + Abs",
+    "Legs"
+  ];
+
+  const getRotationForDay = dayKey =>
+    dayKey >= WORKOUT_ROTATION_V2_START ? WORKOUT_ROTATION_V2 : WORKOUT_ROTATION;
+
+  const getRotationAnchorForDay = dayKey =>
+    dayKey >= WORKOUT_ROTATION_V2_START ? WORKOUT_ROTATION_V2_START : WORKOUT_ROTATION_ANCHOR;
+
+  getDefaultWorkoutIndex = function getDefaultWorkoutIndexV2(dayKey = getTodayKey()) {
+    const rotation = getRotationForDay(dayKey);
+    const anchorKey = getRotationAnchorForDay(dayKey);
+    const daysFromAnchor = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(anchorKey);
+    return ((daysFromAnchor % rotation.length) + rotation.length) % rotation.length;
+  };
+
+  getWorkoutIndex = function getWorkoutIndexV2(dayKey = getTodayKey()) {
+    const rotation = getRotationForDay(dayKey);
+    const anchorKey = state?.meta?.workoutRotationAnchorKey;
+    const anchorIndex = state?.meta?.workoutRotationAnchorIndex;
+
+    if (!isDateKey(anchorKey) || !Number.isInteger(anchorIndex)) {
+      return getDefaultWorkoutIndex(dayKey);
+    }
+
+    const anchorUsesV2 = anchorKey >= WORKOUT_ROTATION_V2_START;
+    const dayUsesV2 = dayKey >= WORKOUT_ROTATION_V2_START;
+    if (anchorUsesV2 !== dayUsesV2) return getDefaultWorkoutIndex(dayKey);
+
+    const daysFromAnchor = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(anchorKey);
+    const index = anchorIndex + daysFromAnchor;
+    return ((index % rotation.length) + rotation.length) % rotation.length;
+  };
+
+  const getBaseWorkoutName = dayKey => {
+    const rotation = getRotationForDay(dayKey);
+    const index = getWorkoutIndex(dayKey);
+    return rotation[index] || rotation[0];
+  };
+
+  const isNeckWorkoutDay = dayKey => {
+    if (dayKey < WORKOUT_ROTATION_V2_START) return false;
+
+    const baseWorkout = getBaseWorkoutName(dayKey);
+    if (baseWorkout !== "Chest + side delts" && baseWorkout !== "Legs") return false;
+
+    const date = keyToLocalDate(dayKey);
+    const dayOfWeek = date.getDay();
+    const weekStart = addDays(date, -dayOfWeek);
+
+    for (let offset = 0; offset < dayOfWeek; offset += 1) {
+      const earlierKey = formatDateKey(addDays(weekStart, offset));
+      if (getBaseWorkoutName(earlierKey) === baseWorkout) return false;
+    }
+
+    return true;
+  };
+
+  formatWorkoutName = function formatWorkoutNameV2(index, dayKey = getTodayKey()) {
+    const rotation = getRotationForDay(dayKey);
+    return rotation[index] || rotation[0];
+  };
+
+  getWorkoutName = function getWorkoutNameV2(dayKey = getTodayKey()) {
+    const baseWorkout = formatWorkoutName(getWorkoutIndex(dayKey), dayKey);
+    return isNeckWorkoutDay(dayKey) ? `${baseWorkout} + Neck` : baseWorkout;
+  };
+
+  shiftWorkoutDraft = function shiftWorkoutDraftV2(amount) {
+    const dayKey = getTodayKey();
+    const rotation = getRotationForDay(dayKey);
+    const current = Number.isInteger(workoutDraftIndex)
+      ? workoutDraftIndex
+      : getWorkoutIndex(dayKey);
+
+    workoutDraftIndex =
+      ((current + amount) % rotation.length + rotation.length) % rotation.length;
+    workoutDraftDirty = true;
+    renderWorkoutPicker();
+  };
+
+  setWorkoutRotationForToday = function setWorkoutRotationForTodayV2() {
+    const dayKey = getTodayKey();
+    const rotation = getRotationForDay(dayKey);
+
+    if (!Number.isInteger(workoutDraftIndex)) {
+      workoutDraftIndex = getWorkoutIndex(dayKey);
+    }
+
+    workoutDraftIndex =
+      ((workoutDraftIndex % rotation.length) + rotation.length) % rotation.length;
+
+    state.meta = state.meta || {};
+    state.meta.workoutRotationAnchorKey = dayKey;
+    state.meta.workoutRotationAnchorIndex = workoutDraftIndex;
+    workoutDraftDirty = false;
+
+    saveState();
+    render();
+    toast(`Gym rotation set to ${getWorkoutName(dayKey)}.`);
+  };
+});
+</script>
 </body>
 </html>
