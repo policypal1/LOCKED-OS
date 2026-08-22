@@ -494,6 +494,23 @@ window.addEventListener("DOMContentLoaded", () => {
     renderWorkoutPicker();
   };
 
+  const originalMakeMorning = makeMorning;
+  makeMorning = function makeMorningWithoutMasseterTraining(dayName) {
+    return originalMakeMorning(dayName).filter(task => task.id !== "masseter-training");
+  };
+
+  const originalMakeNight = makeNight;
+  makeNight = function makeNightWithClinicianPlan(dayName, dayKey) {
+    const tasks = originalMakeNight(dayName, dayKey);
+    if (["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(dayName)) {
+      tasks.push({
+        id: "clinician-night-plan",
+        title: "Follow clinician-directed night plan"
+      });
+    }
+    return tasks;
+  };
+
   setWorkoutRotationForToday = function setWorkoutRotationForTodayV2() {
     const dayKey = getTodayKey();
     const rotation = getRotationForDay(dayKey);
