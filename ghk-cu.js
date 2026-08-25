@@ -502,50 +502,6 @@
     const style = document.createElement("style");
     style.id = "looksTaskManagerStyles";
     style.textContent = `
-      .looks-task-manager-controls {
-        margin-top: 12px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-      .looks-add-task-btn {
-        appearance: none;
-        border: 1px dashed rgba(37,132,184,.42);
-        background: rgba(37,132,184,.06);
-        color: #176a98;
-        border-radius: 12px;
-        padding: 9px 13px;
-        font: inherit;
-        font-size: 13px;
-        font-weight: 800;
-        cursor: pointer;
-      }
-      .looks-add-task-btn:hover {
-        background: rgba(37,132,184,.11);
-      }
-      .looks-task-add-form {
-        width: 100%;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
-        gap: 8px;
-        align-items: center;
-      }
-      .looks-task-add-form input {
-        width: 100%;
-        min-width: 0;
-        border: 1px solid rgba(42,30,18,.16);
-        border-radius: 12px;
-        background: #fffdf8;
-        color: inherit;
-        padding: 10px 12px;
-        font: inherit;
-        outline: none;
-      }
-      .looks-task-add-form input:focus {
-        border-color: rgba(37,132,184,.65);
-        box-shadow: 0 0 0 3px rgba(37,132,184,.10);
-      }
       .looks-reorder-banner {
         margin: 10px 0 0;
         padding: 9px 11px;
@@ -593,91 +549,79 @@
       .task-menu-action.delete-custom-action {
         color: #a2372a;
       }
-      @media (max-width: 620px) {
-        .looks-task-add-form {
-          grid-template-columns: 1fr 1fr;
-        }
-        .looks-task-add-form input {
-          grid-column: 1 / -1;
-        }
-      }
     `;
     document.head.appendChild(style);
   }
 
-  function installAddControls() {
-    for (const [section, listId] of Object.entries(LIST_ID_BY_SECTION)) {
-      const list = document.getElementById(listId);
-      const card = list?.closest(".card.section");
-      if (!list || !card || card.querySelector(`[data-task-manager-controls="${section}"]`)) continue;
+  function startInlineAddTask(row, section) {
+    if (row.querySelector(".looks-inline-add-editor")) return;
 
-      const controls = document.createElement("div");
-      controls.className = "looks-task-manager-controls";
-      controls.dataset.taskManagerControls = section;
+    row.classList.add("editing");
 
-      const addButton = document.createElement("button");
-      addButton.type = "button";
-      addButton.className = "looks-add-task-btn";
-      addButton.textContent = "+ Add task";
+    const editor = document.createElement("div");
+    editor.className = "task-inline-editor looks-inline-add-editor";
 
-      const showForm = () => {
-        if (controls.querySelector(".looks-task-add-form")) return;
+    const field = document.createElement("div");
+    field.className = "task-inline-field";
 
-        addButton.hidden = true;
+    const label = document.createElement("label");
+    label.textContent = `Add new ${SECTION_LABEL[section].toLowerCase()} task`;
 
-        const form = document.createElement("div");
-        form.className = "looks-task-add-form";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "task-inline-input";
+    input.maxLength = 160;
+    input.placeholder = "Task name";
+    input.setAttribute("aria-label", `Add new ${SECTION_LABEL[section]} task`);
 
-        const input = document.createElement("input");
-        input.type = "text";
-        input.maxLength = 160;
-        input.placeholder = `Add ${SECTION_LABEL[section].toLowerCase()} task`;
-        input.setAttribute("aria-label", `Add ${SECTION_LABEL[section]} task`);
+    field.append(label, input);
 
-        const save = document.createElement("button");
-        save.type = "button";
-        save.className = "btn blue compact";
-        save.textContent = "Add";
+    const actions = document.createElement("div");
+    actions.className = "task-inline-actions";
 
-        const cancel = document.createElement("button");
-        cancel.type = "button";
-        cancel.className = "btn secondary compact";
-        cancel.textContent = "Cancel";
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.className = "btn blue compact task-edit-save";
+    addButton.textContent = "Add";
 
-        const close = () => {
-          form.remove();
-          addButton.hidden = false;
-        };
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "btn secondary compact";
+    cancelButton.textContent = "Cancel";
 
-        const submit = () => {
-          if (!addCustomTask(section, input.value)) {
-            input.focus();
-            return;
-          }
-          close();
-        };
+    const closeEditor = () => {
+      row.classList.remove("editing");
+      editor.remove();
+    };
 
-        save.addEventListener("click", submit);
-        cancel.addEventListener("click", close);
-        input.addEventListener("keydown", event => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            submit();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            close();
-          }
-        });
+    const submit = () => {
+      const title = input.value.trim();
+      if (!title) {
+        input.focus();
+        toast("Enter a task name.");
+        return;
+      }
+      addCustomTask(section, title);
+      closeEditor();
+    };
 
-        form.append(input, save, cancel);
-        controls.appendChild(form);
-        requestAnimationFrame(() => input.focus());
-      };
+    addButton.addEventListener("click", submit);
+    cancelButton.addEventListener("click", closeEditor);
+    input.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        submit();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditor();
+      }
+    });
 
-      addButton.addEventListener("click", showForm);
-      controls.appendChild(addButton);
-      list.insertAdjacentElement("afterend", controls);
-    }
+    actions.append(addButton, cancelButton);
+    editor.append(field, actions);
+    row.appendChild(editor);
+
+    requestAnimationFrame(() => input.focus());
   }
 
   function setReorderMode(section, enabled) {
@@ -689,6 +633,17 @@
   function decorateMenu(row, task, section) {
     const popover = row.querySelector(".task-menu-popover");
     if (!popover) return;
+
+    const addNew = document.createElement("button");
+    addNew.type = "button";
+    addNew.className = "task-menu-action";
+    addNew.textContent = "Add New Task";
+    addNew.addEventListener("click", event => {
+      event.stopPropagation();
+      row.querySelector("details.task-menu")?.removeAttribute("open");
+      startInlineAddTask(row, section);
+    });
+    popover.appendChild(addNew);
 
     const reorder = document.createElement("button");
     reorder.type = "button";
@@ -881,7 +836,6 @@
     installRoutineWrapper();
     installRenderer();
     installMeaningfulStateWrapper();
-    installAddControls();
 
     saveLocalState();
 
