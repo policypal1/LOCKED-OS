@@ -347,3 +347,539 @@
     if (!mainApp.classList.contains("hidden")) render();
   });
 })();
+/*
+ * Looksmaxxing custom task manager
+ * Adds persistent custom tasks plus drag-and-drop ordering to Morning/Midday/Night.
+ * Stored inside the existing state.meta object, so it follows the app's existing
+ * localStorage + Supabase save path.
+ */
+(() => {
+  const SECTION_BY_LIST_ID = {
+    looksMorningList: "morning",
+    looksMiddayList: "midday",
+    looksNightList: "night"
+  };
+  const LIST_ID_BY_SECTION = {
+    morning: "looksMorningList",
+    midday: "looksMiddayList",
+    night: "looksNightList"
+  };
+  const SECTION_LABEL = {
+    morning: "Morning",
+    midday: "Midday",
+    night: "Night"
+  };
+
+  let activeReorderSection = null;
+  let draggedTaskId = null;
+
+  function ensureManagerState() {
+    state.meta = state.meta || {};
+
+    if (!Array.isArray(state.meta.looksCustomTasks)) {
+      state.meta.looksCustomTasks = [];
+    }
+
+    if (!state.meta.looksTaskOrder || typeof state.meta.looksTaskOrder !== "object" || Array.isArray(state.meta.looksTaskOrder)) {
+      state.meta.looksTaskOrder = {};
+    }
+
+    for (const section of Object.keys(LIST_ID_BY_SECTION)) {
+      if (!Array.isArray(state.meta.looksTaskOrder[section])) {
+        state.meta.looksTaskOrder[section] = [];
+      }
+    }
+
+    state.meta.looksCustomTasks = state.meta.looksCustomTasks
+      .filter(task => task && typeof task === "object")
+      .map(task => ({
+        id: String(task.id || ""),
+        title: String(task.title || "").trim().slice(0, 160),
+        section: ["morning", "midday", "night"].includes(task.section) ? task.section : "morning",
+        startDayKey: isDateKey(task.startDayKey) ? task.startDayKey : getTodayKey()
+      }))
+      .filter(task => task.id && task.title);
+  }
+
+  function getCustomTasksFor(section, dayKey) {
+    ensureManagerState();
+    return state.meta.looksCustomTasks
+      .filter(task => task.section === section && task.startDayKey <= dayKey)
+      .map(task => ({
+        id: task.id,
+        title: task.title,
+        customTask: true
+      }));
+  }
+
+  function orderTasks(section, tasks) {
+    ensureManagerState();
+
+    const order = state.meta.looksTaskOrder[section];
+    const index = new Map(order.map((id, i) => [id, i]));
+
+    return tasks
+      .map((task, originalIndex) => ({ task, originalIndex }))
+      .sort((a, b) => {
+        const ai = index.has(a.task.id) ? index.get(a.task.id) : Number.MAX_SAFE_INTEGER;
+        const bi = index.has(b.task.id) ? index.get(b.task.id) : Number.MAX_SAFE_INTEGER;
+        return ai - bi || a.originalIndex - b.originalIndex;
+      })
+      .map(item => item.task);
+  }
+
+  function persistVisibleOrder(section, element) {
+    ensureManagerState();
+
+    const visibleIds = [...element.querySelectorAll(".task-row[data-looks-task-id]")]
+      .map(row => row.dataset.looksTaskId)
+      .filter(Boolean);
+
+    const hiddenOrFutureIds = state.meta.looksTaskOrder[section]
+      .filter(id => !visibleIds.includes(id));
+
+    state.meta.looksTaskOrder[section] = [...visibleIds, ...hiddenOrFutureIds];
+    saveState();
+  }
+
+  function addCustomTask(section, rawTitle) {
+    ensureManagerState();
+
+    const title = String(rawTitle || "").trim().slice(0, 160);
+    if (!title) return false;
+
+    const id = `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    state.meta.looksCustomTasks.push({
+      id,
+      title,
+      section,
+      startDayKey: getTodayKey()
+    });
+
+    state.meta.looksTaskOrder[section].push(id);
+    saveState();
+    render();
+    toast("Task added.");
+    return true;
+  }
+
+  function deleteCustomTask(taskId) {
+    ensureManagerState();
+
+    const task = state.meta.looksCustomTasks.find(item => item.id === taskId);
+    if (!task) return;
+
+    const confirmed = window.confirm(`Delete "${getLooksTaskTitle(task)}"?`);
+    if (!confirmed) return;
+
+    state.meta.looksCustomTasks = state.meta.looksCustomTasks.filter(item => item.id !== taskId);
+
+    for (const section of Object.keys(LIST_ID_BY_SECTION)) {
+      state.meta.looksTaskOrder[section] = state.meta.looksTaskOrder[section].filter(id => id !== taskId);
+    }
+
+    if (state.meta.looksTaskEdits) delete state.meta.looksTaskEdits[taskId];
+
+    for (const day of Object.values(state.days || {})) {
+      if (!day || typeof day !== "object") continue;
+      day.looksDone = (day.looksDone || []).filter(id => id !== taskId);
+      day.looksSkipped = (day.looksSkipped || []).filter(id => id !== taskId);
+    }
+
+    activeReorderSection = null;
+    saveState();
+    render();
+    toast("Task deleted.");
+  }
+
+  function installStyles() {
+    if (document.getElementById("looksTaskManagerStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "looksTaskManagerStyles";
+    style.textContent = `
+      .looks-task-manager-controls {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .looks-add-task-btn {
+        appearance: none;
+        border: 1px dashed rgba(37,132,184,.42);
+        background: rgba(37,132,184,.06);
+        color: #176a98;
+        border-radius: 12px;
+        padding: 9px 13px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .looks-add-task-btn:hover {
+        background: rgba(37,132,184,.11);
+      }
+      .looks-task-add-form {
+        width: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 8px;
+        align-items: center;
+      }
+      .looks-task-add-form input {
+        width: 100%;
+        min-width: 0;
+        border: 1px solid rgba(42,30,18,.16);
+        border-radius: 12px;
+        background: #fffdf8;
+        color: inherit;
+        padding: 10px 12px;
+        font: inherit;
+        outline: none;
+      }
+      .looks-task-add-form input:focus {
+        border-color: rgba(37,132,184,.65);
+        box-shadow: 0 0 0 3px rgba(37,132,184,.10);
+      }
+      .looks-reorder-banner {
+        margin: 10px 0 0;
+        padding: 9px 11px;
+        border-radius: 11px;
+        background: rgba(37,132,184,.08);
+        color: #176a98;
+        font-size: 12px;
+        font-weight: 800;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+      .looks-reorder-done {
+        appearance: none;
+        border: 0;
+        border-radius: 9px;
+        padding: 6px 10px;
+        background: #2584b8;
+        color: white;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .checklist.looks-reordering .task-row {
+        cursor: grab;
+        user-select: none;
+        border-color: rgba(37,132,184,.28);
+      }
+      .checklist.looks-reordering .task-row:active {
+        cursor: grabbing;
+      }
+      .checklist.looks-reordering .task-row.dragging {
+        opacity: .45;
+        transform: scale(.99);
+      }
+      .checklist.looks-reordering .task-row.drag-over {
+        box-shadow: 0 -3px 0 #2584b8;
+      }
+      .task-menu-action.reorder-action {
+        color: #176a98;
+        font-weight: 800;
+      }
+      .task-menu-action.delete-custom-action {
+        color: #a2372a;
+      }
+      @media (max-width: 620px) {
+        .looks-task-add-form {
+          grid-template-columns: 1fr 1fr;
+        }
+        .looks-task-add-form input {
+          grid-column: 1 / -1;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function installAddControls() {
+    for (const [section, listId] of Object.entries(LIST_ID_BY_SECTION)) {
+      const list = document.getElementById(listId);
+      const card = list?.closest(".card.section");
+      if (!list || !card || card.querySelector(`[data-task-manager-controls="${section}"]`)) continue;
+
+      const controls = document.createElement("div");
+      controls.className = "looks-task-manager-controls";
+      controls.dataset.taskManagerControls = section;
+
+      const addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "looks-add-task-btn";
+      addButton.textContent = "+ Add task";
+
+      const showForm = () => {
+        if (controls.querySelector(".looks-task-add-form")) return;
+
+        addButton.hidden = true;
+
+        const form = document.createElement("div");
+        form.className = "looks-task-add-form";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.maxLength = 160;
+        input.placeholder = `Add ${SECTION_LABEL[section].toLowerCase()} task`;
+        input.setAttribute("aria-label", `Add ${SECTION_LABEL[section]} task`);
+
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "btn blue compact";
+        save.textContent = "Add";
+
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "btn secondary compact";
+        cancel.textContent = "Cancel";
+
+        const close = () => {
+          form.remove();
+          addButton.hidden = false;
+        };
+
+        const submit = () => {
+          if (!addCustomTask(section, input.value)) {
+            input.focus();
+            return;
+          }
+          close();
+        };
+
+        save.addEventListener("click", submit);
+        cancel.addEventListener("click", close);
+        input.addEventListener("keydown", event => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            submit();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            close();
+          }
+        });
+
+        form.append(input, save, cancel);
+        controls.appendChild(form);
+        requestAnimationFrame(() => input.focus());
+      };
+
+      addButton.addEventListener("click", showForm);
+      controls.appendChild(addButton);
+      list.insertAdjacentElement("afterend", controls);
+    }
+  }
+
+  function setReorderMode(section, enabled) {
+    activeReorderSection = enabled ? section : null;
+    render();
+    if (enabled) toast("Drag tasks to reorder them.");
+  }
+
+  function decorateMenu(row, task, section) {
+    const popover = row.querySelector(".task-menu-popover");
+    if (!popover) return;
+
+    const reorder = document.createElement("button");
+    reorder.type = "button";
+    reorder.className = "task-menu-action reorder-action";
+    reorder.textContent = activeReorderSection === section ? "Finish reordering" : "Reorder this list";
+    reorder.addEventListener("click", event => {
+      event.stopPropagation();
+      row.querySelector("details.task-menu")?.removeAttribute("open");
+      setReorderMode(section, activeReorderSection !== section);
+    });
+    popover.appendChild(reorder);
+
+    if (task.customTask) {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "task-menu-action delete-custom-action";
+      remove.textContent = "Delete task";
+      remove.addEventListener("click", event => {
+        event.stopPropagation();
+        row.querySelector("details.task-menu")?.removeAttribute("open");
+        deleteCustomTask(task.id);
+      });
+      popover.appendChild(remove);
+    }
+  }
+
+  function enableDragForRow(row, section, element) {
+    row.draggable = true;
+
+    row.addEventListener("dragstart", event => {
+      draggedTaskId = row.dataset.looksTaskId;
+      row.classList.add("dragging");
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", draggedTaskId || "");
+      }
+    });
+
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+      element.querySelectorAll(".drag-over").forEach(item => item.classList.remove("drag-over"));
+      persistVisibleOrder(section, element);
+      draggedTaskId = null;
+      render();
+    });
+
+    row.addEventListener("dragover", event => {
+      event.preventDefault();
+      if (!draggedTaskId || row.dataset.looksTaskId === draggedTaskId) return;
+
+      element.querySelectorAll(".drag-over").forEach(item => item.classList.remove("drag-over"));
+      row.classList.add("drag-over");
+
+      const dragging = element.querySelector(`.task-row[data-looks-task-id="${CSS.escape(draggedTaskId)}"]`);
+      if (!dragging) return;
+
+      const rect = row.getBoundingClientRect();
+      const before = event.clientY < rect.top + rect.height / 2;
+      element.insertBefore(dragging, before ? row : row.nextSibling);
+    });
+
+    row.addEventListener("drop", event => {
+      event.preventDefault();
+      row.classList.remove("drag-over");
+    });
+  }
+
+  function addReorderBanner(section, element) {
+    const card = element.closest(".card.section");
+    const existing = card?.querySelector(".looks-reorder-banner");
+    if (existing) existing.remove();
+
+    if (activeReorderSection !== section || !card) return;
+
+    const banner = document.createElement("div");
+    banner.className = "looks-reorder-banner";
+    banner.innerHTML = `<span>Drag any task to a new position.</span>`;
+
+    const done = document.createElement("button");
+    done.type = "button";
+    done.className = "looks-reorder-done";
+    done.textContent = "Done";
+    done.addEventListener("click", () => setReorderMode(section, false));
+
+    banner.appendChild(done);
+    const header = card.querySelector(".section-header");
+    header?.insertAdjacentElement("afterend", banner);
+  }
+
+  function installRoutineWrapper() {
+    ensureManagerState();
+
+    const baseGetLooksRoutine = getLooksRoutine;
+    getLooksRoutine = function getLooksRoutineWithCustomTasks(dayKey = getTodayKey()) {
+      const routine = baseGetLooksRoutine(dayKey);
+
+      return {
+        morning: orderTasks("morning", [
+          ...routine.morning,
+          ...getCustomTasksFor("morning", dayKey)
+        ]),
+        midday: orderTasks("midday", [
+          ...routine.midday,
+          ...getCustomTasksFor("midday", dayKey)
+        ]),
+        night: orderTasks("night", [
+          ...routine.night,
+          ...getCustomTasksFor("night", dayKey)
+        ])
+      };
+    };
+  }
+
+  function installRenderer() {
+    renderLooksTaskList = function renderLooksTaskListWithManager(element, tasks, day) {
+      element.innerHTML = "";
+
+      const section = SECTION_BY_LIST_ID[element.id];
+      const done = new Set(day.looksDone);
+      const skipped = new Set(day.looksSkipped);
+      const orderedTasks = section ? orderTasks(section, tasks) : tasks;
+
+      element.classList.toggle("looks-reordering", activeReorderSection === section);
+
+      for (const task of orderedTasks) {
+        const displayTask = {
+          ...task,
+          title: getLooksTaskTitle(task),
+          defaultTitle: task.title
+        };
+
+        const toggle = () => {
+          if (activeReorderSection === section) return;
+
+          if (task.meta === "waterTracked") {
+            $("waterCard").scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
+          }
+          setLooksStatus(task, "done");
+        };
+
+        const row = createTaskRow(
+          displayTask,
+          done.has(task.id),
+          skipped.has(task.id),
+          "looks-task",
+          toggle,
+          () => setLooksStatus(task, "skipped"),
+          nextTitle => saveLooksTaskEdit(task, nextTitle)
+        );
+
+        row.dataset.looksTaskId = task.id;
+        row.dataset.looksTaskSection = section || "";
+
+        if (section) {
+          decorateMenu(row, task, section);
+
+          if (activeReorderSection === section) {
+            enableDragForRow(row, section, element);
+          }
+        }
+
+        element.appendChild(row);
+      }
+
+      if (section) addReorderBanner(section, element);
+    };
+  }
+
+  function installMeaningfulStateWrapper() {
+    if (typeof hasMeaningfulState !== "function") return;
+
+    const baseHasMeaningfulState = hasMeaningfulState;
+    hasMeaningfulState = function hasMeaningfulStateWithTaskManager(snapshot) {
+      if (baseHasMeaningfulState(snapshot)) return true;
+      return (
+        Array.isArray(snapshot?.meta?.looksCustomTasks) &&
+        snapshot.meta.looksCustomTasks.length > 0
+      ) || (
+        snapshot?.meta?.looksTaskOrder &&
+        Object.values(snapshot.meta.looksTaskOrder).some(value => Array.isArray(value) && value.length > 0)
+      );
+    };
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    installStyles();
+    ensureManagerState();
+    installRoutineWrapper();
+    installRenderer();
+    installMeaningfulStateWrapper();
+    installAddControls();
+
+    saveLocalState();
+
+    if (!mainApp.classList.contains("hidden")) render();
+  });
+})();
