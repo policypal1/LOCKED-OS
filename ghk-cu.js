@@ -155,12 +155,12 @@
       }
 
       // Keep tretinoin on its configured nights while adding azelaic acid
-      // every night. On tretinoin nights azelaic acid comes immediately after it.
+      // every night. On tretinoin nights the order is azelaic acid, then tretinoin.
       if (!tasks.some(task => task.id === "azelaic-acid")) {
         const tretinoinIndex = tasks.findIndex(task => task.id === "tretinoin");
         const moisturizerIndex = tasks.findIndex(task => task.id === "night-moisturizer");
         const insertAt = tretinoinIndex >= 0
-          ? tretinoinIndex + 1
+          ? tretinoinIndex
           : moisturizerIndex >= 0
             ? moisturizerIndex
             : tasks.length;
@@ -168,10 +168,8 @@
         tasks.splice(insertAt, 0, { id: "azelaic-acid", title: "Apply azelaic acid" });
       }
 
-      const lipCareIndex = tasks.findIndex(task => task.id === "lip-care");
-      const thumbTask = { id: "thumb-pulling-night", title: "Thumb pulling" };
-      if (lipCareIndex >= 0) tasks.splice(lipCareIndex, 0, thumbTask);
-      else tasks.push(thumbTask);
+      // Thumb pulling is always the final task of the night.
+      tasks.push({ id: "thumb-pulling-night", title: "Thumb pulling" });
 
       return tasks;
     };
