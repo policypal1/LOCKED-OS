@@ -384,6 +384,10 @@
       state.meta.looksTaskOrder = {};
     }
 
+    if (!state.meta.looksTaskDeletes || typeof state.meta.looksTaskDeletes !== "object" || Array.isArray(state.meta.looksTaskDeletes)) {
+      state.meta.looksTaskDeletes = {};
+    }
+
     for (const section of Object.keys(LIST_ID_BY_SECTION)) {
       if (!Array.isArray(state.meta.looksTaskOrder[section])) {
         state.meta.looksTaskOrder[section] = [];
@@ -401,10 +405,20 @@
       .filter(task => task.id && task.title);
   }
 
+  function isTaskDeletedOn(taskId, dayKey) {
+    ensureManagerState();
+    const deletedFrom = state.meta.looksTaskDeletes?.[taskId];
+    return isDateKey(deletedFrom) && dayKey >= deletedFrom;
+  }
+
   function getCustomTasksFor(section, dayKey) {
     ensureManagerState();
     return state.meta.looksCustomTasks
-      .filter(task => task.section === section && task.startDayKey <= dayKey)
+      .filter(task =>
+        task.section === section &&
+        task.startDayKey <= dayKey &&
+        !isTaskDeletedOn(task.id, dayKey)
+      )
       .map(task => ({
         id: task.id,
         title: task.title,
@@ -463,27 +477,17 @@
     return true;
   }
 
-  function deleteCustomTask(taskId) {
+  function deleteLooksTask(task) {
     ensureManagerState();
 
-    const task = state.meta.looksCustomTasks.find(item => item.id === taskId);
-    if (!task) return;
-
-    const confirmed = window.confirm(`Delete "${getLooksTaskTitle(task)}"?`);
+    const title = getLooksTaskTitle(task);
+    const confirmed = window.confirm(`Delete "${title}" from your Looksmaxxing routine?`);
     if (!confirmed) return;
 
-    state.meta.looksCustomTasks = state.meta.looksCustomTasks.filter(item => item.id !== taskId);
+    state.meta.looksTaskDeletes[task.id] = getTodayKey();
 
     for (const section of Object.keys(LIST_ID_BY_SECTION)) {
-      state.meta.looksTaskOrder[section] = state.meta.looksTaskOrder[section].filter(id => id !== taskId);
-    }
-
-    if (state.meta.looksTaskEdits) delete state.meta.looksTaskEdits[taskId];
-
-    for (const day of Object.values(state.days || {})) {
-      if (!day || typeof day !== "object") continue;
-      day.looksDone = (day.looksDone || []).filter(id => id !== taskId);
-      day.looksSkipped = (day.looksSkipped || []).filter(id => id !== taskId);
+      state.meta.looksTaskOrder[section] = state.meta.looksTaskOrder[section].filter(id => id !== task.id);
     }
 
     activeReorderSection = null;
@@ -697,18 +701,16 @@
     });
     popover.appendChild(reorder);
 
-    if (task.customTask) {
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "task-menu-action delete-custom-action";
-      remove.textContent = "Delete task";
-      remove.addEventListener("click", event => {
-        event.stopPropagation();
-        row.querySelector("details.task-menu")?.removeAttribute("open");
-        deleteCustomTask(task.id);
-      });
-      popover.appendChild(remove);
-    }
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "task-menu-action delete-custom-action";
+    remove.textContent = "Delete task";
+    remove.addEventListener("click", event => {
+      event.stopPropagation();
+      row.querySelector("details.task-menu")?.removeAttribute("open");
+      deleteLooksTask(task);
+    });
+    popover.appendChild(remove);
   }
 
   function enableDragForRow(row, section, element) {
@@ -783,15 +785,15 @@
 
       return {
         morning: orderTasks("morning", [
-          ...routine.morning,
+          ...routine.morning.filter(task => !isTaskDeletedOn(task.id, dayKey)),
           ...getCustomTasksFor("morning", dayKey)
         ]),
         midday: orderTasks("midday", [
-          ...routine.midday,
+          ...routine.midday.filter(task => !isTaskDeletedOn(task.id, dayKey)),
           ...getCustomTasksFor("midday", dayKey)
         ]),
         night: orderTasks("night", [
-          ...routine.night,
+          ...routine.night.filter(task => !isTaskDeletedOn(task.id, dayKey)),
           ...getCustomTasksFor("night", dayKey)
         ])
       };
@@ -866,6 +868,9 @@
       ) || (
         snapshot?.meta?.looksTaskOrder &&
         Object.values(snapshot.meta.looksTaskOrder).some(value => Array.isArray(value) && value.length > 0)
+      ) || (
+        snapshot?.meta?.looksTaskDeletes &&
+        Object.keys(snapshot.meta.looksTaskDeletes).length > 0
       );
     };
   }
