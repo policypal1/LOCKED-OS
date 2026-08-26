@@ -193,10 +193,6 @@
     const style = document.createElement("style");
     style.id = "lockedOsFeatureStyles";
     style.textContent = `
-      .forums-tab {
-        border: 1px solid rgba(126, 87, 194, .24);
-      }
-
       .forums-page {
         display: grid;
         gap: 16px;
@@ -593,8 +589,8 @@
     button.type = "button";
     button.textContent = "Forums";
 
-    const adminTab = [...nav.querySelectorAll(".tab")].find(item => item.dataset.tab === "adminPage");
-    if (adminTab) nav.insertBefore(button, adminTab);
+    const mkTab = [...nav.querySelectorAll(".tab")].find(item => item.dataset.tab === "mk677Page");
+    if (mkTab) nav.insertBefore(button, mkTab);
     else nav.appendChild(button);
 
     const page = document.createElement("section");
