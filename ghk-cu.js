@@ -478,15 +478,51 @@
         font-weight: 800;
       }
 
-      .forums-source-note {
-        margin: 0;
-        padding: 12px 14px;
-        border-radius: 14px;
-        background: rgba(126,87,194,.07);
-        color: var(--muted);
-        font-size: .82rem;
-        font-weight: 750;
-        line-height: 1.45;
+      .forums-library-card {
+        width: 100%;
+      }
+
+      .forums-library-heading {
+        align-items: center;
+      }
+
+      .forums-library-actions {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .resource-add-details {
+        position: relative;
+      }
+
+      .resource-add-details > summary {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .resource-add-details > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .resource-add-popdown {
+        position: absolute;
+        z-index: 30;
+        right: 0;
+        top: calc(100% + 10px);
+        width: min(390px, calc(100vw - 42px));
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 17px;
+        background: var(--card);
+        box-shadow: 0 18px 50px rgba(55,38,18,.18);
+      }
+
+      .resource-add-popdown .feature-form {
+        margin-top: 0;
       }
 
       .appointments-panel {
@@ -571,6 +607,27 @@
         .card-actions {
           justify-content: flex-start;
         }
+
+        .forums-library-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .forums-library-actions {
+          width: 100%;
+          justify-content: space-between;
+        }
+
+        .resource-add-details {
+          position: static;
+        }
+
+        .resource-add-popdown {
+          position: static;
+          width: 100%;
+          margin-top: 10px;
+          box-shadow: none;
+        }
       }
     `;
     document.head.appendChild(style);
@@ -602,105 +659,50 @@
           <div>
             <p class="eyebrow blue">Saved research</p>
             <h2>Forums</h2>
-            <p>Keep useful videos, forum threads, articles, and your own looksmaxxing guides in one searchable place.</p>
+            <p>Keep useful videos, forum threads, and articles in one place.</p>
           </div>
           <div class="forums-hero-badge" id="forumResourceCount">0 saved</div>
         </section>
 
-        <p class="forums-source-note">
-          YouTube links embed automatically. Forum and article links are saved as source cards because many sites block third-party iframe embedding. Treat forum claims as unverified until you check stronger sources.
-        </p>
-
-        <div class="forums-grid">
-          <div class="forums-stack">
-            <section class="card feature-card">
-              <div class="panel-title">
-                <div>
-                  <p class="eyebrow blue">Add source</p>
-                  <h3>Save a video or forum thread</h3>
-                  <p class="feature-card-copy">Paste the link once and keep it with a title and notes.</p>
+        <section class="card feature-card forums-library-card">
+          <div class="panel-title forums-library-heading">
+            <div>
+              <p class="eyebrow blue">Library</p>
+              <h3>Saved resources</h3>
+            </div>
+            <div class="forums-library-actions">
+              <span class="badge blue" id="forumLibraryBadge">0 items</span>
+              <details class="resource-add-details" id="resourceAddDetails">
+                <summary class="btn blue compact">Add resource</summary>
+                <div class="resource-add-popdown">
+                  <div class="feature-form">
+                    <label class="feature-field">
+                      <span>Title</span>
+                      <input id="forumResourceTitle" maxlength="160" placeholder="Resource title" type="text" />
+                    </label>
+                    <label class="feature-field">
+                      <span>URL</span>
+                      <input id="forumResourceUrl" maxlength="1000" placeholder="https://..." type="url" />
+                    </label>
+                    <label class="feature-field">
+                      <span>Type</span>
+                      <select id="forumResourceType">
+                        <option value="video">Video</option>
+                        <option value="forum">Forum thread</option>
+                        <option value="article">Article</option>
+                        <option value="other">Other link</option>
+                      </select>
+                    </label>
+                    <button class="btn blue" id="saveForumResourceBtn" type="button">Save resource</button>
+                    <p class="feature-status" id="forumResourceStatus"></p>
+                  </div>
                 </div>
-              </div>
-              <div class="feature-form">
-                <label class="feature-field">
-                  <span>Title</span>
-                  <input id="forumResourceTitle" maxlength="160" placeholder="Example: Jaw development video" type="text" />
-                </label>
-                <label class="feature-field">
-                  <span>URL</span>
-                  <input id="forumResourceUrl" maxlength="1000" placeholder="https://..." type="url" />
-                </label>
-                <div class="feature-two-col">
-                  <label class="feature-field">
-                    <span>Type</span>
-                    <select id="forumResourceType">
-                      <option value="video">Video</option>
-                      <option value="forum">Forum thread</option>
-                      <option value="article">Article</option>
-                      <option value="other">Other link</option>
-                    </select>
-                  </label>
-                  <label class="feature-field">
-                    <span>Notes</span>
-                    <input id="forumResourceNotes" maxlength="1000" placeholder="Why you saved it" type="text" />
-                  </label>
-                </div>
-                <button class="btn blue" id="saveForumResourceBtn" type="button">Save resource</button>
-                <p class="feature-status" id="forumResourceStatus"></p>
-              </div>
-            </section>
-
-            <section class="card feature-card">
-              <div class="panel-title">
-                <div>
-                  <p class="eyebrow blue">My notes</p>
-                  <h3>Create a guide</h3>
-                  <p class="feature-card-copy">Write your own reference guides and update them whenever you want.</p>
-                </div>
-              </div>
-              <div class="feature-form">
-                <input id="guideEditId" type="hidden" />
-                <label class="feature-field">
-                  <span>Guide title</span>
-                  <input id="guideTitle" maxlength="160" placeholder="Example: Hair routine notes" type="text" />
-                </label>
-                <label class="feature-field">
-                  <span>Guide</span>
-                  <textarea id="guideContent" maxlength="20000" placeholder="Write your guide here..."></textarea>
-                </label>
-                <div class="feature-actions">
-                  <button class="btn blue" id="saveGuideBtn" type="button">Save guide</button>
-                  <button class="btn secondary hidden" id="cancelGuideEditBtn" type="button">Cancel edit</button>
-                </div>
-                <p class="feature-status" id="guideStatus"></p>
-              </div>
-            </section>
+              </details>
+            </div>
           </div>
 
-          <div class="forums-stack">
-            <section class="card feature-card">
-              <div class="panel-title">
-                <div>
-                  <p class="eyebrow blue">Library</p>
-                  <h3>Saved resources</h3>
-                </div>
-                <span class="badge blue" id="forumLibraryBadge">0 items</span>
-              </div>
-              <div class="resource-list" id="forumResourceList"></div>
-            </section>
-
-            <section class="card feature-card">
-              <div class="panel-title">
-                <div>
-                  <p class="eyebrow blue">Reference</p>
-                  <h3>My guides</h3>
-                </div>
-                <span class="badge" id="guideCountBadge">0 guides</span>
-              </div>
-              <div class="guide-list" id="guideList"></div>
-            </section>
-          </div>
-        </div>
+          <div class="resource-list" id="forumResourceList"></div>
+        </section>
       </div>
     `;
 
@@ -1063,7 +1065,7 @@
     const title = safeText(document.getElementById("forumResourceTitle")?.value, 160);
     const url = normalizeUrl(document.getElementById("forumResourceUrl")?.value);
     let type = safeText(document.getElementById("forumResourceType")?.value, 20);
-    const notes = safeText(document.getElementById("forumResourceNotes")?.value, 1000);
+    const notes = "";
 
     if (!title) {
       setStatus("forumResourceStatus", "Enter a title.", "bad");
@@ -1091,21 +1093,25 @@
     persist();
     document.getElementById("forumResourceTitle").value = "";
     document.getElementById("forumResourceUrl").value = "";
-    document.getElementById("forumResourceNotes").value = "";
     setStatus("forumResourceStatus", "Resource saved.", "good");
+    const addDetails = document.getElementById("resourceAddDetails");
+    if (addDetails) addDetails.open = false;
     renderForums();
     if (typeof toast === "function") toast("Resource saved.");
   }
 
   function deleteResource(id) {
     ensureFeatureState();
-    const item = state.meta.forumHub.resources.find(entry => entry.id === id);
-    if (!item) return;
-    if (!window.confirm(`Delete "${item.title}"?`)) return;
 
+    const before = state.meta.forumHub.resources.length;
     state.meta.forumHub.resources = state.meta.forumHub.resources.filter(entry => entry.id !== id);
+    if (state.meta.forumHub.resources.length === before) return;
+
+    if (typeof saveLocalState === "function") saveLocalState();
+    renderResources();
     persist();
-    renderForums();
+
+    if (typeof toast === "function") toast("Resource deleted.");
   }
 
   function renderResources() {
@@ -1123,7 +1129,7 @@
     if (!resources.length) {
       const empty = document.createElement("div");
       empty.className = "feature-empty";
-      empty.textContent = "No saved videos or forum threads yet.";
+      empty.textContent = "No saved resources yet.";
       list.appendChild(empty);
       return;
     }
@@ -1176,7 +1182,11 @@
       remove.type = "button";
       remove.className = "feature-mini-btn danger";
       remove.textContent = "Delete";
-      remove.addEventListener("click", () => deleteResource(item.id));
+      remove.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        deleteResource(item.id);
+      });
 
       right.append(pill, remove);
       head.append(info, right);
@@ -1354,7 +1364,6 @@
     if (!document.getElementById("forumsPage")) return;
     ensureFeatureState();
     renderResources();
-    renderGuides();
   }
 
   function installEventHandlers() {
@@ -1369,11 +1378,6 @@
       if (event.key === "Enter") saveResource();
     });
 
-    document.getElementById("saveGuideBtn")?.addEventListener("click", saveGuide);
-    document.getElementById("cancelGuideEditBtn")?.addEventListener("click", () => {
-      resetGuideForm();
-      setStatus("guideStatus", "");
-    });
   }
 
   function installRenderWrapper() {
