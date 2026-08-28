@@ -642,3 +642,13 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
   .mk-notes-card, .mk-monitor-card { padding: 16px; }
   .mk-note-list > div { grid-template-columns: 1fr; gap: 4px; }
 }
+/* Looksmaxxing task management */
+.looks-task[draggable="true"] { cursor: grab; }
+.looks-task.dragging { opacity: .55; cursor: grabbing; }
+.looks-task.dragging .task-main { pointer-events: none; }
+.task-menu-action.delete-action { color: var(--red); }
+.task-menu-action.delete-action:hover { background: var(--red-soft); color: var(--red); }
+.task-menu-action.add-action:hover { background: var(--green-soft); color: var(--green-dark); }
+.task-row.adding { grid-template-columns: minmax(0, 1fr); }
+.task-row.adding > .task-main,
+.task-row.adding > .task-menu { display: none; }

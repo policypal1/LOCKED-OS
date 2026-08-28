@@ -5,8 +5,9 @@ const SUPABASE_URL = "https://qihajayxjukppcnsrgpi.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_NCPEc56HEwlcQroUnCtp2Q_Niz3sNH6";
 const SUPABASE_ROW_ID = "samuel-main";
 const SUPABASE_TABLE = "locked_os_state_v2";
-const STORAGE_KEY = "locked_os_daily_checklist_v16";
+const STORAGE_KEY = "locked_os_daily_checklist_v17";
 const OLD_STORAGE_KEYS = [
+  "locked_os_daily_checklist_v16",
   "locked_os_daily_checklist_v15",
   "locked_os_daily_checklist_v14",
   "locked_os_daily_checklist_v13",
@@ -267,12 +268,44 @@ function makeNight(dayName, dayKey) {
   return tasks;
 }
 
+function getLooksTaskMeta() {
+  const meta = state?.meta || {};
+  return {
+    customTasks: Array.isArray(meta.looksCustomTasks) ? meta.looksCustomTasks : [],
+    deletedIds: new Set(Array.isArray(meta.looksDeletedTaskIds) ? meta.looksDeletedTaskIds : []),
+    order: meta.looksTaskOrder && typeof meta.looksTaskOrder === "object" ? meta.looksTaskOrder : {}
+  };
+}
+
+function applyLooksTaskCustomizations(section, baseTasks) {
+  const { customTasks, deletedIds, order } = getLooksTaskMeta();
+  const tasks = [
+    ...baseTasks,
+    ...customTasks
+      .filter(task => task.section === section)
+      .map(task => ({ ...task, custom: true }))
+  ].filter(task => !deletedIds.has(task.id));
+
+  const savedOrder = Array.isArray(order[section]) ? order[section] : [];
+  if (!savedOrder.length) return tasks;
+
+  const rank = new Map(savedOrder.map((id, index) => [id, index]));
+  return tasks
+    .map((task, index) => ({ task, index }))
+    .sort((a, b) => {
+      const aRank = rank.has(a.task.id) ? rank.get(a.task.id) : Number.MAX_SAFE_INTEGER;
+      const bRank = rank.has(b.task.id) ? rank.get(b.task.id) : Number.MAX_SAFE_INTEGER;
+      return aRank - bRank || a.index - b.index;
+    })
+    .map(item => item.task);
+}
+
 function getLooksRoutine(dayKey = getTodayKey()) {
   const dayName = getRoutineDayName(dayKey);
   return {
-    morning: makeMorning(dayName),
-    midday: makeMidday(dayKey),
-    night: makeNight(dayName, dayKey)
+    morning: applyLooksTaskCustomizations("morning", makeMorning(dayName)),
+    midday: applyLooksTaskCustomizations("midday", makeMidday(dayKey)),
+    night: applyLooksTaskCustomizations("night", makeNight(dayName, dayKey))
   };
 }
 
@@ -344,7 +377,7 @@ function normalizeMk677Log(dayKey, original = {}) {
   return {
     status,
     doseMg: optionalNumber(original.doseMg, 0, 50),
-    time: /^\\d{2}:\\d{2}$/.test(String(original.time || "")) ? String(original.time) : "",
+    time: /^\d{2}:\d{2}$/.test(String(original.time || "")) ? String(original.time) : "",
     fastingGlucose: optionalNumber(original.fastingGlucose, 40, 600),
     weight: optionalNumber(original.weight, 50, 500),
     systolic: optionalNumber(original.systolic, 60, 260),
@@ -428,7 +461,10 @@ function createEmptyState() {
     meta: {
       lastOpenedDayKey: null,
       tretinoinScheduleChanges: [],
-      looksTaskEdits: {}
+      looksTaskEdits: {},
+      looksCustomTasks: [],
+      looksDeletedTaskIds: [],
+      looksTaskOrder: { morning: [], midday: [], night: [] }
     },
     adminOverrides: {
       streakOffset: null,
@@ -519,6 +555,38 @@ function normalizeLooksTaskEdits(original) {
   return normalized;
 }
 
+function normalizeLooksCustomTasks(original) {
+  if (!Array.isArray(original)) return [];
+  const sections = new Set(["morning", "midday", "night"]);
+  const seen = new Set();
+  const normalized = [];
+  for (const item of original) {
+    if (!item || typeof item !== "object") continue;
+    const id = String(item.id || "").trim();
+    const section = String(item.section || "").trim();
+    const title = String(item.title || "").trim().slice(0, 160);
+    if (!id || seen.has(id) || !sections.has(section) || !title) continue;
+    seen.add(id);
+    normalized.push({ id, section, title, custom: true });
+  }
+  return normalized;
+}
+
+function normalizeLooksDeletedTaskIds(original) {
+  if (!Array.isArray(original)) return [];
+  return [...new Set(original.map(value => String(value || "").trim()).filter(Boolean))];
+}
+
+function normalizeLooksTaskOrder(original) {
+  const normalized = { morning: [], midday: [], night: [] };
+  if (!original || typeof original !== "object" || Array.isArray(original)) return normalized;
+  for (const section of Object.keys(normalized)) {
+    const ids = Array.isArray(original[section]) ? original[section] : [];
+    normalized[section] = [...new Set(ids.map(value => String(value || "").trim()).filter(Boolean))];
+  }
+  return normalized;
+}
+
 function backfillMissingPastDays() {
   const todayKey = getTodayKey();
   const todayDate = keyToLocalDate(todayKey);
@@ -565,7 +633,7 @@ function normalizeState() {
     changed = true;
   }
   if (!state.meta || typeof state.meta !== "object") {
-    state.meta = { lastOpenedDayKey: state.lastOpenedDayKey || null, tretinoinScheduleChanges: [], looksTaskEdits: {} };
+    state.meta = { lastOpenedDayKey: state.lastOpenedDayKey || null, tretinoinScheduleChanges: [], looksTaskEdits: {}, looksCustomTasks: [], looksDeletedTaskIds: [], looksTaskOrder: { morning: [], midday: [], night: [] } };
     changed = true;
   }
 
@@ -617,6 +685,33 @@ function normalizeState() {
     changed = true;
   } else if (!state.meta.looksTaskEdits || typeof state.meta.looksTaskEdits !== "object") {
     state.meta.looksTaskEdits = {};
+    changed = true;
+  }
+
+  const normalizedCustomTasks = normalizeLooksCustomTasks(state.meta.looksCustomTasks);
+  if (JSON.stringify(state.meta.looksCustomTasks || []) !== JSON.stringify(normalizedCustomTasks)) {
+    state.meta.looksCustomTasks = normalizedCustomTasks;
+    changed = true;
+  } else if (!Array.isArray(state.meta.looksCustomTasks)) {
+    state.meta.looksCustomTasks = [];
+    changed = true;
+  }
+
+  const normalizedDeletedTaskIds = normalizeLooksDeletedTaskIds(state.meta.looksDeletedTaskIds);
+  if (JSON.stringify(state.meta.looksDeletedTaskIds || []) !== JSON.stringify(normalizedDeletedTaskIds)) {
+    state.meta.looksDeletedTaskIds = normalizedDeletedTaskIds;
+    changed = true;
+  } else if (!Array.isArray(state.meta.looksDeletedTaskIds)) {
+    state.meta.looksDeletedTaskIds = [];
+    changed = true;
+  }
+
+  const normalizedTaskOrder = normalizeLooksTaskOrder(state.meta.looksTaskOrder);
+  if (JSON.stringify(state.meta.looksTaskOrder || {}) !== JSON.stringify(normalizedTaskOrder)) {
+    state.meta.looksTaskOrder = normalizedTaskOrder;
+    changed = true;
+  } else if (!state.meta.looksTaskOrder || typeof state.meta.looksTaskOrder !== "object") {
+    state.meta.looksTaskOrder = normalizedTaskOrder;
     changed = true;
   }
 
@@ -686,6 +781,9 @@ function hasMeaningfulState(snapshot) {
   )) return true;
   if (Array.isArray(snapshot.meta?.tretinoinScheduleChanges) && snapshot.meta.tretinoinScheduleChanges.length > 0) return true;
   if (snapshot.meta?.looksTaskEdits && Object.keys(snapshot.meta.looksTaskEdits).length > 0) return true;
+  if (Array.isArray(snapshot.meta?.looksCustomTasks) && snapshot.meta.looksCustomTasks.length > 0) return true;
+  if (Array.isArray(snapshot.meta?.looksDeletedTaskIds) && snapshot.meta.looksDeletedTaskIds.length > 0) return true;
+  if (snapshot.meta?.looksTaskOrder && Object.values(snapshot.meta.looksTaskOrder).some(value => Array.isArray(value) && value.length > 0)) return true;
   if (Number.isInteger(snapshot.meta?.workoutRotationAnchorIndex)) return true;
 
   return Object.values(snapshot.days || {}).some(day => {
@@ -902,9 +1000,77 @@ function saveLooksTaskEdit(task, nextTitle) {
   render();
 }
 
+function ensureLooksTaskCustomizationState() {
+  state.meta = state.meta || {};
+  state.meta.looksTaskEdits = state.meta.looksTaskEdits || {};
+  state.meta.looksCustomTasks = Array.isArray(state.meta.looksCustomTasks) ? state.meta.looksCustomTasks : [];
+  state.meta.looksDeletedTaskIds = Array.isArray(state.meta.looksDeletedTaskIds) ? state.meta.looksDeletedTaskIds : [];
+  state.meta.looksTaskOrder = state.meta.looksTaskOrder && typeof state.meta.looksTaskOrder === "object"
+    ? state.meta.looksTaskOrder
+    : { morning: [], midday: [], night: [] };
+}
+
+function makeCustomLooksTaskId() {
+  return `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function addLooksTask(section, title, afterTaskId = null) {
+  const cleaned = String(title || "").trim().slice(0, 160);
+  if (!cleaned) return;
+  ensureLooksTaskCustomizationState();
+
+  const task = { id: makeCustomLooksTaskId(), section, title: cleaned, custom: true };
+  state.meta.looksCustomTasks.push(task);
+
+  const currentIds = getLooksRoutine(getTodayKey())[section].map(item => item.id).filter(id => id !== task.id);
+  const insertAt = afterTaskId ? currentIds.indexOf(afterTaskId) + 1 : currentIds.length;
+  currentIds.splice(Math.max(0, insertAt), 0, task.id);
+  state.meta.looksTaskOrder[section] = currentIds;
+
+  saveState();
+  render();
+  toast("Task added.");
+}
+
+function deleteLooksTask(task, section) {
+  ensureLooksTaskCustomizationState();
+
+  if (task.custom || String(task.id).startsWith("custom-")) {
+    state.meta.looksCustomTasks = state.meta.looksCustomTasks.filter(item => item.id !== task.id);
+  } else if (!state.meta.looksDeletedTaskIds.includes(task.id)) {
+    state.meta.looksDeletedTaskIds.push(task.id);
+  }
+
+  delete state.meta.looksTaskEdits[task.id];
+  for (const key of ["morning", "midday", "night"]) {
+    const order = Array.isArray(state.meta.looksTaskOrder[key]) ? state.meta.looksTaskOrder[key] : [];
+    state.meta.looksTaskOrder[key] = order.filter(id => id !== task.id);
+  }
+
+  for (const day of Object.values(state.days || {})) {
+    if (!day || typeof day !== "object") continue;
+    day.looksDone = (day.looksDone || []).filter(id => id !== task.id);
+    day.looksSkipped = (day.looksSkipped || []).filter(id => id !== task.id);
+  }
+
+  const today = ensureDay();
+  today.looksCompleted = getResolvedSet(today, "looks").size === getLooksTaskIds().length;
+  saveState();
+  render();
+  toast("Task deleted.");
+}
+
+function saveLooksTaskOrder(section, orderedIds) {
+  ensureLooksTaskCustomizationState();
+  state.meta.looksTaskOrder[section] = [...new Set(orderedIds.filter(Boolean))];
+  saveState();
+}
+
 function startInlineTaskEdit(row, main, menu, task, onEdit) {
   if (row.classList.contains("editing")) return;
   row.classList.add("editing");
+  const wasDraggable = row.draggable;
+  row.draggable = false;
 
   const editor = document.createElement("div");
   editor.className = "task-inline-editor";
@@ -945,6 +1111,7 @@ function startInlineTaskEdit(row, main, menu, task, onEdit) {
 
   const closeEditor = () => {
     row.classList.remove("editing");
+    row.draggable = wasDraggable;
     editor.remove();
   };
 
@@ -981,7 +1148,62 @@ function startInlineTaskEdit(row, main, menu, task, onEdit) {
   });
 }
 
-function createTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit) {
+function startInlineTaskAdd(row, menu, section, afterTaskId, onAdd) {
+  if (row.classList.contains("editing") || row.classList.contains("adding")) return;
+  row.classList.add("adding");
+  row.draggable = false;
+
+  const editor = document.createElement("div");
+  editor.className = "task-inline-editor task-inline-add";
+
+  const field = document.createElement("div");
+  field.className = "task-inline-field";
+  const label = document.createElement("label");
+  label.textContent = "New task name";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "task-inline-input";
+  input.maxLength = 160;
+  input.placeholder = "Enter a new task";
+  input.setAttribute("aria-label", "New task name");
+  field.append(label, input);
+
+  const actions = document.createElement("div");
+  actions.className = "task-inline-actions";
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.className = "btn blue compact task-edit-save";
+  saveButton.textContent = "Add task";
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "btn secondary compact";
+  cancelButton.textContent = "Cancel";
+
+  const close = () => {
+    row.classList.remove("adding");
+    row.draggable = true;
+    editor.remove();
+  };
+  const save = () => {
+    const cleaned = input.value.trim();
+    if (!cleaned) { input.focus(); return; }
+    onAdd(section, cleaned, afterTaskId);
+  };
+
+  saveButton.addEventListener("click", save);
+  cancelButton.addEventListener("click", close);
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); save(); }
+    if (event.key === "Escape") { event.preventDefault(); close(); }
+  });
+  actions.append(saveButton, cancelButton);
+  editor.append(field, actions);
+  row.appendChild(editor);
+  menu.open = false;
+  requestAnimationFrame(() => input.focus());
+}
+
+function createTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit, controls = {}) {
   const row = document.createElement("div");
   row.className = `task-row ${theme} ${done ? "done" : ""} ${skipped ? "skipped" : ""} ${task.meta === "waterTracked" ? "tracked" : ""}`;
 
@@ -998,7 +1220,7 @@ function createTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit) {
   main.addEventListener("click", onToggle);
   row.appendChild(main);
 
-  if (typeof onSkip === "function" || typeof onEdit === "function") {
+  if (typeof onSkip === "function" || typeof onEdit === "function" || typeof controls.onAdd === "function" || typeof controls.onDelete === "function") {
     const menu = document.createElement("details");
     menu.className = "task-menu";
 
@@ -1034,6 +1256,31 @@ function createTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit) {
         startInlineTaskEdit(row, main, menu, task, onEdit);
       });
       popover.appendChild(editButton);
+    }
+
+    if (typeof controls.onAdd === "function") {
+      const addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "task-menu-action add-action";
+      addButton.textContent = "Add new task";
+      addButton.addEventListener("click", event => {
+        event.stopPropagation();
+        startInlineTaskAdd(row, menu, controls.section, task.id, controls.onAdd);
+      });
+      popover.appendChild(addButton);
+    }
+
+    if (typeof controls.onDelete === "function") {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "task-menu-action delete-action";
+      deleteButton.textContent = "Delete task";
+      deleteButton.addEventListener("click", event => {
+        event.stopPropagation();
+        menu.open = false;
+        if (window.confirm(`Delete “${task.title}”?`)) controls.onDelete(task, controls.section);
+      });
+      popover.appendChild(deleteButton);
     }
 
     menu.append(summary, popover);
@@ -1094,7 +1341,7 @@ function renderDayStreak() {
   $("looksStreak").textContent = looksStreak;
 }
 
-function renderLooksTaskList(element, tasks, day) {
+function renderLooksTaskList(element, tasks, day, section) {
   element.innerHTML = "";
   const done = new Set(day.looksDone);
   const skipped = new Set(day.looksSkipped);
@@ -1109,18 +1356,58 @@ function renderLooksTaskList(element, tasks, day) {
       setLooksStatus(task, "done");
     };
 
-    element.appendChild(
-      createTaskRow(
-        displayTask,
-        done.has(task.id),
-        skipped.has(task.id),
-        "looks-task",
-        toggle,
-        () => setLooksStatus(task, "skipped"),
-        nextTitle => saveLooksTaskEdit(task, nextTitle)
-      )
+    const row = createTaskRow(
+      displayTask,
+      done.has(task.id),
+      skipped.has(task.id),
+      "looks-task",
+      toggle,
+      () => setLooksStatus(task, "skipped"),
+      nextTitle => saveLooksTaskEdit(task, nextTitle),
+      { section, onAdd: addLooksTask, onDelete: deleteLooksTask }
     );
+
+    row.dataset.taskId = task.id;
+    row.draggable = true;
+    row.setAttribute("aria-grabbed", "false");
+    row.addEventListener("dragstart", event => {
+      if (row.classList.contains("editing") || row.classList.contains("adding")) {
+        event.preventDefault();
+        return;
+      }
+      row.classList.add("dragging");
+      row.setAttribute("aria-grabbed", "true");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", task.id);
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+      row.setAttribute("aria-grabbed", "false");
+      element.querySelectorAll(".task-row").forEach(item => item.classList.remove("drag-over"));
+    });
+
+    element.appendChild(row);
   }
+
+  element.addEventListener("dragover", event => {
+    event.preventDefault();
+    const dragging = element.querySelector(".task-row.dragging");
+    if (!dragging) return;
+    const rows = [...element.querySelectorAll(".task-row:not(.dragging)")];
+    const next = rows.find(row => {
+      const rect = row.getBoundingClientRect();
+      return event.clientY < rect.top + rect.height / 2;
+    });
+    if (next) element.insertBefore(dragging, next);
+    else element.appendChild(dragging);
+  });
+
+  element.addEventListener("drop", event => {
+    event.preventDefault();
+    const orderedIds = [...element.querySelectorAll(".task-row")].map(row => row.dataset.taskId).filter(Boolean);
+    saveLooksTaskOrder(section, orderedIds);
+    toast("Task order saved.");
+  });
 }
 
 function renderWorkoutPicker() {
@@ -1167,9 +1454,9 @@ function renderLooks() {
   $("looksDayName").textContent = `${dayName} routine`;
   $("looksDateText").textContent = `${dayName}, ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
 
-  renderLooksTaskList($("looksMorningList"), routine.morning, day);
-  renderLooksTaskList($("looksMiddayList"), routine.midday, day);
-  renderLooksTaskList($("looksNightList"), routine.night, day);
+  renderLooksTaskList($("looksMorningList"), routine.morning, day, "morning");
+  renderLooksTaskList($("looksMiddayList"), routine.midday, day, "midday");
+  renderLooksTaskList($("looksNightList"), routine.night, day, "night");
 
   const total = getLooksTaskIds(key).length;
   const done = day.looksDone.length;
@@ -1197,7 +1484,6 @@ function renderWater() {
   $("waterAmount").innerHTML = `${waterOz} <span>oz / ${WATER_TARGET_OZ} oz</span>`;
   $("waterBadge").textContent = `${displayPercent}%`;
   $("waterFill").style.width = `${Math.max(0, Math.min(100, displayPercent))}%`;
-
   if (waterOz < WATER_MINIMUM_OZ) $("waterStatus").textContent = `${WATER_MINIMUM_OZ - waterOz} oz until the daily minimum.`;
   else if (waterOz < WATER_TARGET_OZ) $("waterStatus").textContent = `Minimum hit. ${WATER_TARGET_OZ - waterOz} oz until target.`;
   else $("waterStatus").textContent = waterOz === WATER_TARGET_OZ ? `${WATER_TARGET_OZ} oz target complete.` : `${waterOz - WATER_TARGET_OZ} oz above target.`;
