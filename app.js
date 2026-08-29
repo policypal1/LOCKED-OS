@@ -360,7 +360,7 @@ function createDefaultMk677State() {
     currentDoseMg: 12.5,
     monitoring: { date: "", weight: null, restingHr: null, notes: "" },
     logs: {},
-    glucoseEntries: {},
+    glucoseEntries: [],
     labs: [],
     thresholds: { fastingGlucoseMax: null, systolicMax: null, diastolicMax: null }
   };
@@ -379,14 +379,35 @@ function normalizeSeverity(value) {
 }
 
 function normalizeGlucoseEntries(original) {
-  const normalized = {};
-  if (!original || typeof original !== "object" || Array.isArray(original)) return normalized;
-  for (const [dayKey, rawValue] of Object.entries(original)) {
-    const value = Number(rawValue);
-    if (!isDateKey(dayKey) || !Number.isFinite(value) || value < 40 || value > 600) continue;
-    normalized[dayKey] = Math.round(value);
+  const normalized = [];
+  const addEntry = (raw, fallbackDayKey = "", fallbackId = "") => {
+    const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { glucose: raw };
+    const dayKey = isDateKey(source.dayKey) ? source.dayKey : (isDateKey(fallbackDayKey) ? fallbackDayKey : "");
+    const glucose = Number(source.glucose ?? source.value);
+    if (!dayKey || !Number.isFinite(glucose) || glucose < 40 || glucose > 600) return;
+    const time = /^\d{2}:\d{2}$/.test(String(source.time || "")) ? String(source.time) : "";
+    const context = String(source.context || "").trim().slice(0, 40);
+    const id = String(source.id || fallbackId || `glucose-${dayKey}-${time || "na"}-${normalized.length}`).slice(0, 120);
+    normalized.push({ id, dayKey, glucose: Math.round(glucose), time, context });
+  };
+
+  if (Array.isArray(original)) {
+    original.forEach((item, index) => addEntry(item, "", `glucose-entry-${index}`));
+  } else if (original && typeof original === "object") {
+    for (const [key, value] of Object.entries(original)) {
+      addEntry(value, key, isDateKey(key) ? `legacy-${key}` : key);
+    }
   }
-  return normalized;
+
+  const seen = new Set();
+  return normalized
+    .filter(entry => {
+      const signature = `${entry.id}|${entry.dayKey}|${entry.time}|${entry.glucose}|${entry.context}`;
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+      return true;
+    })
+    .sort((a, b) => a.dayKey.localeCompare(b.dayKey) || a.time.localeCompare(b.time) || a.id.localeCompare(b.id));
 }
 
 function normalizeMk677Log(dayKey, original = {}) {
@@ -432,10 +453,17 @@ function normalizeMk677State(original) {
   }
   normalized.glucoseEntries = normalizeGlucoseEntries(original.glucoseEntries);
   for (const [dayKey, log] of Object.entries(normalized.logs)) {
-    if (Number.isFinite(log.fastingGlucose) && !Object.prototype.hasOwnProperty.call(normalized.glucoseEntries, dayKey)) {
-      normalized.glucoseEntries[dayKey] = Math.round(log.fastingGlucose);
+    if (Number.isFinite(log.fastingGlucose) && !normalized.glucoseEntries.some(entry => entry.dayKey === dayKey)) {
+      normalized.glucoseEntries.push({
+        id: `legacy-log-${dayKey}`,
+        dayKey,
+        glucose: Math.round(log.fastingGlucose),
+        time: "",
+        context: "Fasting"
+      });
     }
   }
+  normalized.glucoseEntries.sort((a, b) => a.dayKey.localeCompare(b.dayKey) || a.time.localeCompare(b.time) || a.id.localeCompare(b.id));
   normalized.thresholds = {
     fastingGlucoseMax: optionalNumber(original.thresholds?.fastingGlucoseMax, 40, 600),
     systolicMax: optionalNumber(original.thresholds?.systolicMax, 60, 260),
@@ -1738,7 +1766,7 @@ function buildSmoothPath(points) {
   return d;
 }
 
-function renderMetricChart({ chartId, entries, valueKey, unit, decimals = 1, emptyText = "No entries in this time range yet." }) {
+function renderMetricChart({ chartId, entries, valueKey, unit, decimals = 1, emptyText = "No entries in this time range yet.", tooltipDetail = null }) {
   const chart = $(chartId);
   if (!chart) return;
   chart.innerHTML = "";
@@ -1762,13 +1790,19 @@ function renderMetricChart({ chartId, entries, valueKey, unit, decimals = 1, emp
   const minValue = Math.floor((rawMin - pad) / stepBase) * stepBase;
   const maxValue = Math.ceil((rawMax + pad) / stepBase) * stepBase;
   const valueSpan = Math.max(stepBase, maxValue - minValue);
-  const firstDay = keyToUtcDayNumber(entries[0].dayKey);
-  const lastDay = keyToUtcDayNumber(entries.at(-1).dayKey);
-  const daySpan = Math.max(1, lastDay - firstDay);
+  const timeValue = entry => {
+    let value = keyToUtcDayNumber(entry.dayKey);
+    const match = /^(\d{2}):(\d{2})$/.exec(String(entry.time || ""));
+    if (match) value += (Number(match[1]) * 60 + Number(match[2])) / 1440;
+    return value;
+  };
+  const firstTime = timeValue(entries[0]);
+  const lastTime = timeValue(entries.at(-1));
+  const timeSpan = Math.max(1 / 1440, lastTime - firstTime);
 
   const xForEntry = (entry, index) => entries.length === 1
     ? padding.left + plotWidth / 2
-    : padding.left + ((keyToUtcDayNumber(entry.dayKey) - firstDay) / daySpan) * plotWidth;
+    : padding.left + ((timeValue(entry) - firstTime) / timeSpan) * plotWidth;
   const yForValue = value => padding.top + ((maxValue - value) / valueSpan) * plotHeight;
   const points = entries.map((entry, index) => ({
     x: xForEntry(entry, index),
@@ -1823,7 +1857,8 @@ function renderMetricChart({ chartId, entries, valueKey, unit, decimals = 1, emp
     const point = points[index];
     if (!point) return;
     const value = Number(point.entry[valueKey]);
-    tooltip.innerHTML = `<strong>${value.toFixed(decimals)} ${escapeHtml(unit)}</strong><span>${escapeHtml(formatWeightDate(point.entry.dayKey, { year: "numeric" }))}</span>`;
+    const detail = typeof tooltipDetail === "function" ? String(tooltipDetail(point.entry) || "") : "";
+    tooltip.innerHTML = `<strong>${value.toFixed(decimals)} ${escapeHtml(unit)}</strong><span>${escapeHtml(formatWeightDate(point.entry.dayKey, { year: "numeric" }))}</span>${detail ? `<span>${escapeHtml(detail)}</span>` : ""}`;
     tooltip.hidden = false;
     tooltip.style.left = `${(point.x / width) * 100}%`;
     tooltip.style.top = `${(point.y / height) * 100}%`;
@@ -1858,10 +1893,14 @@ function renderWeightChart(entries) {
 }
 
 function getGlucoseEntries() {
-  return Object.entries(state.mk677?.glucoseEntries || {})
-    .filter(([dayKey, value]) => isDateKey(dayKey) && Number.isFinite(Number(value)))
-    .map(([dayKey, value]) => ({ dayKey, glucose: Number(value) }))
-    .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+  return normalizeGlucoseEntries(state.mk677?.glucoseEntries || []);
+}
+
+function formatGlucoseTime(time) {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(time || ""));
+  if (!match) return "";
+  const date = new Date(2000, 0, 1, Number(match[1]), Number(match[2]));
+  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 function getVisibleGlucoseEntries() {
@@ -1875,9 +1914,13 @@ function getVisibleGlucoseEntries() {
 
 function saveGlucoseEntry() {
   const dateInput = $("glucoseDateInput");
+  const timeInput = $("glucoseTimeInput");
   const valueInput = $("glucoseValueInput");
+  const contextInput = $("glucoseContextInput");
   if (!dateInput || !valueInput) return;
   const dayKey = dateInput.value;
+  const time = /^\d{2}:\d{2}$/.test(String(timeInput?.value || "")) ? timeInput.value : "";
+  const context = String(contextInput?.value || "").trim().slice(0, 40);
   const value = Number(valueInput.value);
   if (!isDateKey(dayKey)) {
     setMkStatus("glucoseSaveStatus", "Choose a valid date.", "bad");
@@ -1890,16 +1933,28 @@ function saveGlucoseEntry() {
     return;
   }
   state.mk677 = normalizeMk677State(state.mk677);
-  state.mk677.glucoseEntries[dayKey] = Math.round(value);
+  const existing = state.mk677.glucoseEntries.find(entry => entry.dayKey === dayKey && entry.time === time && entry.context === context);
+  if (existing) {
+    existing.glucose = Math.round(value);
+  } else {
+    state.mk677.glucoseEntries.push({
+      id: `glucose-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      dayKey,
+      glucose: Math.round(value),
+      time,
+      context
+    });
+  }
+  state.mk677.glucoseEntries.sort((a, b) => a.dayKey.localeCompare(b.dayKey) || a.time.localeCompare(b.time) || a.id.localeCompare(b.id));
   saveState();
   renderGlucoseTracker();
   valueInput.value = "";
-  setMkStatus("glucoseSaveStatus", `Saved ${Math.round(value)} mg/dL for ${formatWeightDate(dayKey)}.`, "good");
+  const detail = [context, formatGlucoseTime(time)].filter(Boolean).join(" · ");
+  setMkStatus("glucoseSaveStatus", `Saved ${Math.round(value)} mg/dL for ${formatWeightDate(dayKey)}${detail ? ` · ${detail}` : ""}.`, "good");
   toast("Glucose saved.");
 }
 
 function renderGlucoseTracker() {
-  const allEntries = getGlucoseEntries();
   const visibleEntries = getVisibleGlucoseEntries();
   const dateInput = $("glucoseDateInput");
   if (dateInput && !dateInput.value) dateInput.value = getTodayKey();
@@ -1914,26 +1969,18 @@ function renderGlucoseTracker() {
     valueKey: "glucose",
     unit: "mg/dL",
     decimals: 0,
-    emptyText: "No glucose entries in this time range yet."
+    emptyText: "No glucose entries in this time range yet.",
+    tooltipDetail: entry => [entry.context, formatGlucoseTime(entry.time)].filter(Boolean).join(" · ")
   });
 
-  const latestBadge = $("glucoseLatestBadge");
-  const firstValue = $("glucoseFirstValue");
-  const latestValue = $("glucoseLatestValue");
   const changeValue = $("glucoseChangeValue");
   if (!visibleEntries.length) {
-    if (latestBadge) latestBadge.textContent = allEntries.length ? `${allEntries.at(-1).glucose} mg/dL latest` : "No entries";
-    if (firstValue) firstValue.textContent = "—";
-    if (latestValue) latestValue.textContent = "—";
     if (changeValue) changeValue.textContent = "—";
     return;
   }
   const first = visibleEntries[0];
   const latest = visibleEntries.at(-1);
   const change = latest.glucose - first.glucose;
-  if (latestBadge) latestBadge.textContent = `${latest.glucose} mg/dL latest`;
-  if (firstValue) firstValue.textContent = `${first.glucose} mg/dL`;
-  if (latestValue) latestValue.textContent = `${latest.glucose} mg/dL`;
   if (changeValue) changeValue.textContent = `${change > 0 ? "+" : ""}${change} mg/dL`;
 }
 
@@ -1942,7 +1989,9 @@ function renderWeightTracker() {
   const allEntries = getWeightEntries();
   const visibleEntries = getVisibleWeightEntries();
   const dateInput = $("weightDateInput");
+  const valueInput = $("weightValueInput");
   if (dateInput && !dateInput.value) dateInput.value = getTodayKey();
+  if (valueInput) valueInput.placeholder = allEntries.length ? allEntries.at(-1).weight.toFixed(1) : "165.0";
 
   document.querySelectorAll(".weight-range-btn").forEach(button => {
     button.classList.toggle("active", button.dataset.weightRange === weightRange);
@@ -1950,15 +1999,8 @@ function renderWeightTracker() {
 
   renderWeightChart(visibleEntries);
 
-  const latestBadge = $("weightLatestBadge");
-  const firstValue = $("weightFirstValue");
-  const latestValue = $("weightLatestValue");
   const changeValue = $("weightChangeValue");
-
   if (!visibleEntries.length) {
-    if (latestBadge) latestBadge.textContent = allEntries.length ? `${allEntries.at(-1).weight.toFixed(1)} lb latest` : "No entries";
-    if (firstValue) firstValue.textContent = "—";
-    if (latestValue) latestValue.textContent = "—";
     if (changeValue) changeValue.textContent = "—";
     return;
   }
@@ -1966,10 +2008,6 @@ function renderWeightTracker() {
   const first = visibleEntries[0];
   const latest = visibleEntries.at(-1);
   const change = Math.round((latest.weight - first.weight) * 10) / 10;
-
-  if (latestBadge) latestBadge.textContent = `${latest.weight.toFixed(1)} lb latest`;
-  if (firstValue) firstValue.textContent = `${first.weight.toFixed(1)} lb`;
-  if (latestValue) latestValue.textContent = `${latest.weight.toFixed(1)} lb`;
   if (changeValue) changeValue.textContent = `${change > 0 ? "+" : ""}${change.toFixed(1)} lb`;
 }
 
