@@ -107,6 +107,13 @@ let renderedDayKey = getTodayKey();
 let workoutDraftIndex = null;
 let workoutDraftDirty = false;
 let weightRange = "30";
+let glucoseRange = "30";
+let localRevision = 0;
+let syncedRevision = 0;
+let supabaseSaveInFlight = false;
+let supabaseSaveQueued = false;
+let latestSupabaseWriteAt = "";
+let interactionRenderTimer = null;
 const MK_CYCLE_WEEKS = 8;
 const MK_CYCLE_DAYS = MK_CYCLE_WEEKS * 7;
 const MK_SCHEDULED_DAYS = new Set([1, 2, 3, 4, 5]);
@@ -353,6 +360,7 @@ function createDefaultMk677State() {
     currentDoseMg: 12.5,
     monitoring: { date: "", weight: null, restingHr: null, notes: "" },
     logs: {},
+    glucoseEntries: {},
     labs: [],
     thresholds: { fastingGlucoseMax: null, systolicMax: null, diastolicMax: null }
   };
@@ -368,6 +376,17 @@ function optionalNumber(value, min = -Infinity, max = Infinity) {
 function normalizeSeverity(value) {
   const number = Math.round(Number(value) || 0);
   return Math.max(0, Math.min(3, number));
+}
+
+function normalizeGlucoseEntries(original) {
+  const normalized = {};
+  if (!original || typeof original !== "object" || Array.isArray(original)) return normalized;
+  for (const [dayKey, rawValue] of Object.entries(original)) {
+    const value = Number(rawValue);
+    if (!isDateKey(dayKey) || !Number.isFinite(value) || value < 40 || value > 600) continue;
+    normalized[dayKey] = Math.round(value);
+  }
+  return normalized;
 }
 
 function normalizeMk677Log(dayKey, original = {}) {
@@ -409,6 +428,12 @@ function normalizeMk677State(original) {
   if (original.logs && typeof original.logs === "object" && !Array.isArray(original.logs)) {
     for (const [dayKey, log] of Object.entries(original.logs)) {
       if (isDateKey(dayKey)) normalized.logs[dayKey] = normalizeMk677Log(dayKey, log);
+    }
+  }
+  normalized.glucoseEntries = normalizeGlucoseEntries(original.glucoseEntries);
+  for (const [dayKey, log] of Object.entries(normalized.logs)) {
+    if (Number.isFinite(log.fastingGlucose) && !Object.prototype.hasOwnProperty.call(normalized.glucoseEntries, dayKey)) {
+      normalized.glucoseEntries[dayKey] = Math.round(log.fastingGlucose);
     }
   }
   normalized.thresholds = {
@@ -776,6 +801,7 @@ function hasMeaningfulState(snapshot) {
     snapshot.mk677.cycleStart ||
     Number(snapshot.mk677.currentDoseMg) !== 12.5 ||
     Object.keys(snapshot.mk677.logs || {}).length > 0 ||
+    Object.keys(snapshot.mk677.glucoseEntries || {}).length > 0 ||
     (Array.isArray(snapshot.mk677.labs) && snapshot.mk677.labs.length > 0) ||
     Object.values(snapshot.mk677.thresholds || {}).some(value => value !== null && value !== "")
   )) return true;
@@ -797,11 +823,23 @@ function hasMeaningfulState(snapshot) {
   });
 }
 
-function applyRemoteState(remoteState, statusMessage = "Updated from Supabase.") {
+function hasPendingLocalChanges() {
+  return Boolean(saveTimer || supabaseSaveInFlight || localRevision > syncedRevision);
+}
+
+function applyRemoteState(remoteState, statusMessage = "Updated from Supabase.", { force = false, updatedAt = "" } = {}) {
   if (!remoteState || typeof remoteState !== "object") return false;
+  if (!force && updatedAt && latestSupabaseWriteAt && updatedAt < latestSupabaseWriteAt) return false;
+  if (!force && hasPendingLocalChanges()) {
+    if (syncStatus) syncStatus.textContent = "Saving local changes…";
+    return false;
+  }
   state = remoteState;
   normalizeState();
   saveLocalState();
+  localRevision = 0;
+  syncedRevision = 0;
+  if (updatedAt) latestSupabaseWriteAt = updatedAt;
   if (!mainApp.classList.contains("hidden")) render();
   if (syncStatus) syncStatus.textContent = statusMessage;
   return true;
@@ -836,7 +874,9 @@ function subscribeToSupabaseState() {
       payload => {
         const remoteState = payload?.new?.state;
         if (!remoteState || typeof remoteState !== "object") return;
-        applyRemoteState(remoteState, "Updated live from Supabase.");
+        if (hasPendingLocalChanges()) return;
+        const updatedAt = payload?.new?.updated_at || "";
+        applyRemoteState(remoteState, "Updated live from Supabase.", { updatedAt });
       }
     )
     .subscribe((status, error) => {
@@ -850,13 +890,17 @@ function subscribeToSupabaseState() {
 }
 
 function saveState() {
+  localRevision += 1;
   saveLocalState();
   queueSupabaseSave();
 }
 
-function queueSupabaseSave() {
+function queueSupabaseSave(delay = 180) {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveSupabaseState, 250);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    saveSupabaseState();
+  }, delay);
 }
 
 async function loadSupabaseState() {
@@ -873,46 +917,75 @@ async function loadSupabaseState() {
     const localHasData = hasMeaningfulState(localBeforeLoad);
 
     if (remoteHasData || !localHasData) {
-      applyRemoteState(remoteRow.state, "Synced with Supabase.");
+      applyRemoteState(remoteRow.state, "Synced with Supabase.", { force: true, updatedAt: remoteRow.updated_at || "" });
     } else {
       state = localBeforeLoad;
       normalizeState();
       saveLocalState();
+      localRevision += 1;
       await saveSupabaseState();
       syncStatus.textContent = "Restored local data to Supabase.";
     }
   } else {
+    localRevision += 1;
     await saveSupabaseState();
   }
   subscribeToSupabaseState();
 }
 
 async function refreshSupabaseState() {
-  if (!supabaseClient || mainApp.classList.contains("hidden")) return;
+  if (!supabaseClient || mainApp.classList.contains("hidden") || hasPendingLocalChanges()) return;
   const remoteRow = await fetchSupabaseState({ silent: true });
-  if (remoteRow?.state && typeof remoteRow.state === "object") applyRemoteState(remoteRow.state, "Synced with Supabase.");
+  if (hasPendingLocalChanges()) return;
+  if (remoteRow?.state && typeof remoteRow.state === "object") {
+    applyRemoteState(remoteRow.state, "Synced with Supabase.", { updatedAt: remoteRow.updated_at || "" });
+  }
 }
 
 async function saveSupabaseState() {
   if (!supabaseClient) {
     syncStatus.textContent = "Saved locally. Supabase is not connected.";
+    syncedRevision = localRevision;
     return false;
   }
 
+  if (supabaseSaveInFlight) {
+    supabaseSaveQueued = true;
+    return false;
+  }
+
+  supabaseSaveInFlight = true;
+  supabaseSaveQueued = false;
+  const revisionToSave = localRevision;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const writeTimestamp = new Date().toISOString();
+  let saveSucceeded = false;
   syncStatus.textContent = "Saving…";
-  const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert({
-    id: SUPABASE_ROW_ID,
-    state,
-    updated_at: new Date().toISOString()
-  });
 
-  if (error) {
-    console.error(error);
-    syncStatus.textContent = "Supabase save failed. Saved locally only.";
-    return false;
+  try {
+    const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert({
+      id: SUPABASE_ROW_ID,
+      state: snapshot,
+      updated_at: writeTimestamp
+    });
+
+    if (error) {
+      console.error(error);
+      syncStatus.textContent = "Supabase save failed. Saved locally only.";
+      return false;
+    }
+
+    syncedRevision = Math.max(syncedRevision, revisionToSave);
+    latestSupabaseWriteAt = writeTimestamp;
+    saveSucceeded = true;
+    syncStatus.textContent = localRevision > syncedRevision ? "Saving newer changes…" : "Saved to Supabase.";
+    return true;
+  } finally {
+    supabaseSaveInFlight = false;
+    // Only chain another write after a successful save. If Supabase is offline,
+    // keep the newer local state dirty and let the next edit/online event retry it.
+    if (saveSucceeded && (supabaseSaveQueued || localRevision > syncedRevision)) queueSupabaseSave(0);
   }
-  syncStatus.textContent = "Saved to Supabase.";
-  return true;
 }
 
 function calculateStreak(completedField) {
@@ -952,6 +1025,59 @@ function toggleMainTask(taskId) {
   render();
 }
 
+function refreshLooksTaskRow(taskId) {
+  const day = ensureDay();
+  const done = new Set(day.looksDone);
+  const skipped = new Set(day.looksSkipped);
+  document.querySelectorAll(".looks-task").forEach(row => {
+    if (row.dataset.taskId !== taskId) return;
+    const isDone = done.has(taskId);
+    const isSkipped = skipped.has(taskId);
+    row.classList.toggle("done", isDone);
+    row.classList.toggle("skipped", isSkipped);
+    const box = row.querySelector(".task-box");
+    if (box) box.textContent = isDone ? "✓" : isSkipped ? "−" : "";
+    const copy = row.querySelector(".task-copy");
+    if (copy) {
+      let status = copy.querySelector(".task-status");
+      if (isSkipped && !status) {
+        status = document.createElement("div");
+        status.className = "task-status";
+        copy.appendChild(status);
+      }
+      if (status) {
+        status.textContent = isSkipped ? "Skipped today" : "";
+        status.hidden = !isSkipped;
+      }
+    }
+  });
+}
+
+function refreshLooksProgressUI() {
+  const key = getTodayKey();
+  const day = ensureDay(key);
+  const total = getLooksTaskIds(key).length;
+  const done = day.looksDone.length;
+  const skipped = day.looksSkipped.length;
+  const resolved = done + skipped;
+  const left = total - resolved;
+  const percent = total ? Math.round((resolved / total) * 100) : 0;
+  $("looksPercent").textContent = `${percent}%`;
+  $("looksDoneCount").textContent = skipped ? `${done} done • ${skipped} skipped` : `${done} / ${total}`;
+  $("looksTasksLeft").textContent = left === 0
+    ? "Looksmaxxing routine resolved. Its separate streak updated."
+    : `${left} looks task${left === 1 ? "" : "s"} left today.`;
+  $("looksProgressCircle").style.background = `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
+}
+
+function scheduleInteractionRender() {
+  clearTimeout(interactionRenderTimer);
+  interactionRenderTimer = setTimeout(() => {
+    interactionRenderTimer = null;
+    if (!mainApp.classList.contains("hidden")) render();
+  }, 420);
+}
+
 function setLooksStatus(task, status) {
   const day = ensureDay();
   const done = new Set(day.looksDone);
@@ -980,7 +1106,12 @@ function setLooksStatus(task, status) {
   syncWaterTask(day, getTodayKey());
   day.looksCompleted = getResolvedSet(day, "looks").size === getLooksTaskIds().length;
   saveState();
-  render();
+  refreshLooksTaskRow(task.id);
+  if (task.meta === "morningWater") refreshLooksTaskRow("water-through-day");
+  refreshLooksProgressUI();
+  renderDayStreak();
+  renderWater();
+  scheduleInteractionRender();
 }
 
 function saveLooksTaskEdit(task, nextTitle) {
@@ -1389,7 +1520,7 @@ function renderLooksTaskList(element, tasks, day, section) {
     element.appendChild(row);
   }
 
-  element.addEventListener("dragover", event => {
+  element.ondragover = event => {
     event.preventDefault();
     const dragging = element.querySelector(".task-row.dragging");
     if (!dragging) return;
@@ -1400,14 +1531,14 @@ function renderLooksTaskList(element, tasks, day, section) {
     });
     if (next) element.insertBefore(dragging, next);
     else element.appendChild(dragging);
-  });
+  };
 
-  element.addEventListener("drop", event => {
+  element.ondrop = event => {
     event.preventDefault();
     const orderedIds = [...element.querySelectorAll(".task-row")].map(row => row.dataset.taskId).filter(Boolean);
     saveLooksTaskOrder(section, orderedIds);
     toast("Task order saved.");
-  });
+  };
 }
 
 function renderWorkoutPicker() {
@@ -1497,7 +1628,6 @@ function setWaterOz(value) {
   saveState();
   render();
 }
-
 function getWeightEntries() {
   return Object.entries(state.weights || {})
     .filter(([dayKey, weight]) => isDateKey(dayKey) && Number.isFinite(Number(weight)))
@@ -1595,60 +1725,218 @@ function renderWeightHistory(entries) {
   });
 }
 
-function renderWeightChart(entries) {
-  const chart = $("weightChart");
+function buildSmoothPath(points) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const current = points[i];
+    const next = points[i + 1];
+    const midX = (current.x + next.x) / 2;
+    d += ` C ${midX} ${current.y}, ${midX} ${next.y}, ${next.x} ${next.y}`;
+  }
+  return d;
+}
+
+function renderMetricChart({ chartId, entries, valueKey, unit, decimals = 1, emptyText = "No entries in this time range yet." }) {
+  const chart = $(chartId);
   if (!chart) return;
+  chart.innerHTML = "";
 
   if (!entries.length) {
-    chart.innerHTML = '<div class="weight-chart-empty">No entries in this time range yet.</div>';
+    chart.innerHTML = `<div class="weight-chart-empty">${escapeHtml(emptyText)}</div>`;
     return;
   }
 
-  const width = 800;
-  const height = 310;
-  const padding = { top: 24, right: 28, bottom: 42, left: 56 };
+  const width = 1100;
+  const height = 460;
+  const padding = { top: 34, right: 34, bottom: 60, left: 74 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
-  const weights = entries.map(entry => entry.weight);
-  const rawMin = Math.min(...weights);
-  const rawMax = Math.max(...weights);
+  const values = entries.map(entry => Number(entry[valueKey])).filter(Number.isFinite);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
   const spread = rawMax - rawMin;
-  const pad = spread === 0 ? 2 : Math.max(1, spread * 0.18);
-  const minWeight = Math.floor((rawMin - pad) * 2) / 2;
-  const maxWeight = Math.ceil((rawMax + pad) * 2) / 2;
-  const weightSpan = Math.max(1, maxWeight - minWeight);
+  const pad = spread === 0 ? Math.max(2, Math.abs(rawMax) * .015) : Math.max(1, spread * .22);
+  const stepBase = decimals === 0 ? 1 : .5;
+  const minValue = Math.floor((rawMin - pad) / stepBase) * stepBase;
+  const maxValue = Math.ceil((rawMax + pad) / stepBase) * stepBase;
+  const valueSpan = Math.max(stepBase, maxValue - minValue);
+  const firstDay = keyToUtcDayNumber(entries[0].dayKey);
+  const lastDay = keyToUtcDayNumber(entries.at(-1).dayKey);
+  const daySpan = Math.max(1, lastDay - firstDay);
 
-  const xForIndex = index => entries.length === 1 ? padding.left + plotWidth / 2 : padding.left + (index / (entries.length - 1)) * plotWidth;
-  const yForWeight = weight => padding.top + ((maxWeight - weight) / weightSpan) * plotHeight;
+  const xForEntry = (entry, index) => entries.length === 1
+    ? padding.left + plotWidth / 2
+    : padding.left + ((keyToUtcDayNumber(entry.dayKey) - firstDay) / daySpan) * plotWidth;
+  const yForValue = value => padding.top + ((maxValue - value) / valueSpan) * plotHeight;
+  const points = entries.map((entry, index) => ({
+    x: xForEntry(entry, index),
+    y: yForValue(entry[valueKey]),
+    entry
+  }));
 
-  const gridLines = [0, 0.5, 1].map(ratio => {
+  const yGrid = Array.from({ length: 6 }, (_, index) => {
+    const ratio = index / 5;
     const y = padding.top + ratio * plotHeight;
-    const value = maxWeight - ratio * weightSpan;
-    return `
-      <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(42,30,18,.10)" stroke-width="1" />
-      <text x="${padding.left - 10}" y="${y + 4}" text-anchor="end" fill="#7a6b59" font-size="12" font-weight="700">${value.toFixed(1)}</text>`;
+    const value = maxValue - ratio * valueSpan;
+    return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" class="metric-grid-line" />
+      <text x="${padding.left - 12}" y="${y + 5}" text-anchor="end" class="metric-axis-label">${value.toFixed(decimals)}</text>`;
   }).join("");
 
-  const points = entries.map((entry, index) => `${xForIndex(index)},${yForWeight(entry.weight)}`).join(" ");
-  const circles = entries.map((entry, index) => `
-    <circle cx="${xForIndex(index)}" cy="${yForWeight(entry.weight)}" r="4.5" fill="#2584b8" stroke="#fffaf1" stroke-width="2">
-      <title>${entry.dayKey}: ${entry.weight.toFixed(1)} lb</title>
-    </circle>`).join("");
+  const xTickCount = Math.min(6, entries.length);
+  const xTickIndexes = [...new Set(Array.from({ length: xTickCount }, (_, i) => Math.round(i * (entries.length - 1) / Math.max(1, xTickCount - 1))))];
+  const xLabels = xTickIndexes.map(index => {
+    const point = points[index];
+    const anchor = index === 0 ? "start" : index === entries.length - 1 ? "end" : "middle";
+    return `<text x="${point.x}" y="${height - 22}" text-anchor="${anchor}" class="metric-axis-label">${escapeHtml(formatWeightDate(point.entry.dayKey))}</text>`;
+  }).join("");
 
-  const first = entries[0];
-  const last = entries.at(-1);
-  const firstX = xForIndex(0);
-  const lastX = xForIndex(entries.length - 1);
+  const path = buildSmoothPath(points);
+  const areaPath = entries.length > 1
+    ? `${path} L ${points.at(-1).x} ${padding.top + plotHeight} L ${points[0].x} ${padding.top + plotHeight} Z`
+    : "";
+  const gradientId = `${chartId}Gradient`;
+  const circles = points.map((point, index) => `<circle class="metric-chart-point" data-index="${index}" cx="${point.x}" cy="${point.y}" r="6" tabindex="0" />`).join("");
 
   chart.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
-      ${gridLines}
-      ${entries.length > 1 ? `<polyline points="${points}" fill="none" stroke="#2584b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />` : ""}
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <defs>
+        <linearGradient id="${gradientId}" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="currentColor" stop-opacity=".20" />
+          <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      ${yGrid}
+      ${areaPath ? `<path d="${areaPath}" class="metric-chart-area" fill="url(#${gradientId})" />` : ""}
+      ${entries.length > 1 ? `<path d="${path}" class="metric-chart-line" />` : ""}
       ${circles}
-      <text x="${firstX}" y="${height - 16}" text-anchor="${entries.length === 1 ? "middle" : "start"}" fill="#7a6b59" font-size="12" font-weight="700">${escapeHtml(formatWeightDate(first.dayKey))}</text>
-      ${entries.length > 1 ? `<text x="${lastX}" y="${height - 16}" text-anchor="end" fill="#7a6b59" font-size="12" font-weight="700">${escapeHtml(formatWeightDate(last.dayKey))}</text>` : ""}
+      ${xLabels}
     </svg>`;
+
+  const tooltip = document.createElement("div");
+  tooltip.className = "metric-chart-tooltip";
+  tooltip.hidden = true;
+  chart.appendChild(tooltip);
+
+  const showPoint = index => {
+    const point = points[index];
+    if (!point) return;
+    const value = Number(point.entry[valueKey]);
+    tooltip.innerHTML = `<strong>${value.toFixed(decimals)} ${escapeHtml(unit)}</strong><span>${escapeHtml(formatWeightDate(point.entry.dayKey, { year: "numeric" }))}</span>`;
+    tooltip.hidden = false;
+    tooltip.style.left = `${(point.x / width) * 100}%`;
+    tooltip.style.top = `${(point.y / height) * 100}%`;
+  };
+  const hidePoint = () => { tooltip.hidden = true; };
+
+  chart.querySelectorAll(".metric-chart-point").forEach(point => {
+    const index = Number(point.dataset.index);
+    point.addEventListener("mouseenter", () => showPoint(index));
+    point.addEventListener("mouseleave", hidePoint);
+    point.addEventListener("focus", () => showPoint(index));
+    point.addEventListener("blur", hidePoint);
+    point.addEventListener("click", event => {
+      event.stopPropagation();
+      showPoint(index);
+    });
+  });
+  chart.onclick = event => {
+    if (!event.target.classList?.contains("metric-chart-point")) hidePoint();
+  };
 }
+
+function renderWeightChart(entries) {
+  renderMetricChart({
+    chartId: "weightChart",
+    entries,
+    valueKey: "weight",
+    unit: "lb",
+    decimals: 1,
+    emptyText: "No weight entries in this time range yet."
+  });
+}
+
+function getGlucoseEntries() {
+  return Object.entries(state.mk677?.glucoseEntries || {})
+    .filter(([dayKey, value]) => isDateKey(dayKey) && Number.isFinite(Number(value)))
+    .map(([dayKey, value]) => ({ dayKey, glucose: Number(value) }))
+    .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+}
+
+function getVisibleGlucoseEntries() {
+  const entries = getGlucoseEntries();
+  if (glucoseRange === "all") return entries;
+  const days = Number(glucoseRange);
+  if (!Number.isFinite(days) || days <= 0) return entries;
+  const cutoffKey = formatDateKey(addDays(keyToLocalDate(getTodayKey()), -(days - 1)));
+  return entries.filter(entry => entry.dayKey >= cutoffKey);
+}
+
+function saveGlucoseEntry() {
+  const dateInput = $("glucoseDateInput");
+  const valueInput = $("glucoseValueInput");
+  if (!dateInput || !valueInput) return;
+  const dayKey = dateInput.value;
+  const value = Number(valueInput.value);
+  if (!isDateKey(dayKey)) {
+    setMkStatus("glucoseSaveStatus", "Choose a valid date.", "bad");
+    dateInput.focus();
+    return;
+  }
+  if (!Number.isFinite(value) || value < 40 || value > 600) {
+    setMkStatus("glucoseSaveStatus", "Enter a glucose value from 40 to 600 mg/dL.", "bad");
+    valueInput.focus();
+    return;
+  }
+  state.mk677 = normalizeMk677State(state.mk677);
+  state.mk677.glucoseEntries[dayKey] = Math.round(value);
+  saveState();
+  renderGlucoseTracker();
+  valueInput.value = "";
+  setMkStatus("glucoseSaveStatus", `Saved ${Math.round(value)} mg/dL for ${formatWeightDate(dayKey)}.`, "good");
+  toast("Glucose saved.");
+}
+
+function renderGlucoseTracker() {
+  const allEntries = getGlucoseEntries();
+  const visibleEntries = getVisibleGlucoseEntries();
+  const dateInput = $("glucoseDateInput");
+  if (dateInput && !dateInput.value) dateInput.value = getTodayKey();
+
+  document.querySelectorAll(".glucose-range-btn").forEach(button => {
+    button.classList.toggle("active", button.dataset.glucoseRange === glucoseRange);
+  });
+
+  renderMetricChart({
+    chartId: "glucoseChart",
+    entries: visibleEntries,
+    valueKey: "glucose",
+    unit: "mg/dL",
+    decimals: 0,
+    emptyText: "No glucose entries in this time range yet."
+  });
+
+  const latestBadge = $("glucoseLatestBadge");
+  const firstValue = $("glucoseFirstValue");
+  const latestValue = $("glucoseLatestValue");
+  const changeValue = $("glucoseChangeValue");
+  if (!visibleEntries.length) {
+    if (latestBadge) latestBadge.textContent = allEntries.length ? `${allEntries.at(-1).glucose} mg/dL latest` : "No entries";
+    if (firstValue) firstValue.textContent = "—";
+    if (latestValue) latestValue.textContent = "—";
+    if (changeValue) changeValue.textContent = "—";
+    return;
+  }
+  const first = visibleEntries[0];
+  const latest = visibleEntries.at(-1);
+  const change = latest.glucose - first.glucose;
+  if (latestBadge) latestBadge.textContent = `${latest.glucose} mg/dL latest`;
+  if (firstValue) firstValue.textContent = `${first.glucose} mg/dL`;
+  if (latestValue) latestValue.textContent = `${latest.glucose} mg/dL`;
+  if (changeValue) changeValue.textContent = `${change > 0 ? "+" : ""}${change} mg/dL`;
+}
+
 
 function renderWeightTracker() {
   const allEntries = getWeightEntries();
@@ -1661,7 +1949,6 @@ function renderWeightTracker() {
   });
 
   renderWeightChart(visibleEntries);
-  renderWeightHistory(allEntries);
 
   const latestBadge = $("weightLatestBadge");
   const firstValue = $("weightFirstValue");
@@ -1815,7 +2102,7 @@ function renderMkSchedule() {
     return `<div class="mk-day ${on ? "on" : "off"} ${name === todayName ? "today" : ""}"><strong>${name.slice(0, 3)}</strong><span>${on ? "Night" : "Off"}</span></div>`;
   }).join("");
   const badge = $("mkTodayPlanBadge");
-  if (badge) badge.textContent = isMkScheduledDay() ? `Tonight · ${state.mk677.currentDoseMg} mg` : "Today · off";
+  if (badge) badge.textContent = isMkScheduledDay() ? "Today · scheduled" : "Today · off";
 }
 
 function renderMkTrends(logs) {
@@ -1989,27 +2276,10 @@ function renderMk677() {
   const page = $("mk677Page");
   if (!page) return;
   state.mk677 = normalizeMk677State(state.mk677);
-  const todayKey = getTodayKey();
-  const cycleDay = getMkCycleDay(todayKey);
-  const cycleEnd = getMkCycleEndKey();
-  const cycleLabel = $("mkCycleDay");
-  if (cycleLabel) {
-    if (!state.mk677.cycleStart) cycleLabel.textContent = "Not started";
-    else if (todayKey < state.mk677.cycleStart) cycleLabel.textContent = `Starts ${formatMkDate(state.mk677.cycleStart)}`;
-    else if (cycleDay) cycleLabel.textContent = `Day ${cycleDay} / ${MK_CYCLE_DAYS}`;
-    else if (cycleEnd && todayKey > cycleEnd) cycleLabel.textContent = "Cycle complete";
-    else cycleLabel.textContent = "Outside cycle";
-  }
-  const doseDisplay = $("mkCurrentDoseDisplay");
-  if (doseDisplay) doseDisplay.textContent = `${state.mk677.currentDoseMg} mg`;
-  const startInput = $("mkCycleStartInput");
-  if (startInput) startInput.value = state.mk677.cycleStart || "";
-  const doseSelect = $("mkDoseSelect");
-  if (doseSelect) doseSelect.value = String(state.mk677.currentDoseMg);
   renderMkSchedule();
-  renderMkMonitoring();
+  renderWeightTracker();
+  renderGlucoseTracker();
 }
-
 
 function getWeeklyReviewKeys() {
   const today = keyToLocalDate(getTodayKey());
@@ -2304,7 +2574,6 @@ function render() {
   renderPhoneLock();
   renderDayStreak();
   renderLooks();
-  renderWeightTracker();
   renderWeeklyReview();
   renderMk677();
   renderAdmin();
@@ -2390,9 +2659,16 @@ document.querySelectorAll(".weight-range-btn").forEach(button => {
   });
 });
 
-
-$("saveMkPlanBtn")?.addEventListener("click", saveMkPlan);
-$("saveMkMonitoringBtn")?.addEventListener("click", saveMkMonitoring);
+$("saveGlucoseBtn")?.addEventListener("click", saveGlucoseEntry);
+$("glucoseValueInput")?.addEventListener("keydown", event => {
+  if (event.key === "Enter") saveGlucoseEntry();
+});
+document.querySelectorAll(".glucose-range-btn").forEach(button => {
+  button.addEventListener("click", () => {
+    glucoseRange = button.dataset.glucoseRange || "30";
+    renderGlucoseTracker();
+  });
+});
 
 document.addEventListener("click", event => {
   document.querySelectorAll("details.task-menu[open]").forEach(menu => {

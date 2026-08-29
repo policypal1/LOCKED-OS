@@ -652,3 +652,87 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 .task-row.adding { grid-template-columns: minmax(0, 1fr); }
 .task-row.adding > .task-main,
 .task-row.adding > .task-menu { display: none; }
+
+/* 2026-08-28 stability + MK-677 tracker refresh */
+.task-main { touch-action: manipulation; }
+.looks-task .task-main { will-change: background, border-color; }
+
+.mk-simple-status { grid-template-columns: repeat(2, minmax(120px,1fr)); }
+.mk-notes-wide { padding: 20px; }
+.mk-notes-wide .mk-note-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
+
+.mk-tracker-disclosure { overflow: hidden; }
+.mk-tracker-disclosure > summary { list-style: none; }
+.mk-tracker-disclosure > summary::-webkit-details-marker { display: none; }
+.mk-tracker-summary {
+  min-height: 92px;
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  cursor: pointer;
+  user-select: none;
+  background: linear-gradient(145deg, rgba(255,250,241,.94), rgba(37,132,184,.055));
+}
+.mk-tracker-summary:hover { background: linear-gradient(145deg, rgba(255,250,241,.98), rgba(37,132,184,.09)); }
+.mk-tracker-summary h2 { margin: 0; font-size: clamp(1.55rem,4vw,2.3rem); letter-spacing: -.04em; }
+.mk-tracker-summary > div > span { display: block; margin-top: 5px; color: var(--muted); font-size: .82rem; font-weight: 800; }
+.mk-tracker-summary::after { content: "⌄"; flex: 0 0 auto; color: var(--blue-dark); font-size: 1.4rem; font-weight: 950; transition: transform .18s ease; }
+.mk-tracker-disclosure[open] .mk-tracker-summary::after { transform: rotate(180deg); }
+.mk-tracker-body { padding: 0 22px 22px; border-top: 1px solid var(--line); }
+.tracker-log-strip {
+  display: grid;
+  grid-template-columns: minmax(170px,.7fr) minmax(200px,1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 20px 0 8px;
+}
+.tracker-log-strip .btn { min-height: 48px; }
+.tracker-chart-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 12px 0 12px; }
+.tracker-chart-head h3 { margin: 0; font-size: 1.25rem; letter-spacing: -.025em; }
+.tracker-chart-head .weight-range-tabs { margin: 0; justify-content: flex-end; }
+
+.metric-chart-large { position: relative; min-height: 460px; border-radius: 22px; overflow: visible; }
+.metric-chart-large svg { width: 100%; height: auto; min-height: 390px; color: var(--blue); overflow: visible; }
+.metric-grid-line { stroke: rgba(42,30,18,.105); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.metric-axis-label { fill: #7a6b59; font-size: 13px; font-weight: 750; }
+.metric-chart-line { fill: none; stroke: var(--blue); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.metric-chart-area { color: var(--blue); }
+.metric-chart-point { fill: var(--blue); stroke: #fffaf1; stroke-width: 3; cursor: pointer; vector-effect: non-scaling-stroke; transition: r .12s ease; }
+.metric-chart-point:hover, .metric-chart-point:focus { r: 9; outline: none; }
+.metric-chart-tooltip {
+  position: absolute;
+  z-index: 15;
+  transform: translate(-50%, calc(-100% - 14px));
+  min-width: 118px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: var(--text);
+  color: var(--card);
+  box-shadow: 0 12px 30px rgba(33,24,15,.2);
+  pointer-events: none;
+  text-align: center;
+}
+.metric-chart-tooltip strong, .metric-chart-tooltip span { display: block; white-space: nowrap; }
+.metric-chart-tooltip strong { font-size: .9rem; }
+.metric-chart-tooltip span { margin-top: 3px; color: rgba(255,250,241,.7); font-size: .7rem; font-weight: 800; }
+.chart-tip { margin: 9px 2px 0; color: var(--muted); font-size: .76rem; font-weight: 750; }
+
+@media (max-width: 760px) {
+  .mk-notes-wide .mk-note-list { grid-template-columns: 1fr; }
+  .mk-tracker-summary { padding: 17px; align-items: flex-start; flex-wrap: wrap; }
+  .mk-tracker-summary .badge { order: 3; }
+  .mk-tracker-body { padding: 0 16px 17px; }
+  .tracker-log-strip { grid-template-columns: 1fr; }
+  .tracker-chart-head { align-items: flex-start; flex-direction: column; }
+  .tracker-chart-head .weight-range-tabs { justify-content: flex-start; }
+  .metric-chart-large { min-height: 350px; overflow-x: auto; overflow-y: visible; }
+  .metric-chart-large svg { min-width: 720px; min-height: 320px; }
+  .weight-chart-stats { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+
+@media (max-width: 480px) {
+  .mk-simple-status { grid-template-columns: 1fr 1fr; }
+  .weight-chart-stats { grid-template-columns: 1fr; }
+}

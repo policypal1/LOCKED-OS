@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
@@ -10,8 +9,8 @@
 <link href="styles.css" rel="stylesheet"/>
 <link href="ghk-cu.css" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script defer="" src="app.js"></script>
-<script defer="" src="ghk-cu.js"></script>
+<script defer src="app.js"></script>
+<script defer src="ghk-cu.js"></script>
 </head>
 <body>
 <main class="app">
@@ -27,81 +26,37 @@
 <div aria-live="polite" class="error-text" id="loginError"></div>
 </div>
 </section>
+
 <section class="hidden" id="mainApp">
 <header class="top">
 <div><h1>Locked OS</h1></div>
 <nav aria-label="App tabs" class="tabs">
-
 <button class="tab active" data-tab="looksPage" type="button">Looksmaxxing</button>
-
-
 <button class="tab mk-tab" data-tab="mk677Page" type="button">MK-677</button>
 <button class="tab ghk-tab" data-tab="ghkCuPage" type="button">GHK-Cu</button>
 <button class="tab admin-tab" data-tab="adminPage" type="button">Admin</button>
 </nav>
 </header>
+
 <section class="page" id="checklistPage">
 <div class="layout">
 <div>
 <section class="card summary">
-<div class="circle" id="progressCircle">
-<div class="circle-inner">
-<div class="percent" id="percent">0%</div>
-<div class="done-count" id="doneCount">0 / 11</div>
+<div class="circle" id="progressCircle"><div class="circle-inner"><div class="percent" id="percent">0%</div><div class="done-count" id="doneCount">0 / 11</div></div></div>
+<div><p class="quote">Win today. No drama.</p><p class="tasks-left" id="tasksLeft">Your checklist is loading.</p><p class="sync-status" id="syncStatus">Loading saved data…</p></div>
+</section>
+<section class="card section"><div class="section-header"><h3>Morning</h3><p>Complete every morning task to unlock phone access.</p></div><div class="checklist" id="morningList"></div><div class="phone-lock locked" id="phoneLockCard"><div><strong id="phoneLockTitle">Phone locked</strong><span id="phoneLockText">Complete every morning task first.</span></div><div class="lock-badge" id="phoneLockBadge">Locked</div></div></section>
+<section class="card section"><div class="section-header"><h3>Afternoon</h3><p>The goal is to show up every day.</p></div><div class="checklist" id="afternoonList"></div></section>
+<section class="card section"><div class="section-header"><h3>Night</h3></div><div class="checklist" id="nightList"></div></section>
 </div>
-</div>
-<div>
-<p class="quote">Win today. No drama.</p>
-<p class="tasks-left" id="tasksLeft">Your checklist is loading.</p>
-<p class="sync-status" id="syncStatus">Loading saved data…</p>
+<aside class="mini-side"><section class="card panel-card day-streak-card"><div class="panel-title"><h3>Day streak</h3></div><div class="day-streak-value"><strong id="dayStreakNumber">0</strong><span id="dayStreakLabel">days</span></div><p class="rank-copy">Complete the daily checklist to keep the streak going.</p></section></aside>
 </div>
 </section>
-<section class="card section">
-<div class="section-header">
-<h3>Morning</h3>
-<p>Complete every morning task to unlock phone access.</p>
-</div>
-<div class="checklist" id="morningList"></div>
-<div class="phone-lock locked" id="phoneLockCard">
-<div>
-<strong id="phoneLockTitle">Phone locked</strong>
-<span id="phoneLockText">Complete every morning task first.</span>
-</div>
-<div class="lock-badge" id="phoneLockBadge">Locked</div>
-</div>
-</section>
-<section class="card section">
-<div class="section-header"><h3>Afternoon</h3><p>The goal is to show up every day.</p></div>
-<div class="checklist" id="afternoonList"></div>
-</section>
-<section class="card section">
-<div class="section-header"><h3>Night</h3></div>
-<div class="checklist" id="nightList"></div>
-</section>
-</div>
-<aside class="mini-side">
-<section class="card panel-card day-streak-card">
-<div class="panel-title"><h3>Day streak</h3></div>
-<div class="day-streak-value"><strong id="dayStreakNumber">0</strong><span id="dayStreakLabel">days</span></div>
-<p class="rank-copy">Complete the daily checklist to keep the streak going.</p>
-</section>
-</aside>
-</div>
-</section>
+
 <section class="page active" id="looksPage">
 <div class="looks-hero">
-<section class="card looks-title-card">
-<p class="eyebrow blue">Separate routine</p>
-<h2 id="looksDayName">Monday routine</h2>
-<p id="looksDateText">Today</p>
-<div class="looks-streak-line">Looksmaxxing streak: <strong id="looksStreak">0</strong></div>
-</section>
-<section class="card summary">
-<div class="circle looks-circle" id="looksProgressCircle">
-<div class="circle-inner"><div class="percent" id="looksPercent">0%</div><div class="done-count" id="looksDoneCount">0 / 0</div></div>
-</div>
-<div><p class="quote">Build it daily.</p><p class="tasks-left" id="looksTasksLeft">Your routine is loading.</p></div>
-</section>
+<section class="card looks-title-card"><p class="eyebrow blue">Separate routine</p><h2 id="looksDayName">Monday routine</h2><p id="looksDateText">Today</p><div class="looks-streak-line">Looksmaxxing streak: <strong id="looksStreak">0</strong></div></section>
+<section class="card summary"><div class="circle looks-circle" id="looksProgressCircle"><div class="circle-inner"><div class="percent" id="looksPercent">0%</div><div class="done-count" id="looksDoneCount">0 / 0</div></div></div><div><p class="quote">Build it daily.</p><p class="tasks-left" id="looksTasksLeft">Your routine is loading.</p></div></section>
 </div>
 <div class="layout">
 <div>
@@ -116,332 +71,131 @@
 <div class="water-track"><span class="water-fill" id="waterFill"></span><span aria-hidden="true" class="water-minimum-marker"></span></div>
 <div class="water-labels"><span>0</span><span>80 minimum</span><span>100 target</span></div>
 <p class="water-status" id="waterStatus">80 oz until the daily minimum.</p>
-<div class="water-controls">
-<button class="btn blue compact" data-water-add="8" type="button">+8 oz</button>
-<button class="btn blue compact" data-water-add="16" type="button">+16 oz</button>
-<button class="btn secondary compact" data-water-add="-8" type="button">−8 oz</button>
-<button class="btn secondary compact" id="resetWaterBtn" type="button">Reset</button>
-</div>
+<div class="water-controls"><button class="btn blue compact" data-water-add="8" type="button">+8 oz</button><button class="btn blue compact" data-water-add="16" type="button">+16 oz</button><button class="btn secondary compact" data-water-add="-8" type="button">−8 oz</button><button class="btn secondary compact" id="resetWaterBtn" type="button">Reset</button></div>
 <div class="water-custom-row"><input class="water-input" id="waterCustomInput" inputmode="numeric" max="240" min="1" placeholder="Custom ounces" type="number"/><button class="btn blue" id="addCustomWaterBtn" type="button">Add</button></div>
 </section>
 <section class="card workout-card">
-<div class="panel-title"><h3>Today's gym</h3></div>
-<h2 class="workout-name" id="workoutName">Loading…</h2>
-<div class="workout-rotation">
-<p class="workout-rotation-label">Change rotation position</p>
-<div class="workout-preview" id="workoutPreviewName">Loading…</div>
-<div class="workout-rotation-controls">
-<button aria-label="Previous workout" class="workout-step-btn" id="workoutPrevBtn" type="button">←</button>
-<button class="btn blue compact" id="setWorkoutBtn" type="button">Set this workout</button>
-<button aria-label="Next workout" class="workout-step-btn" id="workoutNextBtn" type="button">→</button>
-</div>
-<p class="workout-rotation-status" id="workoutRotationStatus">Choose a workout and hit Set.</p>
-</div>
+<div class="panel-title"><h3>Today's gym</h3></div><h2 class="workout-name" id="workoutName">Loading…</h2>
+<div class="workout-rotation"><p class="workout-rotation-label">Change rotation position</p><div class="workout-preview" id="workoutPreviewName">Loading…</div><div class="workout-rotation-controls"><button aria-label="Previous workout" class="workout-step-btn" id="workoutPrevBtn" type="button">←</button><button class="btn blue compact" id="setWorkoutBtn" type="button">Set this workout</button><button aria-label="Next workout" class="workout-step-btn" id="workoutNextBtn" type="button">→</button></div><p class="workout-rotation-status" id="workoutRotationStatus">Choose a workout and hit Set.</p></div>
 </section>
 </aside>
 </div>
 </section>
 
-
 <section class="page" id="mk677Page">
 <div class="mk677-page mk677-simple-page">
 <section class="card mk-hero-card">
-<div class="mk-hero-copy">
-<p class="eyebrow blue">Regimen</p>
-<h2>MK-677</h2>
-<p>A simple place for the weekly plan, personal notes, and basic monitoring.</p>
-</div>
-<div class="mk-cycle-status">
-<div><span>Cycle</span><strong id="mkCycleDay">Not started</strong></div>
-<div><span>Current dose</span><strong id="mkCurrentDoseDisplay">12.5 mg</strong></div>
-<div><span>Schedule</span><strong>Mon–Fri</strong></div>
-<div><span>Weekend</span><strong>Off</strong></div>
-</div>
+<div class="mk-hero-copy"><p class="eyebrow blue">Personal tracker</p><h2>MK-677</h2><p>Weekly reminders, personal notes, weight, and glucose in one clean place.</p></div>
+<div class="mk-cycle-status mk-simple-status"><div><span>Schedule</span><strong>Mon–Fri</strong></div><div><span>Weekend</span><strong>Off</strong></div></div>
 </section>
+
 <section class="card mk-plan-card">
-<div class="panel-title">
-<div><p class="eyebrow blue">Weekly plan</p><h3>5 days on · 2 days off</h3></div>
-<span class="badge blue" id="mkTodayPlanBadge">Loading…</span>
-</div>
+<div class="panel-title"><div><p class="eyebrow blue">Weekly plan</p><h3>5 days on · 2 days off</h3></div><span class="badge blue" id="mkTodayPlanBadge">Loading…</span></div>
 <div class="mk-week-schedule" id="mkWeekSchedule"></div>
 </section>
-<div class="mk-compact-grid">
-<section class="card mk-notes-card">
+
+<section class="card mk-notes-card mk-notes-wide">
 <div class="panel-title"><div><p class="eyebrow blue">Personal notes</p><h3>Keep it simple</h3></div></div>
 <div class="mk-note-list">
-<div><strong>Night</strong><span>Preferred timing if I want to avoid extra daytime hunger.</span></div>
-<div><strong>Morning</strong><span>Preferred timing if I want more daytime hunger and my clinician says timing can be shifted.</span></div>
+<div><strong>Timing</strong><span>Keep your preferred timing consistent unless you intentionally change it.</span></div>
 <div><strong>Schedule</strong><span>Monday through Friday. Saturday and Sunday off.</span></div>
-<div><strong>Cycle length</strong><span>Follow the cycle limit set by my clinician.</span></div>
+<div><strong>Weight</strong><span>Log once per day so the trend stays clean.</span></div>
+<div><strong>Glucose</strong><span>Save readings by date so you can see the trend over time.</span></div>
 </div>
 </section>
-<section class="card mk-monitor-card">
-<div class="panel-title"><div><p class="eyebrow blue">Monitoring</p><h3>Basic check-in</h3></div><span class="badge" id="mkMonitorSavedBadge">Not saved</span></div>
-<div class="mk-monitor-form">
-<label class="mk-field"><span>Date</span><input id="mkMonitorDate" type="date"/></label>
-<div class="mk-field-grid two">
-<label class="mk-field"><span>Weight</span><div class="mk-input-unit"><input id="mkMonitorWeight" inputmode="decimal" max="500" min="50" placeholder="Optional" step="0.1" type="number"/><span>lb</span></div></label>
-<label class="mk-field"><span>Resting heart rate</span><div class="mk-input-unit"><input id="mkMonitorHeartRate" inputmode="numeric" max="220" min="30" placeholder="Optional" step="1" type="number"/><span>bpm</span></div></label>
-</div>
-<label class="mk-field"><span>Notes</span><input id="mkMonitorNotes" maxlength="500" placeholder="Anything worth remembering…" type="text"/></label>
-<button class="btn blue" id="saveMkMonitoringBtn" type="button">Save monitoring</button>
-<p aria-live="polite" class="mk-save-status" id="mkMonitoringStatus"></p>
-</div>
-</section>
-</div>
-<section class="card mk-settings-card mk-settings-bottom">
-<p class="eyebrow blue">Cycle setup</p>
-<h3>Clinician-set plan</h3>
-<div class="mk-settings-form mk-settings-bottom-form">
-<label class="mk-field"><span>Cycle start date</span><input id="mkCycleStartInput" type="date"/></label>
-<label class="mk-field"><span>Current dose (mg)</span>
-<select id="mkDoseSelect">
-<option value="12.5">12.5 mg</option>
-<option value="25">25 mg</option>
-</select>
-</label>
-<button class="btn blue" id="saveMkPlanBtn" type="button">Save plan</button>
-</div>
-<p aria-live="polite" class="mk-save-status" id="mkPlanStatus"></p>
-</section>
-<section class="mk-embedded-weight">
-<div class="mk-embedded-heading">
-<div><p class="eyebrow blue">Progress</p><h2>Weight</h2></div>
-<p>Your existing weight tracker, now kept with MK-677.</p>
-</div>
-<div class="weight-grid">
-<section class="card weight-log-card">
-<p class="eyebrow blue">Daily log</p>
-<h2>Weight tracker</h2>
-<p>Log your weight once per day. Logging the same date again updates that day's entry.</p>
-<div class="weight-log-form">
-<label class="weight-field">
-<span>Date</span>
-<input class="weight-input" id="weightDateInput" type="date"/>
-</label>
-<label class="weight-field">
-<span>Weight (lb)</span>
-<input class="weight-input" id="weightValueInput" inputmode="decimal" max="500" min="50" placeholder="165.0" step="0.1" type="number"/>
-</label>
+
+<details class="card mk-tracker-disclosure" id="weightTrackerDisclosure">
+<summary class="mk-tracker-summary">
+<div><p class="eyebrow blue">Progress</p><h2>Weight tracker</h2><span>Open tracker and graph</span></div>
+<span class="badge blue" id="weightLatestBadge">No entries</span>
+</summary>
+<div class="mk-tracker-body">
+<div class="tracker-log-strip">
+<label class="weight-field"><span>Date</span><input class="weight-input" id="weightDateInput" type="date"/></label>
+<label class="weight-field"><span>Weight (lb)</span><input class="weight-input" id="weightValueInput" inputmode="decimal" max="500" min="50" placeholder="165.0" step="0.1" type="number"/></label>
 <button class="btn blue weight-save-btn" id="saveWeightBtn" type="button">Log weight</button>
 </div>
 <p aria-live="polite" class="weight-save-status" id="weightSaveStatus"></p>
-</section>
-<section class="card weight-chart-card">
-<div class="panel-title weight-panel-title">
-<div>
-<p class="eyebrow blue">Progress</p>
-<h2>Weight graph</h2>
+<div class="tracker-chart-head"><div><p class="eyebrow blue">Trend</p><h3>Weight graph</h3></div><div aria-label="Weight graph time range" class="weight-range-tabs"><button class="weight-range-btn" data-weight-range="7" type="button">7D</button><button class="weight-range-btn active" data-weight-range="30" type="button">30D</button><button class="weight-range-btn" data-weight-range="90" type="button">90D</button><button class="weight-range-btn" data-weight-range="365" type="button">1Y</button><button class="weight-range-btn" data-weight-range="all" type="button">All</button></div></div>
+<div aria-label="Weight progress chart" class="weight-chart metric-chart-large" id="weightChart" role="img"></div>
+<p class="chart-tip">Hover, tap, or focus a dot to see the exact date and value.</p>
+<div class="weight-chart-stats"><div><span>First</span><strong id="weightFirstValue">—</strong></div><div><span>Latest</span><strong id="weightLatestValue">—</strong></div><div><span>Change</span><strong id="weightChangeValue">—</strong></div></div>
 </div>
-<span class="badge blue" id="weightLatestBadge">No entries</span>
+</details>
+
+<details class="card mk-tracker-disclosure" id="glucoseTrackerDisclosure">
+<summary class="mk-tracker-summary">
+<div><p class="eyebrow blue">Tracking</p><h2>Glucose tracker</h2><span>Open tracker and graph</span></div>
+<span class="badge blue" id="glucoseLatestBadge">No entries</span>
+</summary>
+<div class="mk-tracker-body">
+<div class="tracker-log-strip">
+<label class="weight-field"><span>Date</span><input class="weight-input" id="glucoseDateInput" type="date"/></label>
+<label class="weight-field"><span>Glucose (mg/dL)</span><input class="weight-input" id="glucoseValueInput" inputmode="numeric" max="600" min="40" placeholder="95" step="1" type="number"/></label>
+<button class="btn blue weight-save-btn" id="saveGlucoseBtn" type="button">Log glucose</button>
 </div>
-<div aria-label="Weight graph time range" class="weight-range-tabs">
-<button class="weight-range-btn" data-weight-range="7" type="button">7D</button>
-<button class="weight-range-btn active" data-weight-range="30" type="button">30D</button>
-<button class="weight-range-btn" data-weight-range="90" type="button">90D</button>
-<button class="weight-range-btn" data-weight-range="365" type="button">1Y</button>
-<button class="weight-range-btn" data-weight-range="all" type="button">All</button>
+<p aria-live="polite" class="weight-save-status" id="glucoseSaveStatus"></p>
+<div class="tracker-chart-head"><div><p class="eyebrow blue">Trend</p><h3>Glucose graph</h3></div><div aria-label="Glucose graph time range" class="weight-range-tabs"><button class="glucose-range-btn weight-range-btn" data-glucose-range="7" type="button">7D</button><button class="glucose-range-btn weight-range-btn active" data-glucose-range="30" type="button">30D</button><button class="glucose-range-btn weight-range-btn" data-glucose-range="90" type="button">90D</button><button class="glucose-range-btn weight-range-btn" data-glucose-range="365" type="button">1Y</button><button class="glucose-range-btn weight-range-btn" data-glucose-range="all" type="button">All</button></div></div>
+<div aria-label="Glucose progress chart" class="weight-chart metric-chart-large" id="glucoseChart" role="img"></div>
+<p class="chart-tip">Hover, tap, or focus a dot to see the exact date and value.</p>
+<div class="weight-chart-stats"><div><span>First</span><strong id="glucoseFirstValue">—</strong></div><div><span>Latest</span><strong id="glucoseLatestValue">—</strong></div><div><span>Change</span><strong id="glucoseChangeValue">—</strong></div></div>
 </div>
-<div aria-label="Weight progress chart" class="weight-chart" id="weightChart" role="img"></div>
-<div class="weight-chart-stats">
-<div><span>First</span><strong id="weightFirstValue">—</strong></div>
-<div><span>Latest</span><strong id="weightLatestValue">—</strong></div>
-<div><span>Change</span><strong id="weightChangeValue">—</strong></div>
+</details>
 </div>
 </section>
-<section class="card weight-history-card">
-<div class="panel-title"><h3>Recent entries</h3></div>
-<div class="weight-history-list" id="weightHistoryList"></div>
-</section>
-</div></section></div>
-</section>
+
 <section class="page" id="ghkCuPage">
 <div class="ghk-page">
-<section class="card ghk-hero-card">
-<div>
-<p class="eyebrow blue">Reference + schedule</p>
-<h2>GHK-Cu</h2>
-<p>Keep supplies, storage checks, vial appearance guidance, and your clinician-directed schedule in one place.</p>
-</div>
-<div class="ghk-hero-badge">Copper peptide</div>
-</section>
-<section class="card ghk-schedule-card">
-<div class="panel-title ghk-schedule-heading">
-<div><p class="eyebrow blue">Weekday planner</p><h3>Morning check-in</h3></div>
-<span class="badge blue" id="ghkTodayBadge">Weekday plan</span>
-</div>
-<div aria-label="GHK-Cu weekday morning planner" class="ghk-week-schedule">
-<div class="ghk-day" data-ghk-day="1"><strong>Mon</strong><span>Morning</span></div>
-<div class="ghk-day" data-ghk-day="2"><strong>Tue</strong><span>Morning</span></div>
-<div class="ghk-day" data-ghk-day="3"><strong>Wed</strong><span>Morning</span></div>
-<div class="ghk-day" data-ghk-day="4"><strong>Thu</strong><span>Morning</span></div>
-<div class="ghk-day" data-ghk-day="5"><strong>Fri</strong><span>Morning</span></div>
-<div class="ghk-day off" data-ghk-day="6"><strong>Sat</strong><span>No reminder</span></div>
-<div class="ghk-day off" data-ghk-day="0"><strong>Sun</strong><span>No reminder</span></div>
-</div>
-<p class="ghk-fine-print">Planner only. Use the timing and frequency given by a licensed clinician or pharmacist for your specific product.</p>
-</section>
+<section class="card ghk-hero-card"><div><p class="eyebrow blue">Reference + schedule</p><h2>GHK-Cu</h2><p>Keep supplies, storage checks, vial appearance guidance, and your clinician-directed schedule in one place.</p></div><div class="ghk-hero-badge">Copper peptide</div></section>
+<section class="card ghk-schedule-card"><div class="panel-title ghk-schedule-heading"><div><p class="eyebrow blue">Weekday planner</p><h3>Morning check-in</h3></div><span class="badge blue" id="ghkTodayBadge">Weekday plan</span></div><div aria-label="GHK-Cu weekday morning planner" class="ghk-week-schedule"><div class="ghk-day" data-ghk-day="1"><strong>Mon</strong><span>Morning</span></div><div class="ghk-day" data-ghk-day="2"><strong>Tue</strong><span>Morning</span></div><div class="ghk-day" data-ghk-day="3"><strong>Wed</strong><span>Morning</span></div><div class="ghk-day" data-ghk-day="4"><strong>Thu</strong><span>Morning</span></div><div class="ghk-day" data-ghk-day="5"><strong>Fri</strong><span>Morning</span></div><div class="ghk-day off" data-ghk-day="6"><strong>Sat</strong><span>No reminder</span></div><div class="ghk-day off" data-ghk-day="0"><strong>Sun</strong><span>No reminder</span></div></div><p class="ghk-fine-print">Planner only. Use the timing and frequency given by a licensed clinician or pharmacist for your specific product.</p></section>
 <div class="ghk-top-grid">
-<section class="card ghk-reference-card">
-<div class="panel-title"><div><p class="eyebrow blue">What you need</p><h3>Supplies</h3></div></div>
-<div class="ghk-reference-list">
-<div><strong>Peptide vial</strong><span>Lyophilized (freeze-dried) GHK-Cu powder.</span></div>
-<div><strong>Bacteriostatic water</strong><span>Sterile diluent containing benzyl alcohol for multi-dose vial use.</span></div>
-<div><strong>Alcohol prep pads</strong><span>For disinfecting vial stoppers and skin when directed by a clinician.</span></div>
-<div><strong>Sharps container</strong><span>For safe disposal of used needles and syringes.</span></div>
-<div><strong>Syringes</strong><span>Use the exact syringe and needle sizes recommended by a pharmacist or clinician for your product.</span></div>
+<section class="card ghk-reference-card"><div class="panel-title"><div><p class="eyebrow blue">What you need</p><h3>Supplies</h3></div></div><div class="ghk-reference-list"><div><strong>Peptide vial</strong><span>Lyophilized (freeze-dried) GHK-Cu powder.</span></div><div><strong>Bacteriostatic water</strong><span>Sterile diluent containing benzyl alcohol for multi-dose vial use.</span></div><div><strong>Alcohol prep pads</strong><span>For disinfecting vial stoppers and skin when directed by a clinician.</span></div><div><strong>Sharps container</strong><span>For safe disposal of used needles and syringes.</span></div><div><strong>Syringes</strong><span>Use the exact syringe and needle sizes recommended by a pharmacist or clinician for your product.</span></div></div></section>
+<section class="card ghk-reference-card"><div class="panel-title"><div><p class="eyebrow blue">Storage</p><h3>Keep it stable</h3></div></div><div class="ghk-reference-list"><div><strong>Freeze-dried vial</strong><span>Follow the product label for room-temperature and refrigeration limits.</span></div><div><strong>Bacteriostatic water</strong><span>Store unopened as labeled, away from direct sunlight and excessive heat.</span></div><div><strong>After reconstitution</strong><span>Refrigerate if the product instructions require it and protect from light.</span></div><div><strong>28-day rule</strong><span>Multi-dose bacteriostatic-water vials are commonly discarded 28 days after first entry unless the manufacturer says otherwise. Peptide stability can be different.</span></div></div></section>
+</div>
+<section class="card ghk-check-card"><div class="panel-title"><div><p class="eyebrow blue">Visual check</p><h3>Before using a reconstituted vial</h3></div><span class="badge blue">Appearance only</span></div><div class="ghk-check-grid"><div class="good"><strong>Expected</strong><span>Appearance consistent with the product instructions, typically clear and free of visible particles.</span></div><div><strong>Cloudiness or haze</strong><span>Do not use until a pharmacist or clinician confirms it is expected.</span></div><div><strong>Particles or chunks</strong><span>Do not use.</span></div><div><strong>Discoloration</strong><span>Do not use unless the labeled product specifically says that color is expected.</span></div><div><strong>Persistent unusual foam or gel</strong><span>Do not use until the product is evaluated.</span></div></div><p class="ghk-fine-print">A normal-looking vial does not prove purity or sterility. Preparation and administration should follow product-specific instructions from a licensed clinician or pharmacist.</p></section>
+<section class="card ghk-note-card ghk-note-wide"><p class="eyebrow blue">Appearance changes</p><h3>Track specific changes, not internet labels</h3><p>If something changes, note the actual symptom or appearance change, such as puffiness, rash, bruising, discoloration, or another reaction, and discuss concerning symptoms with a clinician.</p></section>
 </div>
 </section>
-<section class="card ghk-reference-card">
-<div class="panel-title"><div><p class="eyebrow blue">Storage</p><h3>Keep it stable</h3></div></div>
-<div class="ghk-reference-list">
-<div><strong>Freeze-dried vial</strong><span>Follow the product label for room-temperature and refrigeration limits.</span></div>
-<div><strong>Bacteriostatic water</strong><span>Store unopened as labeled, away from direct sunlight and excessive heat.</span></div>
-<div><strong>After reconstitution</strong><span>Refrigerate if the product instructions require it and protect from light.</span></div>
-<div><strong>28-day rule</strong><span>Multi-dose bacteriostatic-water vials are commonly discarded 28 days after first entry unless the manufacturer says otherwise. Peptide stability can be different.</span></div>
-</div>
-</section>
-</div>
-<section class="card ghk-check-card">
-<div class="panel-title">
-<div><p class="eyebrow blue">Visual check</p><h3>Before using a reconstituted vial</h3></div>
-<span class="badge blue">Appearance only</span>
-</div>
-<div class="ghk-check-grid">
-<div class="good"><strong>Expected</strong><span>Appearance consistent with the product instructions, typically clear and free of visible particles.</span></div>
-<div><strong>Cloudiness or haze</strong><span>Do not use until a pharmacist or clinician confirms it is expected.</span></div>
-<div><strong>Particles or chunks</strong><span>Do not use.</span></div>
-<div><strong>Discoloration</strong><span>Do not use unless the labeled product specifically says that color is expected.</span></div>
-<div><strong>Persistent unusual foam or gel</strong><span>Do not use until the product is evaluated.</span></div>
-</div>
-<p class="ghk-fine-print">A normal-looking vial does not prove purity or sterility. Preparation and administration should follow product-specific instructions from a licensed clinician or pharmacist.</p>
-</section>
-<section class="card ghk-note-card ghk-note-wide">
-<p class="eyebrow blue">Appearance changes</p>
-<h3>Track specific changes, not internet labels</h3>
-<p>If something changes, note the actual symptom or appearance change, such as puffiness, rash, bruising, discoloration, or another reaction, and discuss concerning symptoms with a clinician.</p>
-</section>
-</div>
-</section>
+
 <section class="page" id="adminPage">
-<div aria-label="Admin sections" class="admin-subtabs" role="tablist">
-<button class="admin-subtab active" data-admin-panel="adminRoutinePanel" type="button">Routine settings</button>
-<button class="admin-subtab" data-admin-panel="weeklyPage" type="button">Weekly review</button>
-</div>
-<div class="admin-subpanel active" id="adminRoutinePanel">
-<div class="admin-grid routine-admin-grid">
-<section class="card admin-card tretinoin-admin-card">
-<p class="eyebrow blue">Admin</p>
-<h2>Tretinoin frequency</h2>
-<p>Change how many nights per week tretinoin appears in your Looksmaxxing routine. Your past days stay unchanged.</p>
-<div class="tret-frequency-control">
-<button aria-label="Decrease tretinoin frequency" class="tret-frequency-btn" id="tretinoinFrequencyDown" type="button">−</button>
-<div class="tret-frequency-value-wrap">
-<strong class="tret-frequency-value" id="tretinoinFrequencyValue">3×</strong>
-<span class="tret-frequency-label" id="tretinoinFrequencyLabel">3 days per week</span>
-</div>
-<button aria-label="Increase tretinoin frequency" class="tret-frequency-btn" id="tretinoinFrequencyUp" type="button">+</button>
-</div>
-<div class="tret-schedule-preview">
-<span class="tret-schedule-title">Current tretinoin nights</span>
-<div class="tret-days-list" id="tretinoinDaysList"></div>
-</div>
-<p class="tret-admin-note">Default is 3× per week: Monday, Wednesday, Saturday. At 7×, tretinoin appears every night.</p>
+<div aria-label="Admin sections" class="admin-subtabs" role="tablist"><button class="admin-subtab active" data-admin-panel="adminRoutinePanel" type="button">Routine settings</button><button class="admin-subtab" data-admin-panel="weeklyPage" type="button">Weekly review</button></div>
+<div class="admin-subpanel active" id="adminRoutinePanel"><div class="admin-grid routine-admin-grid">
+<section class="card admin-card tretinoin-admin-card"><p class="eyebrow blue">Admin</p><h2>Tretinoin frequency</h2><p>Change how many nights per week tretinoin appears in your Looksmaxxing routine. Your past days stay unchanged.</p><div class="tret-frequency-control"><button aria-label="Decrease tretinoin frequency" class="tret-frequency-btn" id="tretinoinFrequencyDown" type="button">−</button><div class="tret-frequency-value-wrap"><strong class="tret-frequency-value" id="tretinoinFrequencyValue">3×</strong><span class="tret-frequency-label" id="tretinoinFrequencyLabel">3 days per week</span></div><button aria-label="Increase tretinoin frequency" class="tret-frequency-btn" id="tretinoinFrequencyUp" type="button">+</button></div><div class="tret-schedule-preview"><span class="tret-schedule-title">Current tretinoin nights</span><div class="tret-days-list" id="tretinoinDaysList"></div></div><p class="tret-admin-note">Default is 3× per week: Monday, Wednesday, Saturday. At 7×, tretinoin appears every night.</p></section>
+<section class="card admin-card rotation-admin-card"><p class="eyebrow blue">Schedule preview</p><h2>Rotation calendar</h2><p>See the next 14 days of rotating Looksmaxxing tasks and your gym rotation. Daily tasks are left out so the schedule stays easy to scan.</p><div class="rotation-calendar" id="rotationCalendar"></div></section>
+</div></div>
+<div class="admin-subpanel" id="weeklyPage"><div class="weekly-review">
+<section class="card weekly-hero-card"><div><p class="eyebrow blue">This week</p><h2>Weekly review</h2><p class="weekly-date-range" id="weeklyDateRange">Loading…</p></div><p class="weekly-hero-copy">A clean view of your routine from Sunday through today.</p></section>
+<div class="weekly-stat-grid"><section class="card weekly-stat-card blue-accent"><span>Looksmaxxing</span><strong id="weeklyLooksCompletion">0%</strong><p id="weeklyLooksMeta">0 tasks completed</p></section><section class="card weekly-stat-card"><span>Average water</span><strong id="weeklyAverageWater">0 oz</strong><p id="weeklyWaterMeta">No water logged</p></section><section class="card weekly-stat-card"><span>Gym days</span><strong id="weeklyGymDays">0/7</strong><p id="weeklyGymMeta">No gym data yet</p></section><section class="card weekly-stat-card"><span>Weight change</span><strong id="weeklyWeightChange">No data</strong><p id="weeklyWeightMeta">Log weight to see change</p></section><section class="card weekly-stat-card skipped-card"><span>Key task to tighten up</span><strong class="weekly-skipped-name" id="weeklySkippedTask">None</strong><p id="weeklySkippedMeta">No skipped tasks</p></section></div>
+<section class="card weekly-days-card"><div class="panel-title weekly-days-heading"><div><p class="eyebrow blue">Breakdown</p><h2>Day by day</h2></div></div><div class="weekly-day-list" id="weeklyDayList"></div></section>
+</div></div>
 </section>
-<section class="card admin-card rotation-admin-card">
-<p class="eyebrow blue">Schedule preview</p>
-<h2>Rotation calendar</h2>
-<p>See the next 14 days of rotating Looksmaxxing tasks and your gym rotation. Daily tasks are left out so the schedule stays easy to scan.</p>
-<div class="rotation-calendar" id="rotationCalendar"></div>
-</section>
-</div>
-</div><div class="admin-subpanel" id="weeklyPage"><div class="weekly-review">
-<section class="card weekly-hero-card">
-<div>
-<p class="eyebrow blue">This week</p>
-<h2>Weekly review</h2>
-<p class="weekly-date-range" id="weeklyDateRange">Loading…</p>
-</div>
-<p class="weekly-hero-copy">A clean view of your routine from Sunday through today.</p>
-</section>
-<div class="weekly-stat-grid">
-<section class="card weekly-stat-card blue-accent">
-<span>Looksmaxxing</span>
-<strong id="weeklyLooksCompletion">0%</strong>
-<p id="weeklyLooksMeta">0 tasks completed</p>
-</section>
-<section class="card weekly-stat-card">
-<span>Average water</span>
-<strong id="weeklyAverageWater">0 oz</strong>
-<p id="weeklyWaterMeta">No water logged</p>
-</section>
-<section class="card weekly-stat-card">
-<span>Gym days</span>
-<strong id="weeklyGymDays">0/7</strong>
-<p id="weeklyGymMeta">No gym data yet</p>
-</section>
-<section class="card weekly-stat-card">
-<span>Weight change</span>
-<strong id="weeklyWeightChange">No data</strong>
-<p id="weeklyWeightMeta">Log weight to see change</p>
-</section>
-<section class="card weekly-stat-card skipped-card">
-<span>Key task to tighten up</span>
-<strong class="weekly-skipped-name" id="weeklySkippedTask">None</strong>
-<p id="weeklySkippedMeta">No skipped tasks</p>
-</section>
-</div>
-<section class="card weekly-days-card">
-<div class="panel-title weekly-days-heading">
-<div>
-<p class="eyebrow blue">Breakdown</p>
-<h2>Day by day</h2>
-</div>
-</div>
-<div class="weekly-day-list" id="weeklyDayList"></div>
-</section>
-</div></div></section>
 </section>
 </main>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
+
 <script>
 "use strict";
-
 window.addEventListener("DOMContentLoaded", () => {
   const WORKOUT_ROTATION_V2_START = "2026-08-23";
-  const WORKOUT_ROTATION_V2 = [
-    "Chest + side delts",
-    "Back + rear delts",
-    "Arms + Abs",
-    "Legs"
-  ];
+  const WORKOUT_ROTATION_V2 = ["Chest + side delts", "Back + rear delts", "Arms + Abs", "Legs"];
+  const getRotationForDay = dayKey => dayKey >= WORKOUT_ROTATION_V2_START ? WORKOUT_ROTATION_V2 : WORKOUT_ROTATION;
+  const getRotationAnchorForDay = dayKey => dayKey >= WORKOUT_ROTATION_V2_START ? WORKOUT_ROTATION_V2_START : WORKOUT_ROTATION_ANCHOR;
 
-  const getRotationForDay = dayKey =>
-    dayKey >= WORKOUT_ROTATION_V2_START ? WORKOUT_ROTATION_V2 : WORKOUT_ROTATION;
-
-  const getRotationAnchorForDay = dayKey =>
-    dayKey >= WORKOUT_ROTATION_V2_START ? WORKOUT_ROTATION_V2_START : WORKOUT_ROTATION_ANCHOR;
-
-  getDefaultWorkoutIndex = function getDefaultWorkoutIndexV2(dayKey = getTodayKey()) {
+  getDefaultWorkoutIndex = function(dayKey = getTodayKey()) {
     const rotation = getRotationForDay(dayKey);
     const anchorKey = getRotationAnchorForDay(dayKey);
     const daysFromAnchor = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(anchorKey);
     return ((daysFromAnchor % rotation.length) + rotation.length) % rotation.length;
   };
 
-  getWorkoutIndex = function getWorkoutIndexV2(dayKey = getTodayKey()) {
+  getWorkoutIndex = function(dayKey = getTodayKey()) {
     const rotation = getRotationForDay(dayKey);
     const anchorKey = state?.meta?.workoutRotationAnchorKey;
     const anchorIndex = state?.meta?.workoutRotationAnchorIndex;
-
-    if (!isDateKey(anchorKey) || !Number.isInteger(anchorIndex)) {
-      return getDefaultWorkoutIndex(dayKey);
-    }
-
+    if (!isDateKey(anchorKey) || !Number.isInteger(anchorIndex)) return getDefaultWorkoutIndex(dayKey);
     const anchorUsesV2 = anchorKey >= WORKOUT_ROTATION_V2_START;
     const dayUsesV2 = dayKey >= WORKOUT_ROTATION_V2_START;
     if (anchorUsesV2 !== dayUsesV2) return getDefaultWorkoutIndex(dayKey);
-
     const daysFromAnchor = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(anchorKey);
     const index = anchorIndex + daysFromAnchor;
     return ((index % rotation.length) + rotation.length) % rotation.length;
@@ -449,84 +203,54 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const getBaseWorkoutName = dayKey => {
     const rotation = getRotationForDay(dayKey);
-    const index = getWorkoutIndex(dayKey);
-    return rotation[index] || rotation[0];
+    return rotation[getWorkoutIndex(dayKey)] || rotation[0];
   };
-
   const isNeckWorkoutDay = dayKey => {
     if (dayKey < WORKOUT_ROTATION_V2_START) return false;
-
     const baseWorkout = getBaseWorkoutName(dayKey);
     if (baseWorkout !== "Chest + side delts" && baseWorkout !== "Legs") return false;
-
     const date = keyToLocalDate(dayKey);
     const dayOfWeek = date.getDay();
     const weekStart = addDays(date, -dayOfWeek);
-
     for (let offset = 0; offset < dayOfWeek; offset += 1) {
       const earlierKey = formatDateKey(addDays(weekStart, offset));
       if (getBaseWorkoutName(earlierKey) === baseWorkout) return false;
     }
-
     return true;
   };
-
-  formatWorkoutName = function formatWorkoutNameV2(index, dayKey = getTodayKey()) {
+  formatWorkoutName = function(index, dayKey = getTodayKey()) {
     const rotation = getRotationForDay(dayKey);
     return rotation[index] || rotation[0];
   };
-
-  getWorkoutName = function getWorkoutNameV2(dayKey = getTodayKey()) {
+  getWorkoutName = function(dayKey = getTodayKey()) {
     const baseWorkout = formatWorkoutName(getWorkoutIndex(dayKey), dayKey);
     return isNeckWorkoutDay(dayKey) ? `${baseWorkout} + Neck` : baseWorkout;
   };
-
-  shiftWorkoutDraft = function shiftWorkoutDraftV2(amount) {
+  shiftWorkoutDraft = function(amount) {
     const dayKey = getTodayKey();
     const rotation = getRotationForDay(dayKey);
-    const current = Number.isInteger(workoutDraftIndex)
-      ? workoutDraftIndex
-      : getWorkoutIndex(dayKey);
-
-    workoutDraftIndex =
-      ((current + amount) % rotation.length + rotation.length) % rotation.length;
+    const current = Number.isInteger(workoutDraftIndex) ? workoutDraftIndex : getWorkoutIndex(dayKey);
+    workoutDraftIndex = ((current + amount) % rotation.length + rotation.length) % rotation.length;
     workoutDraftDirty = true;
     renderWorkoutPicker();
   };
-
   const originalMakeMorning = makeMorning;
-  makeMorning = function makeMorningWithoutMasseterTraining(dayName) {
-    return originalMakeMorning(dayName).filter(task => task.id !== "masseter-training");
-  };
-
+  makeMorning = function(dayName) { return originalMakeMorning(dayName).filter(task => task.id !== "masseter-training"); };
   const originalMakeNight = makeNight;
-  makeNight = function makeNightWithClinicianPlan(dayName, dayKey) {
+  makeNight = function(dayName, dayKey) {
     const tasks = originalMakeNight(dayName, dayKey);
-    if (["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(dayName)) {
-      tasks.push({
-        id: "clinician-night-plan",
-        title: "Take supplements"
-      });
-    }
+    if (["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(dayName)) tasks.push({ id: "clinician-night-plan", title: "Take supplements" });
     return tasks;
   };
-
-  setWorkoutRotationForToday = function setWorkoutRotationForTodayV2() {
+  setWorkoutRotationForToday = function() {
     const dayKey = getTodayKey();
     const rotation = getRotationForDay(dayKey);
-
-    if (!Number.isInteger(workoutDraftIndex)) {
-      workoutDraftIndex = getWorkoutIndex(dayKey);
-    }
-
-    workoutDraftIndex =
-      ((workoutDraftIndex % rotation.length) + rotation.length) % rotation.length;
-
+    if (!Number.isInteger(workoutDraftIndex)) workoutDraftIndex = getWorkoutIndex(dayKey);
+    workoutDraftIndex = ((workoutDraftIndex % rotation.length) + rotation.length) % rotation.length;
     state.meta = state.meta || {};
     state.meta.workoutRotationAnchorKey = dayKey;
     state.meta.workoutRotationAnchorIndex = workoutDraftIndex;
     workoutDraftDirty = false;
-
     saveState();
     render();
     toast(`Gym rotation set to ${getWorkoutName(dayKey)}.`);
