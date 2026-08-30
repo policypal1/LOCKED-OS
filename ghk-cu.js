@@ -52,8 +52,16 @@
     const [y,m,d] = key.split("-").map(Number);
     return new Date(y, m - 1, d, 12, 0, 0, 0);
   }
-  function gymWorkoutForDate(key) {
+  function gymScheduledWorkoutForDate(key) {
     return GYM_DAY_PLAN[gymDateFromKey(key).getDay()] || "Rest";
+  }
+  function gymWorkoutOverrideForDate(key) {
+    if (typeof state === "undefined" || !state?.meta?.gymTracker?.overrides) return "";
+    const value = state.meta.gymTracker.overrides[key];
+    return ["Push", "Pull", "Legs + Abs", "Rest"].includes(value) ? value : "";
+  }
+  function gymWorkoutForDate(key) {
+    return gymWorkoutOverrideForDate(key) || gymScheduledWorkoutForDate(key);
   }
 
   const safeText = (value, max = 2000) => String(value ?? "").trim().slice(0, max);
@@ -127,9 +135,14 @@
       .filter(item => item.url);
 
     if (!state.meta.gymTracker || typeof state.meta.gymTracker !== "object" || Array.isArray(state.meta.gymTracker)) {
-      state.meta.gymTracker = { sessions: [] };
+      state.meta.gymTracker = { sessions: [], overrides: {} };
     }
     if (!Array.isArray(state.meta.gymTracker.sessions)) state.meta.gymTracker.sessions = [];
+    if (!state.meta.gymTracker.overrides || typeof state.meta.gymTracker.overrides !== "object" || Array.isArray(state.meta.gymTracker.overrides)) state.meta.gymTracker.overrides = {};
+    state.meta.gymTracker.overrides = Object.fromEntries(
+      Object.entries(state.meta.gymTracker.overrides)
+        .filter(([date, workout]) => validDateKey(date) && ["Push", "Pull", "Legs + Abs", "Rest"].includes(workout))
+    );
     state.meta.gymTracker.sessions = state.meta.gymTracker.sessions
       .filter(item => item && typeof item === "object" && validDateKey(item.date))
       .map(item => ({
@@ -164,7 +177,8 @@
       (Array.isArray(snapshot?.meta?.appointments) && snapshot.meta.appointments.length > 0) ||
       (Array.isArray(snapshot?.meta?.forumHub?.resources) && snapshot.meta.forumHub.resources.length > 0) ||
       (Array.isArray(snapshot?.meta?.forumHub?.guides) && snapshot.meta.forumHub.guides.length > 0) ||
-      (Array.isArray(snapshot?.meta?.gymTracker?.sessions) && snapshot.meta.gymTracker.sessions.length > 0);
+      (Array.isArray(snapshot?.meta?.gymTracker?.sessions) && snapshot.meta.gymTracker.sessions.length > 0) ||
+      (snapshot?.meta?.gymTracker?.overrides && Object.keys(snapshot.meta.gymTracker.overrides).length > 0);
     wrapped.__featureWrapped = true;
     hasMeaningfulState = wrapped;
   }
@@ -182,11 +196,11 @@
       .appointment-date-block{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}.appointment-date-chip{width:54px;min-height:58px;border-radius:15px;display:grid;place-items:center;align-content:center;background:var(--blue-soft);color:var(--blue-dark)}.appointment-date-chip strong{font-size:1.25rem;line-height:1}.appointment-date-chip span{font-size:.67rem;font-weight:950;text-transform:uppercase}.appointment-countdown{display:inline-block;margin-top:8px;color:var(--green-dark);font-size:.78rem;font-weight:900}.appointment-card.past{opacity:.62}
       .gym-page{display:grid;gap:16px}.gym-hero{padding:24px;display:flex;align-items:center;justify-content:space-between;gap:20px;background:radial-gradient(circle at top right,rgba(37,132,184,.14),transparent 20rem),rgba(255,250,241,.86)}.gym-hero h2{margin:0;font-size:clamp(2rem,5vw,3.1rem);letter-spacing:-.035em}.gym-hero p:not(.eyebrow){margin:9px 0 0;color:var(--muted);font-weight:750;line-height:1.5}.gym-today-badge{padding:12px 16px;border-radius:999px;background:var(--blue-soft);color:var(--blue-dark);font-weight:950;white-space:nowrap}
       .gym-week-card,.gym-log-card,.gym-history-card{padding:20px}.gym-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:14px}.gym-day-card{min-width:0;border:1px solid var(--line);border-radius:15px;padding:12px 9px;background:rgba(255,255,255,.42);cursor:pointer;text-align:left;color:var(--text);font:inherit}.gym-day-card strong,.gym-day-card span{display:block}.gym-day-card strong{font-size:.78rem}.gym-day-card span{margin-top:5px;color:var(--muted);font-size:.7rem;font-weight:850;line-height:1.25}.gym-day-card.today{border-color:rgba(37,132,184,.38);box-shadow:0 0 0 2px rgba(37,132,184,.08)}.gym-day-card.selected{background:var(--blue-soft);border-color:rgba(37,132,184,.42);color:var(--blue-dark)}.gym-day-card.selected span{color:var(--blue-dark)}
-      .gym-log-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.gym-date-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.gym-date-input{min-height:40px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.62);color:var(--text);font:inherit;font-size:.8rem;font-weight:850;padding:0 10px}.gym-nav-btn{width:40px;height:40px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.5);color:var(--text);font:inherit;font-weight:950;cursor:pointer}.gym-workout-title{margin:4px 0 0;font-size:1.75rem;letter-spacing:-.025em}.gym-workout-meta{margin:5px 0 0;color:var(--muted);font-size:.82rem;font-weight:800}.gym-rest{margin-top:18px;padding:30px 18px;border:1px dashed var(--line);border-radius:18px;text-align:center}.gym-rest strong{display:block;font-size:1.15rem}.gym-rest span{display:block;margin-top:6px;color:var(--muted);font-weight:750}
+      .gym-log-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.gym-date-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.gym-date-input{min-height:40px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.62);color:var(--text);font:inherit;font-size:.8rem;font-weight:850;padding:0 10px}.gym-nav-btn{width:40px;height:40px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.5);color:var(--text);font:inherit;font-weight:950;cursor:pointer}.gym-workout-title{margin:4px 0 0;font-size:1.75rem;letter-spacing:-.025em}.gym-workout-meta{margin:5px 0 0;color:var(--muted);font-size:.82rem;font-weight:800}.gym-day-override{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.34)}.gym-day-override-field{display:grid;gap:5px;min-width:220px;flex:1}.gym-day-override-field>span{color:var(--muted);font-size:.68rem;font-weight:900}.gym-workout-select{width:100%;min-height:40px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.7);color:var(--text);font:inherit;font-size:.8rem;font-weight:850;padding:0 10px}.gym-override-note{margin:0;flex-basis:100%;color:var(--muted);font-size:.72rem;font-weight:800}.gym-override-note.custom{color:var(--blue-dark)}.gym-rest{margin-top:18px;padding:30px 18px;border:1px dashed var(--line);border-radius:18px;text-align:center}.gym-rest strong{display:block;font-size:1.15rem}.gym-rest span{display:block;margin-top:6px;color:var(--muted);font-weight:750}
       .gym-exercise-list{display:grid;gap:10px;margin-top:17px}.gym-exercise-row{display:grid;grid-template-columns:minmax(190px,1.25fr) minmax(140px,.9fr) repeat(2,minmax(150px,1fr));gap:10px;align-items:center;padding:13px;border:1px solid var(--line);border-radius:17px;background:rgba(255,255,255,.42)}.gym-exercise-name strong{display:block;font-size:.9rem}.gym-exercise-name span{display:block;margin-top:4px;color:var(--muted);font-size:.72rem;font-weight:850}.gym-prev{font-size:.73rem;color:var(--muted);font-weight:800;line-height:1.4}.gym-prev strong{display:block;color:var(--text);font-size:.73rem}.gym-set-box{display:grid;grid-template-columns:1fr 1fr;gap:6px}.gym-set-box label{display:grid;gap:4px}.gym-set-box label span{font-size:.64rem;color:var(--muted);font-weight:900}.gym-set-input{width:100%;min-width:0;height:38px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.68);color:var(--text);font:inherit;font-size:.8rem;font-weight:850;padding:0 8px}.gym-row-progress{grid-column:2 / -1;display:flex;align-items:center;gap:7px;min-height:20px;color:var(--muted);font-size:.72rem;font-weight:850}.gym-row-progress.good{color:var(--green-dark)}.gym-row-progress.ready{color:var(--blue-dark)}.gym-log-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:15px}.gym-save-actions{display:flex;gap:8px;flex-wrap:wrap}.gym-save-status{margin:0;color:var(--muted);font-size:.8rem;font-weight:850}.gym-save-status.good{color:var(--green-dark)}.gym-save-status.bad{color:var(--red)}.gym-complete-badge{display:inline-flex;padding:7px 10px;border-radius:999px;background:rgba(47,143,86,.1);color:var(--green-dark);font-size:.72rem;font-weight:950}
       .gym-history-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.gym-history-select{min-width:min(320px,100%);height:42px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.62);color:var(--text);font:inherit;font-size:.82rem;font-weight:850;padding:0 11px}.gym-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:14px}.gym-stat{padding:13px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.4)}.gym-stat span{display:block;color:var(--muted);font-size:.67rem;font-weight:900}.gym-stat strong{display:block;margin-top:5px;font-size:1rem}.gym-history-table-wrap{overflow:auto;margin-top:14px;border:1px solid var(--line);border-radius:15px}.gym-history-table{width:100%;border-collapse:collapse;min-width:650px}.gym-history-table th,.gym-history-table td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:.75rem}.gym-history-table th{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em}.gym-history-table td{font-weight:800}.gym-history-table tr:last-child td{border-bottom:0}.gym-pr{color:var(--green-dark);font-weight:950}.gym-empty{padding:25px 16px;text-align:center;color:var(--muted);font-size:.84rem;font-weight:800}
       @media(max-width:980px){.gym-week-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.gym-exercise-row{grid-template-columns:minmax(170px,1fr) minmax(130px,.75fr) minmax(150px,1fr)}.gym-exercise-row>.gym-set-box:last-of-type{grid-column:3}.gym-row-progress{grid-column:2 / -1}.gym-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-      @media(max-width:680px){.forums-hero,.appointments-hero,.gym-hero{padding:17px;align-items:flex-start;flex-direction:column}.feature-card,.gym-week-card,.gym-log-card,.gym-history-card{padding:16px}.feature-two-col{grid-template-columns:1fr}.resource-card-head,.appointment-card-head{flex-direction:column}.resource-add-details{position:static}.resource-add-popdown{position:static;width:100%;margin-top:10px;box-shadow:none}.gym-week-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gym-log-head{display:grid}.gym-date-tools{width:100%}.gym-date-input{flex:1;min-width:130px}.gym-exercise-row{grid-template-columns:1fr 1fr}.gym-exercise-name{grid-column:1 / -1}.gym-prev{grid-column:1 / -1}.gym-set-box{grid-column:auto!important}.gym-row-progress{grid-column:1 / -1}.gym-stat-grid{grid-template-columns:1fr 1fr}.gym-save-actions{width:100%}.gym-save-actions .btn{flex:1}.gym-history-select{width:100%;min-width:0}}
+      @media(max-width:680px){.forums-hero,.appointments-hero,.gym-hero{padding:17px;align-items:flex-start;flex-direction:column}.feature-card,.gym-week-card,.gym-log-card,.gym-history-card{padding:16px}.feature-two-col{grid-template-columns:1fr}.resource-card-head,.appointment-card-head{flex-direction:column}.resource-add-details{position:static}.resource-add-popdown{position:static;width:100%;margin-top:10px;box-shadow:none}.gym-week-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gym-log-head{display:grid}.gym-date-tools{width:100%}.gym-date-input{flex:1;min-width:130px}.gym-day-override{display:grid;grid-template-columns:1fr}.gym-day-override-field{min-width:0}.gym-day-override .btn{width:100%}.gym-exercise-row{grid-template-columns:1fr 1fr}.gym-exercise-name{grid-column:1 / -1}.gym-prev{grid-column:1 / -1}.gym-set-box{grid-column:auto!important}.gym-row-progress{grid-column:1 / -1}.gym-stat-grid{grid-template-columns:1fr 1fr}.gym-save-actions{width:100%}.gym-save-actions .btn{flex:1}.gym-history-select{width:100%;min-width:0}}
     `;
     document.head.appendChild(style);
   }
@@ -352,6 +366,11 @@
               <button class="btn secondary compact" id="gymTodayBtn" type="button">Today</button>
             </div>
           </div>
+          <div class="gym-day-override">
+            <label class="gym-day-override-field"><span>Workout for this day</span><select class="gym-workout-select" id="gymWorkoutOverrideSelect" aria-label="Workout for selected day"></select></label>
+            <button class="btn secondary compact" id="gymResetWorkoutBtn" type="button">Use scheduled workout</button>
+            <p class="gym-override-note" id="gymOverrideNote">Using your normal weekly schedule.</p>
+          </div>
           <div id="gymWorkoutBody"></div>
           <div class="gym-log-actions" id="gymLogActions">
             <p class="gym-save-status" id="gymSaveStatus"></p>
@@ -388,6 +407,39 @@
     });
   }
 
+  function gymSetWorkoutForDate(dateKey, workout) {
+    ensureFeatureState();
+    if (!validDateKey(dateKey)) return;
+    const scheduled = gymScheduledWorkoutForDate(dateKey);
+    if (!["Push", "Pull", "Legs + Abs", "Rest"].includes(workout) || workout === scheduled) {
+      delete state.meta.gymTracker.overrides[dateKey];
+    } else {
+      state.meta.gymTracker.overrides[dateKey] = workout;
+    }
+    persist();
+    renderGym();
+  }
+
+  function renderGymWorkoutOverride() {
+    const select = document.getElementById("gymWorkoutOverrideSelect");
+    const reset = document.getElementById("gymResetWorkoutBtn");
+    const note = document.getElementById("gymOverrideNote");
+    if (!select || !reset || !note || !validDateKey(gymSelectedDate)) return;
+
+    const scheduled = gymScheduledWorkoutForDate(gymSelectedDate);
+    const override = gymWorkoutOverrideForDate(gymSelectedDate);
+    const active = override || scheduled;
+    select.innerHTML = ["Push", "Pull", "Legs + Abs", "Rest"].map(workout =>
+      `<option value="${workout}"${workout === active ? " selected" : ""}>${workout}${workout === scheduled ? " · scheduled" : ""}</option>`
+    ).join("");
+    reset.disabled = !override;
+    reset.classList.toggle("hidden", !override);
+    note.textContent = override
+      ? `Custom workout set for this date. Normal schedule: ${scheduled}.`
+      : `Using your normal weekly schedule: ${scheduled}.`;
+    note.classList.toggle("custom", Boolean(override));
+  }
+
   function gymMoveSelectedDate(days) {
     const date = gymDateFromKey(gymSelectedDate || gymDateKey());
     date.setDate(date.getDate() + days);
@@ -415,13 +467,14 @@
     grid.innerHTML = "";
     gymWeekDates(gymSelectedDate).forEach(dateKey => {
       const workout = gymWorkoutForDate(dateKey);
+      const override = gymWorkoutOverrideForDate(dateKey);
       const session = workout === "Rest" ? null : gymGetSession(dateKey);
       const button = document.createElement("button");
       button.type = "button";
       button.className = `gym-day-card${dateKey === today ? " today" : ""}${dateKey === gymSelectedDate ? " selected" : ""}`;
       button.dataset.gymDate = dateKey;
       const date = gymDateFromKey(dateKey);
-      button.innerHTML = `<strong>${GYM_DAY_LABELS[date.getDay()].slice(0,3)} · ${date.getMonth()+1}/${date.getDate()}</strong><span>${workout}${session?.completed ? " ✓" : ""}</span>`;
+      button.innerHTML = `<strong>${GYM_DAY_LABELS[date.getDay()].slice(0,3)} · ${date.getMonth()+1}/${date.getDate()}</strong><span>${workout}${override ? " · custom" : ""}${session?.completed ? " ✓" : ""}</span>`;
       grid.appendChild(button);
     });
   }
@@ -449,14 +502,15 @@
     if (!body || !title || !meta || !dateInput || !actions) return;
 
     const workout = gymWorkoutForDate(gymSelectedDate);
+    const override = gymWorkoutOverrideForDate(gymSelectedDate);
     const date = gymDateFromKey(gymSelectedDate);
     const dayName = GYM_DAY_LABELS[date.getDay()];
     const session = gymGetSession(gymSelectedDate);
     dateInput.value = gymSelectedDate;
     title.textContent = workout;
     meta.textContent = workout === "Rest"
-      ? `${dayName} · recovery day`
-      : `${dayName} · ${GYM_WORKOUTS[workout].length * 2} working sets · 2 sets each · 6–10 reps`;
+      ? `${dayName} · recovery day${override ? " · custom" : ""}`
+      : `${dayName} · ${GYM_WORKOUTS[workout].length * 2} working sets · 2 sets each · 6–10 reps${override ? " · custom" : ""}`;
     if (deleteBtn) deleteBtn.classList.toggle("hidden", !session);
 
     if (workout === "Rest") {
@@ -656,6 +710,7 @@
     const badge = document.getElementById("gymTodayBadge");
     if (badge) badge.textContent = gymSelectedDate === gymDateKey() ? `Today · ${workout}` : `${gymFormatDate(gymSelectedDate, { year: false })} · ${workout}`;
     renderGymWeek();
+    renderGymWorkoutOverride();
     renderGymWorkout();
     renderGymHistory();
   }
@@ -671,6 +726,17 @@
     document.getElementById("gymTodayBtn")?.addEventListener("click", () => { gymSelectedDate = gymDateKey(); renderGym(); });
     document.getElementById("gymDateInput")?.addEventListener("change", event => {
       if (validDateKey(event.target.value)) { gymSelectedDate = event.target.value; renderGym(); }
+    });
+    document.getElementById("gymWorkoutOverrideSelect")?.addEventListener("change", event => {
+      gymSetWorkoutForDate(gymSelectedDate, event.target.value);
+      if (typeof toast === "function") toast(`Workout set to ${event.target.value}.`);
+    });
+    document.getElementById("gymResetWorkoutBtn")?.addEventListener("click", () => {
+      ensureFeatureState();
+      delete state.meta.gymTracker.overrides[gymSelectedDate];
+      persist();
+      renderGym();
+      if (typeof toast === "function") toast("Scheduled workout restored.");
     });
     document.getElementById("gymSaveBtn")?.addEventListener("click", () => saveGymWorkout(false));
     document.getElementById("gymCompleteBtn")?.addEventListener("click", () => saveGymWorkout(true));
