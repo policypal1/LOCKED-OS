@@ -8,6 +8,118 @@
 <link href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2321180f'/%3E%3Cpath d='M69 10 84 25 40 69 25 54 69 10Z' fill='%23f4d28b'/%3E%3Cpath d='M20 59 41 38 48 45 27 66 20 59Z' fill='%23fff8ec'/%3E%3Cpath d='M18 68 32 54 46 68 32 82 18 68Z' fill='%232f8f56'/%3E%3C/svg%3E" rel="icon"/>
 <link href="styles.css" rel="stylesheet"/>
 <link href="ghk-cu.css" rel="stylesheet"/>
+<style id="lockedOsInlinePatchStyles">
+/* LOCKED OS - 2026-08-29 requested UI fixes */
+
+/* Keep an open task menu above the following task cards/sections. */
+.section:has(.task-menu[open]) {
+  position: relative;
+  z-index: 120 !important;
+}
+.task-row:has(.task-menu[open]) {
+  z-index: 130 !important;
+}
+.task-menu[open] {
+  z-index: 140 !important;
+}
+.task-menu-popover {
+  z-index: 150 !important;
+}
+
+/* Looksmaxxing day history controls. */
+.looks-day-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.looks-day-nav-btn,
+.looks-today-btn {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid rgba(37,132,184,.22);
+  border-radius: 999px;
+  background: rgba(255,255,255,.58);
+  color: var(--blue-dark);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+.looks-day-nav-btn:hover,
+.looks-today-btn:hover {
+  background: var(--blue-soft);
+}
+.looks-day-nav-btn:disabled {
+  opacity: .35;
+  cursor: default;
+}
+.looks-history-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-top: 10px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+/* Glucose tracker: date + time + reading + context + save. */
+#glucoseTrackerDisclosure .glucose-log-strip {
+  grid-template-columns: minmax(145px,.8fr) minmax(125px,.65fr) minmax(165px,.8fr) minmax(190px,1fr) auto;
+}
+#glucoseTrackerDisclosure .weight-input[type="time"],
+#glucoseTrackerDisclosure select.weight-input {
+  border-radius: 999px;
+}
+#glucoseTrackerDisclosure .weight-chart-stats.single-stat {
+  grid-template-columns: minmax(0,220px);
+  justify-content: end;
+}
+
+/* Forums cleanup after the saved-count badges are removed. */
+#forumsPage .forums-hero {
+  align-items: flex-start;
+}
+#forumsPage .forums-library-actions {
+  margin-left: auto;
+}
+
+/* Important: appointments must only render under their own active admin tab. */
+#adminPage .admin-subpanel.appointments-panel:not(.active) {
+  display: none !important;
+}
+#adminPage .admin-subpanel.appointments-panel.active {
+  display: grid !important;
+  gap: 16px;
+}
+
+@media (max-width: 980px) {
+  #glucoseTrackerDisclosure .glucose-log-strip {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+  #glucoseTrackerDisclosure .glucose-log-strip .weight-save-btn {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  #glucoseTrackerDisclosure .glucose-log-strip {
+    grid-template-columns: 1fr;
+  }
+  #glucoseTrackerDisclosure .glucose-log-strip .weight-save-btn {
+    grid-column: auto;
+  }
+  #glucoseTrackerDisclosure .weight-chart-stats.single-stat {
+    grid-template-columns: 1fr;
+  }
+}
+
+</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="app.js"></script>
 <script defer src="ghk-cu.js"></script>
@@ -256,6 +368,374 @@ window.addEventListener("DOMContentLoaded", () => {
     toast(`Gym rotation set to ${getWorkoutName(dayKey)}.`);
   };
 });
+</script>
+<script id="lockedOsInlinePatchScript">
+"use strict";
+
+/* LOCKED OS - 2026-08-29 requested behavior/UI fixes. */
+let lockedOsSelectedLooksDayKey = null;
+
+function lockedOsLooksKey() {
+  const today = getTodayKey();
+  if (!isDateKey(lockedOsSelectedLooksDayKey)) lockedOsSelectedLooksDayKey = today;
+  if (lockedOsSelectedLooksDayKey > today) lockedOsSelectedLooksDayKey = today;
+  return lockedOsSelectedLooksDayKey;
+}
+
+function lockedOsShiftLooksDay(amount) {
+  const today = getTodayKey();
+  const current = keyToLocalDate(lockedOsLooksKey());
+  const candidate = formatDateKey(addDays(current, Number(amount) || 0));
+  lockedOsSelectedLooksDayKey = candidate > today ? today : candidate;
+  workoutDraftDirty = false;
+  renderLooks();
+}
+
+function lockedOsGoLooksToday() {
+  lockedOsSelectedLooksDayKey = getTodayKey();
+  workoutDraftDirty = false;
+  renderLooks();
+}
+
+function lockedOsInstallLooksDayNav() {
+  if (document.getElementById("looksDayNav")) return;
+  const dateText = document.getElementById("looksDateText");
+  if (!dateText) return;
+
+  const nav = document.createElement("div");
+  nav.className = "looks-day-nav";
+  nav.id = "looksDayNav";
+  nav.innerHTML = `
+    <button class="looks-day-nav-btn" id="looksPrevDayBtn" type="button" aria-label="Previous day">← Previous</button>
+    <button class="looks-today-btn" id="looksTodayBtn" type="button">Today</button>
+    <button class="looks-day-nav-btn" id="looksNextDayBtn" type="button" aria-label="Next day">Next →</button>
+  `;
+  dateText.insertAdjacentElement("afterend", nav);
+  document.getElementById("looksPrevDayBtn")?.addEventListener("click", () => lockedOsShiftLooksDay(-1));
+  document.getElementById("looksTodayBtn")?.addEventListener("click", lockedOsGoLooksToday);
+  document.getElementById("looksNextDayBtn")?.addEventListener("click", () => lockedOsShiftLooksDay(1));
+}
+
+function lockedOsInstallWaterHistoryHandlers() {
+  document.querySelectorAll("[data-water-add]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopImmediatePropagation();
+      const day = ensureDay(lockedOsLooksKey());
+      setWaterOz(day.waterOz + Number(button.dataset.waterAdd));
+    }, true);
+  });
+
+  document.getElementById("resetWaterBtn")?.addEventListener("click", event => {
+    event.stopImmediatePropagation();
+    setWaterOz(0);
+  }, true);
+
+  document.getElementById("addCustomWaterBtn")?.addEventListener("click", event => {
+    event.stopImmediatePropagation();
+    const input = document.getElementById("waterCustomInput");
+    const amount = Number(input?.value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      input?.focus();
+      return;
+    }
+    const day = ensureDay(lockedOsLooksKey());
+    setWaterOz(day.waterOz + amount);
+    input.value = "";
+  }, true);
+
+  document.getElementById("waterCustomInput")?.addEventListener("keydown", event => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    document.getElementById("addCustomWaterBtn")?.click();
+  }, true);
+}
+
+function lockedOsCleanMk677() {
+  const page = document.getElementById("mk677Page");
+  if (!page) return;
+
+  const heroText = page.querySelector(".mk-hero-copy > p:last-child");
+  if (heroText) heroText.textContent = "Weekly reminders, weight, and glucose in one clean place.";
+
+  page.querySelector(".mk-notes-card")?.remove();
+
+  const disclosure = document.getElementById("glucoseTrackerDisclosure");
+  const strip = disclosure?.querySelector(".tracker-log-strip");
+  if (strip && !document.getElementById("glucoseTimeInput")) {
+    strip.classList.add("glucose-log-strip");
+
+    const dateField = strip.querySelector("#glucoseDateInput")?.closest("label");
+    const valueField = strip.querySelector("#glucoseValueInput")?.closest("label");
+
+    const timeField = document.createElement("label");
+    timeField.className = "weight-field";
+    timeField.innerHTML = '<span>Time</span><input class="weight-input" id="glucoseTimeInput" type="time"/>';
+
+    const contextField = document.createElement("label");
+    contextField.className = "weight-field";
+    contextField.innerHTML = `
+      <span>Reading type</span>
+      <select class="weight-input" id="glucoseContextInput">
+        <option value="Fasting">Fasting</option>
+        <option value="Before meal">Before meal</option>
+        <option value="1 hr after meal">1 hr after meal</option>
+        <option value="2 hr after meal">2 hr after meal</option>
+        <option value="Bedtime">Bedtime</option>
+        <option value="Random">Random</option>
+      </select>`;
+
+    if (dateField) dateField.insertAdjacentElement("afterend", timeField);
+    if (valueField) valueField.insertAdjacentElement("afterend", contextField);
+  }
+
+  document.getElementById("glucoseLatestBadge")?.remove();
+  const stats = disclosure?.querySelector(".weight-chart-stats");
+  if (stats) {
+    stats.classList.add("single-stat");
+    stats.innerHTML = '<div><span>Change</span><strong id="glucoseChangeValue">—</strong></div>';
+  }
+}
+
+function lockedOsCleanGhkCu() {
+  const page = document.getElementById("ghkCuPage");
+  if (!page) return;
+
+  const hero = page.querySelector(".ghk-hero-card");
+  if (hero) {
+    const eyebrow = hero.querySelector(".eyebrow");
+    const copy = hero.querySelector("p:not(.eyebrow)");
+    if (eyebrow) eyebrow.textContent = "Check-in";
+    if (copy) copy.textContent = "Your simple weekday GHK-Cu check-in.";
+    hero.querySelector(".ghk-hero-badge")?.remove();
+  }
+
+  const schedule = page.querySelector(".ghk-schedule-card");
+  if (schedule) {
+    const eyebrow = schedule.querySelector(".eyebrow");
+    if (eyebrow) eyebrow.textContent = "Check-in";
+    schedule.querySelector(".ghk-fine-print")?.remove();
+  }
+
+  page.querySelector(".ghk-top-grid")?.remove();
+  page.querySelector(".ghk-check-card")?.remove();
+  page.querySelector(".ghk-note-card")?.remove();
+}
+
+function lockedOsCleanForumsAndAppointments() {
+  document.getElementById("forumResourceCount")?.remove();
+  document.getElementById("forumLibraryBadge")?.remove();
+
+  const actions = document.querySelector("#forumsPage .forums-library-actions");
+  if (actions) {
+    [...actions.children].forEach(child => {
+      if (!child.classList.contains("resource-add-details")) child.remove();
+    });
+  }
+
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  lockedOsSelectedLooksDayKey = getTodayKey();
+  lockedOsInstallLooksDayNav();
+  lockedOsCleanMk677();
+  lockedOsCleanGhkCu();
+
+  /* Make Looksmaxxing state edits operate on the selected day. */
+  refreshLooksTaskRow = function(taskId) {
+    const day = ensureDay(lockedOsLooksKey());
+    const done = new Set(day.looksDone);
+    const skipped = new Set(day.looksSkipped);
+    document.querySelectorAll(".looks-task").forEach(row => {
+      if (row.dataset.taskId !== taskId) return;
+      const isDone = done.has(taskId);
+      const isSkipped = skipped.has(taskId);
+      row.classList.toggle("done", isDone);
+      row.classList.toggle("skipped", isSkipped);
+      const box = row.querySelector(".task-box");
+      if (box) box.textContent = isDone ? "✓" : isSkipped ? "−" : "";
+      const copy = row.querySelector(".task-copy");
+      if (copy) {
+        let status = copy.querySelector(".task-status");
+        if (isSkipped && !status) {
+          status = document.createElement("div");
+          status.className = "task-status";
+          copy.appendChild(status);
+        }
+        if (status) {
+          status.textContent = isSkipped ? "Skipped" : "";
+          status.hidden = !isSkipped;
+        }
+      }
+    });
+  };
+
+  refreshLooksProgressUI = function() {
+    const key = lockedOsLooksKey();
+    const day = ensureDay(key);
+    const total = getLooksTaskIds(key).length;
+    const done = day.looksDone.length;
+    const skipped = day.looksSkipped.length;
+    const resolved = done + skipped;
+    const left = total - resolved;
+    const percent = total ? Math.round((resolved / total) * 100) : 0;
+    $("looksPercent").textContent = `${percent}%`;
+    $("looksDoneCount").textContent = skipped ? `${done} done • ${skipped} skipped` : `${done} / ${total}`;
+    $("looksTasksLeft").textContent = left === 0
+      ? "Looksmaxxing routine resolved."
+      : `${left} looks task${left === 1 ? "" : "s"} left for this day.`;
+    $("looksProgressCircle").style.background = `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
+  };
+
+  setLooksStatus = function(task, status) {
+    const key = lockedOsLooksKey();
+    const day = ensureDay(key);
+    const done = new Set(day.looksDone);
+    const skipped = new Set(day.looksSkipped);
+
+    if (status === "done") {
+      if (done.has(task.id)) done.delete(task.id);
+      else {
+        done.add(task.id);
+        skipped.delete(task.id);
+      }
+    } else if (status === "skipped") {
+      if (skipped.has(task.id)) skipped.delete(task.id);
+      else {
+        skipped.add(task.id);
+        done.delete(task.id);
+      }
+    }
+
+    if (task.meta === "morningWater" && status === "done" && done.has(task.id) && day.waterOz < LOOKS_MORNING_WATER_OZ) {
+      day.waterOz = LOOKS_MORNING_WATER_OZ;
+    }
+
+    day.looksDone = [...done];
+    day.looksSkipped = [...skipped];
+    syncWaterTask(day, key);
+    day.looksCompleted = new Set([...day.looksDone, ...day.looksSkipped]).size === getLooksTaskIds(key).length;
+    saveState();
+    refreshLooksTaskRow(task.id);
+    if (task.meta === "morningWater") refreshLooksTaskRow("water-through-day");
+    refreshLooksProgressUI();
+    renderDayStreak();
+    renderWater();
+    scheduleInteractionRender();
+  };
+
+  renderWater = function() {
+    const day = ensureDay(lockedOsLooksKey());
+    const waterOz = day.waterOz;
+    const displayPercent = Math.round((waterOz / WATER_TARGET_OZ) * 100);
+
+    $("waterAmount").innerHTML = `${waterOz} <span>oz / ${WATER_TARGET_OZ} oz</span>`;
+    $("waterBadge").textContent = `${displayPercent}%`;
+    $("waterFill").style.width = `${Math.max(0, Math.min(100, displayPercent))}%`;
+    if (waterOz < WATER_MINIMUM_OZ) $("waterStatus").textContent = `${WATER_MINIMUM_OZ - waterOz} oz until the daily minimum.`;
+    else if (waterOz < WATER_TARGET_OZ) $("waterStatus").textContent = `Minimum hit. ${WATER_TARGET_OZ - waterOz} oz until target.`;
+    else $("waterStatus").textContent = waterOz === WATER_TARGET_OZ ? `${WATER_TARGET_OZ} oz target complete.` : `${waterOz - WATER_TARGET_OZ} oz above target.`;
+  };
+
+  setWaterOz = function(value) {
+    const key = lockedOsLooksKey();
+    const day = ensureDay(key);
+    day.waterOz = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(Number(value) || 0)));
+    syncWaterTask(day, key);
+    day.looksCompleted = new Set([...(day.looksDone || []), ...(day.looksSkipped || [])]).size === getLooksTaskIds(key).length;
+    saveState();
+    renderLooks();
+  };
+
+  renderWorkoutPicker = function() {
+    const key = lockedOsLooksKey();
+    const today = getTodayKey();
+    const currentIndex = getWorkoutIndex(key);
+    const isToday = key === today;
+
+    if (!isToday || !workoutDraftDirty || !Number.isInteger(workoutDraftIndex)) workoutDraftIndex = currentIndex;
+
+    const previewName = $("workoutPreviewName");
+    const status = $("workoutRotationStatus");
+    const prev = $("workoutPrevBtn");
+    const next = $("workoutNextBtn");
+    const set = $("setWorkoutBtn");
+
+    if (previewName) previewName.textContent = formatWorkoutName(workoutDraftIndex, key);
+    [prev, next, set].forEach(button => { if (button) button.disabled = !isToday; });
+
+    if (status) {
+      if (!isToday) status.textContent = "Viewing the workout scheduled for this day.";
+      else status.textContent = workoutDraftIndex === currentIndex
+        ? "This is the workout currently set for today."
+        : "Previewing a different point in the rotation. Hit Set to use it.";
+    }
+  };
+
+  renderLooks = function() {
+    const key = lockedOsLooksKey();
+    const today = getTodayKey();
+    const day = ensureDay(key);
+    const dayName = getRoutineDayName(key);
+    const routine = getLooksRoutine(key);
+    const date = keyToLocalDate(key);
+    const isToday = key === today;
+
+    $("looksDayName").textContent = `${dayName} routine`;
+    $("looksDateText").textContent = `${isToday ? "Today · " : ""}${dayName}, ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
+
+    let historyLabel = document.getElementById("looksHistoryLabel");
+    if (!isToday) {
+      if (!historyLabel) {
+        historyLabel = document.createElement("span");
+        historyLabel.id = "looksHistoryLabel";
+        historyLabel.className = "looks-history-label";
+        document.getElementById("looksDayNav")?.insertAdjacentElement("beforebegin", historyLabel);
+      }
+      historyLabel.textContent = "Viewing previous day";
+      historyLabel.hidden = false;
+    } else if (historyLabel) {
+      historyLabel.hidden = true;
+    }
+
+    const nextButton = document.getElementById("looksNextDayBtn");
+    if (nextButton) nextButton.disabled = isToday;
+    const todayButton = document.getElementById("looksTodayBtn");
+    if (todayButton) todayButton.disabled = isToday;
+
+    renderLooksTaskList($("looksMorningList"), routine.morning, day, "morning");
+    renderLooksTaskList($("looksMiddayList"), routine.midday, day, "midday");
+    renderLooksTaskList($("looksNightList"), routine.night, day, "night");
+
+    const total = getLooksTaskIds(key).length;
+    const done = day.looksDone.length;
+    const skipped = day.looksSkipped.length;
+    const resolved = done + skipped;
+    const left = total - resolved;
+    const percent = total ? Math.round((resolved / total) * 100) : 0;
+
+    $("looksPercent").textContent = `${percent}%`;
+    $("looksDoneCount").textContent = skipped ? `${done} done • ${skipped} skipped` : `${done} / ${total}`;
+    $("looksTasksLeft").textContent = left === 0
+      ? "Looksmaxxing routine resolved."
+      : `${left} looks task${left === 1 ? "" : "s"} left for this day.`;
+    $("looksProgressCircle").style.background = `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
+    $("workoutName").textContent = getWorkoutName(key);
+
+    renderWorkoutPicker();
+    renderWater();
+  };
+
+  lockedOsInstallWaterHistoryHandlers();
+
+  /* ghk-cu.js installs Forums + Appointments in its own DOMContentLoaded handler.
+     Run this after those handlers finish, then keep the cleanup resilient. */
+  setTimeout(() => {
+    lockedOsCleanForumsAndAppointments();
+    renderLooks();
+  }, 0);
+});
+
 </script>
 </body>
 </html>
