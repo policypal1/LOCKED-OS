@@ -119,6 +119,157 @@
   }
 }
 
+
+
+/* Add-task schedule modal. */
+.looks-task-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(28, 20, 12, .48);
+  backdrop-filter: blur(8px);
+}
+.looks-task-modal {
+  width: min(520px, 100%);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--card);
+  box-shadow: 0 28px 90px rgba(35, 23, 10, .28);
+}
+.looks-task-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.looks-task-modal-head h3 {
+  margin: 2px 0 0;
+  font-size: 1.45rem;
+  letter-spacing: -.03em;
+}
+.looks-task-modal-close {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(42,30,18,.07);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.looks-task-modal-field {
+  display: grid;
+  gap: 7px;
+}
+.looks-task-modal-field > span,
+.looks-task-days-label {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 900;
+}
+.looks-task-modal-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.6);
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  outline: 0;
+}
+.looks-task-modal-input:focus {
+  border-color: rgba(37,132,184,.55);
+  box-shadow: 0 0 0 3px rgba(37,132,184,.11);
+}
+.looks-task-days-block {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.looks-task-day-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0,1fr));
+  gap: 7px;
+}
+.looks-task-day-btn {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255,255,255,.48);
+  color: var(--muted);
+  font: inherit;
+  font-size: .74rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+.looks-task-day-btn[aria-pressed="true"] {
+  border-color: rgba(37,132,184,.45);
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+}
+.looks-task-day-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.looks-task-day-presets {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.looks-task-day-preset {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(42,30,18,.07);
+  color: var(--text);
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.looks-task-day-count {
+  color: var(--muted);
+  font-size: .76rem;
+  font-weight: 850;
+}
+.looks-task-modal-error {
+  min-height: 20px;
+  margin: 12px 0 0;
+  color: var(--red);
+  font-size: .8rem;
+  font-weight: 850;
+}
+.looks-task-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 18px;
+}
+@media (max-width: 560px) {
+  .looks-task-modal-backdrop { padding: 12px; }
+  .looks-task-modal { padding: 17px; border-radius: 20px; }
+  .looks-task-day-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .looks-task-modal-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .looks-task-modal-actions .btn { width: 100%; }
+}
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="app.js"></script>
@@ -287,6 +438,206 @@
 
 <script>
 "use strict";
+
+
+const LOCKED_OS_LOOKS_DAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+let lockedOsTaskAddContext = null;
+
+function lockedOsNormalizeTaskDays(value) {
+  if (!Array.isArray(value)) return null;
+  const allowed = new Set(LOCKED_OS_LOOKS_DAY_ORDER);
+  const unique = [...new Set(value.map(day => String(day || "").trim()).filter(day => allowed.has(day)))];
+  return unique.length ? LOCKED_OS_LOOKS_DAY_ORDER.filter(day => unique.includes(day)) : null;
+}
+
+function lockedOsSelectedTaskDays() {
+  const modal = document.getElementById("looksTaskAddModal");
+  if (!modal) return [];
+  return [...modal.querySelectorAll(".looks-task-day-btn[aria-pressed='true']")]
+    .map(button => button.dataset.day)
+    .filter(Boolean);
+}
+
+function lockedOsUpdateTaskDayCount() {
+  const count = document.getElementById("looksTaskDayCount");
+  if (!count) return;
+  const days = lockedOsSelectedTaskDays();
+  count.textContent = `${days.length} day${days.length === 1 ? "" : "s"} selected`;
+}
+
+function lockedOsSetTaskDays(days) {
+  const chosen = new Set(days);
+  document.querySelectorAll("#looksTaskAddModal .looks-task-day-btn").forEach(button => {
+    button.setAttribute("aria-pressed", chosen.has(button.dataset.day) ? "true" : "false");
+  });
+  lockedOsUpdateTaskDayCount();
+}
+
+function lockedOsCloseTaskAddModal() {
+  const context = lockedOsTaskAddContext;
+  lockedOsTaskAddContext = null;
+  document.getElementById("looksTaskAddModalBackdrop")?.remove();
+  if (context?.row?.isConnected) {
+    context.row.classList.remove("adding");
+    context.row.draggable = context.wasDraggable;
+  }
+}
+
+function lockedOsOpenTaskAddModal(row, menu, section, afterTaskId, onAdd) {
+  lockedOsCloseTaskAddModal();
+  const wasDraggable = row.draggable;
+  row.classList.add("adding");
+  row.draggable = false;
+  menu.open = false;
+  lockedOsTaskAddContext = { row, menu, section, afterTaskId, onAdd, wasDraggable };
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "looksTaskAddModalBackdrop";
+  backdrop.className = "looks-task-modal-backdrop";
+  backdrop.innerHTML = `
+    <section class="looks-task-modal" id="looksTaskAddModal" role="dialog" aria-modal="true" aria-labelledby="looksTaskAddModalTitle">
+      <div class="looks-task-modal-head">
+        <div>
+          <p class="eyebrow blue">New task</p>
+          <h3 id="looksTaskAddModalTitle">Add a task</h3>
+        </div>
+        <button class="looks-task-modal-close" id="looksTaskAddClose" type="button" aria-label="Close">×</button>
+      </div>
+      <label class="looks-task-modal-field">
+        <span>Task name</span>
+        <input class="looks-task-modal-input" id="looksTaskAddName" maxlength="160" autocomplete="off" placeholder="Enter task name" type="text"/>
+      </label>
+      <div class="looks-task-days-block">
+        <span class="looks-task-days-label">Show this task on</span>
+        <div class="looks-task-day-grid">
+          ${LOCKED_OS_LOOKS_DAY_ORDER.map(day => `<button class="looks-task-day-btn" type="button" data-day="${day}" aria-pressed="true">${day.slice(0,3)}</button>`).join("")}
+        </div>
+        <div class="looks-task-day-tools">
+          <div class="looks-task-day-presets">
+            <button class="looks-task-day-preset" id="looksTaskEveryDay" type="button">Every day</button>
+            <button class="looks-task-day-preset" id="looksTaskWeekdays" type="button">Weekdays</button>
+            <button class="looks-task-day-preset" id="looksTaskClearDays" type="button">Clear</button>
+          </div>
+          <span class="looks-task-day-count" id="looksTaskDayCount">7 days selected</span>
+        </div>
+      </div>
+      <p class="looks-task-modal-error" id="looksTaskAddError" aria-live="polite"></p>
+      <div class="looks-task-modal-actions">
+        <button class="btn secondary" id="looksTaskAddCancel" type="button">Cancel</button>
+        <button class="btn blue" id="looksTaskAddSave" type="button">Add task</button>
+      </div>
+    </section>`;
+  document.body.appendChild(backdrop);
+
+  const input = document.getElementById("looksTaskAddName");
+  const error = document.getElementById("looksTaskAddError");
+  const save = () => {
+    const title = String(input?.value || "").trim().slice(0, 160);
+    const days = lockedOsSelectedTaskDays();
+    if (!title) {
+      if (error) error.textContent = "Enter a task name.";
+      input?.focus();
+      return;
+    }
+    if (!days.length) {
+      if (error) error.textContent = "Choose at least one day.";
+      return;
+    }
+    const context = lockedOsTaskAddContext;
+    lockedOsCloseTaskAddModal();
+    context?.onAdd?.(context.section, title, context.afterTaskId, days);
+  };
+
+  backdrop.addEventListener("click", event => {
+    if (event.target === backdrop) lockedOsCloseTaskAddModal();
+  });
+  document.getElementById("looksTaskAddClose")?.addEventListener("click", lockedOsCloseTaskAddModal);
+  document.getElementById("looksTaskAddCancel")?.addEventListener("click", lockedOsCloseTaskAddModal);
+  document.getElementById("looksTaskAddSave")?.addEventListener("click", save);
+  document.querySelectorAll("#looksTaskAddModal .looks-task-day-btn").forEach(button => {
+    button.addEventListener("click", () => {
+      button.setAttribute("aria-pressed", button.getAttribute("aria-pressed") === "true" ? "false" : "true");
+      if (error) error.textContent = "";
+      lockedOsUpdateTaskDayCount();
+    });
+  });
+  document.getElementById("looksTaskEveryDay")?.addEventListener("click", () => lockedOsSetTaskDays(LOCKED_OS_LOOKS_DAY_ORDER));
+  document.getElementById("looksTaskWeekdays")?.addEventListener("click", () => lockedOsSetTaskDays(["Monday","Tuesday","Wednesday","Thursday","Friday"]));
+  document.getElementById("looksTaskClearDays")?.addEventListener("click", () => lockedOsSetTaskDays([]));
+  input?.addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); save(); }
+  });
+  requestAnimationFrame(() => input?.focus());
+}
+
+function lockedOsInstallScheduledCustomTasks() {
+  /* Preserve a days[] schedule when app.js normalizes custom tasks. */
+  normalizeLooksCustomTasks = function(original) {
+    if (!Array.isArray(original)) return [];
+    const sections = new Set(["morning", "midday", "night"]);
+    const seen = new Set();
+    const normalized = [];
+    for (const item of original) {
+      if (!item || typeof item !== "object") continue;
+      const id = String(item.id || "").trim();
+      const section = String(item.section || "").trim();
+      const title = String(item.title || "").trim().slice(0, 160);
+      if (!id || seen.has(id) || !sections.has(section) || !title) continue;
+      seen.add(id);
+      const task = { id, section, title, custom: true };
+      const days = lockedOsNormalizeTaskDays(item.days);
+      if (days) task.days = days;
+      normalized.push(task);
+    }
+    return normalized;
+  };
+
+  const baseApplyLooksTaskCustomizations = applyLooksTaskCustomizations;
+  getLooksRoutine = function(dayKey = getTodayKey()) {
+    const dayName = getRoutineDayName(dayKey);
+    const scheduled = (section, baseTasks) => baseApplyLooksTaskCustomizations(section, baseTasks).filter(task => {
+      if (!task.custom) return true;
+      if (!Array.isArray(task.days) || !task.days.length) return true;
+      return task.days.includes(dayName);
+    });
+    return {
+      morning: scheduled("morning", makeMorning(dayName)),
+      midday: scheduled("midday", makeMidday(dayKey)),
+      night: scheduled("night", makeNight(dayName, dayKey))
+    };
+  };
+
+  addLooksTask = function(section, title, afterTaskId = null, days = LOCKED_OS_LOOKS_DAY_ORDER) {
+    const cleaned = String(title || "").trim().slice(0, 160);
+    const scheduledDays = lockedOsNormalizeTaskDays(days) || [...LOCKED_OS_LOOKS_DAY_ORDER];
+    if (!cleaned) return;
+    ensureLooksTaskCustomizationState();
+
+    const task = { id: makeCustomLooksTaskId(), section, title: cleaned, custom: true, days: scheduledDays };
+    state.meta.looksCustomTasks.push(task);
+
+    const dayKey = typeof lockedOsLooksKey === "function" ? lockedOsLooksKey() : getTodayKey();
+    const currentIds = getLooksRoutine(dayKey)[section].map(item => item.id).filter(id => id !== task.id);
+    const insertAt = afterTaskId ? currentIds.indexOf(afterTaskId) + 1 : currentIds.length;
+    currentIds.splice(Math.max(0, insertAt), 0, task.id);
+    state.meta.looksTaskOrder[section] = [...new Set([...(state.meta.looksTaskOrder[section] || []), ...currentIds])];
+
+    saveState();
+    render();
+    toast(`Task added for ${scheduledDays.length === 7 ? "every day" : `${scheduledDays.length} day${scheduledDays.length === 1 ? "" : "s"}`}.`);
+  };
+
+  startInlineTaskAdd = function(row, menu, section, afterTaskId, onAdd) {
+    if (row.classList.contains("editing") || row.classList.contains("adding")) return;
+    lockedOsOpenTaskAddModal(row, menu, section, afterTaskId, onAdd);
+  };
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && document.getElementById("looksTaskAddModalBackdrop")) lockedOsCloseTaskAddModal();
+  });
+}
+
+
 window.addEventListener("DOMContentLoaded", () => {
   const WORKOUT_ROTATION_V2_START = "2026-08-23";
   const WORKOUT_ROTATION_V2 = ["Chest + side delts", "Back + rear delts", "Arms + Abs", "Legs"];
@@ -536,6 +887,7 @@ function lockedOsCleanForumsAndAppointments() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  lockedOsInstallScheduledCustomTasks();
   lockedOsSelectedLooksDayKey = getTodayKey();
   lockedOsInstallLooksDayNav();
   lockedOsCleanMk677();
