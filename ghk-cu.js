@@ -119,6 +119,19 @@
         notes: safeText(item.notes, 500)
       }));
 
+    if (!state.meta.ghkCuVial || typeof state.meta.ghkCuVial !== "object" || Array.isArray(state.meta.ghkCuVial)) {
+      state.meta.ghkCuVial = { bacWaterMl: "", reconstitutedDate: "" };
+    }
+    const ghkBacWater = Number(state.meta.ghkCuVial.bacWaterMl);
+    state.meta.ghkCuVial = {
+      bacWaterMl: Number.isFinite(ghkBacWater) && ghkBacWater > 0
+        ? Math.min(100, Math.round(ghkBacWater * 100) / 100)
+        : "",
+      reconstitutedDate: validDateKey(state.meta.ghkCuVial.reconstitutedDate)
+        ? state.meta.ghkCuVial.reconstitutedDate
+        : ""
+    };
+
     if (!state.meta.forumHub || typeof state.meta.forumHub !== "object" || Array.isArray(state.meta.forumHub)) state.meta.forumHub = { resources: [], guides: [] };
     if (!Array.isArray(state.meta.forumHub.resources)) state.meta.forumHub.resources = [];
     if (!Array.isArray(state.meta.forumHub.guides)) state.meta.forumHub.guides = [];
@@ -178,7 +191,9 @@
       (Array.isArray(snapshot?.meta?.forumHub?.resources) && snapshot.meta.forumHub.resources.length > 0) ||
       (Array.isArray(snapshot?.meta?.forumHub?.guides) && snapshot.meta.forumHub.guides.length > 0) ||
       (Array.isArray(snapshot?.meta?.gymTracker?.sessions) && snapshot.meta.gymTracker.sessions.length > 0) ||
-      (snapshot?.meta?.gymTracker?.overrides && Object.keys(snapshot.meta.gymTracker.overrides).length > 0);
+      (snapshot?.meta?.gymTracker?.overrides && Object.keys(snapshot.meta.gymTracker.overrides).length > 0) ||
+      (Number(snapshot?.meta?.ghkCuVial?.bacWaterMl) > 0) ||
+      Boolean(snapshot?.meta?.ghkCuVial?.reconstitutedDate);
     wrapped.__featureWrapped = true;
     hasMeaningfulState = wrapped;
   }
@@ -194,13 +209,14 @@
       .resource-list,.appointment-list{display:grid;gap:12px;margin-top:14px}.resource-card,.appointment-card{border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.42);overflow:hidden}.resource-card-body,.appointment-card-body{padding:15px}.resource-card-head,.appointment-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.resource-card h4,.appointment-card h4{margin:0}.resource-meta,.appointment-meta{margin-top:5px;color:var(--muted);font-size:.78rem;font-weight:800}.resource-note,.appointment-notes{margin:10px 0 0;color:var(--muted);font-size:.88rem;font-weight:700;line-height:1.5;white-space:pre-wrap}.resource-link{display:inline-flex;margin-top:11px;color:var(--blue-dark);font-size:.84rem;font-weight:900;text-decoration:none}.resource-embed{aspect-ratio:16/9;background:#111}.resource-embed iframe{width:100%;height:100%;border:0;display:block}.resource-type-pill{padding:5px 9px;border-radius:999px;background:var(--blue-soft);color:var(--blue-dark);font-size:.7rem;font-weight:950;text-transform:uppercase}.feature-mini-btn{border:0;border-radius:10px;padding:7px 10px;background:rgba(42,30,18,.07);color:var(--text);font:inherit;font-size:.76rem;font-weight:900;cursor:pointer}.feature-mini-btn.danger{color:var(--red)}.feature-empty{padding:22px 16px;border:1px dashed var(--line);border-radius:16px;color:var(--muted);text-align:center;font-size:.86rem;font-weight:800}
       .forums-library-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.resource-add-details{position:relative}.resource-add-details>summary{list-style:none;cursor:pointer}.resource-add-details>summary::-webkit-details-marker{display:none}.resource-add-popdown{position:absolute;z-index:30;right:0;top:calc(100% + 10px);width:min(390px,calc(100vw - 42px));padding:14px;border:1px solid var(--line);border-radius:17px;background:var(--card);box-shadow:0 18px 50px rgba(55,38,18,.18)}
       .appointment-date-block{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}.appointment-date-chip{width:54px;min-height:58px;border-radius:15px;display:grid;place-items:center;align-content:center;background:var(--blue-soft);color:var(--blue-dark)}.appointment-date-chip strong{font-size:1.25rem;line-height:1}.appointment-date-chip span{font-size:.67rem;font-weight:950;text-transform:uppercase}.appointment-countdown{display:inline-block;margin-top:8px;color:var(--green-dark);font-size:.78rem;font-weight:900}.appointment-card.past{opacity:.62}
+      .ghk-vial-card{padding:20px}.ghk-vial-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.ghk-vial-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.ghk-vial-summary{margin:10px 0 0;color:var(--muted);font-size:.82rem;font-weight:800}.ghk-vial-summary strong{color:var(--text)}.ghk-vial-status{min-height:18px;margin:0;color:var(--muted);font-size:.8rem;font-weight:850}.ghk-vial-status.good{color:var(--green-dark)}.ghk-vial-status.bad{color:var(--red)}
       .gym-page{display:grid;gap:16px}.gym-hero{padding:24px;display:flex;align-items:center;justify-content:space-between;gap:20px;background:radial-gradient(circle at top right,rgba(37,132,184,.14),transparent 20rem),rgba(255,250,241,.86)}.gym-hero h2{margin:0;font-size:clamp(2rem,5vw,3.1rem);letter-spacing:-.035em}.gym-hero p:not(.eyebrow){margin:9px 0 0;color:var(--muted);font-weight:750;line-height:1.5}.gym-today-badge{padding:12px 16px;border-radius:999px;background:var(--blue-soft);color:var(--blue-dark);font-weight:950;white-space:nowrap}
       .gym-week-card,.gym-log-card,.gym-history-card{padding:20px}.gym-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:14px}.gym-day-card{min-width:0;border:1px solid var(--line);border-radius:15px;padding:12px 9px;background:rgba(255,255,255,.42);cursor:pointer;text-align:left;color:var(--text);font:inherit}.gym-day-card strong,.gym-day-card span{display:block}.gym-day-card strong{font-size:.78rem}.gym-day-card span{margin-top:5px;color:var(--muted);font-size:.7rem;font-weight:850;line-height:1.25}.gym-day-card.today{border-color:rgba(37,132,184,.38);box-shadow:0 0 0 2px rgba(37,132,184,.08)}.gym-day-card.selected{background:var(--blue-soft);border-color:rgba(37,132,184,.42);color:var(--blue-dark)}.gym-day-card.selected span{color:var(--blue-dark)}
       .gym-log-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.gym-date-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.gym-date-input{min-height:40px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.62);color:var(--text);font:inherit;font-size:.8rem;font-weight:850;padding:0 10px}.gym-nav-btn{width:40px;height:40px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.5);color:var(--text);font:inherit;font-weight:950;cursor:pointer}.gym-workout-title{margin:4px 0 0;font-size:1.75rem;letter-spacing:-.025em}.gym-workout-meta{margin:5px 0 0;color:var(--muted);font-size:.82rem;font-weight:800}.gym-day-override{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.34)}.gym-day-override-field{display:grid;gap:5px;min-width:220px;flex:1}.gym-day-override-field>span{color:var(--muted);font-size:.68rem;font-weight:900}.gym-workout-select{width:100%;min-height:40px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.7);color:var(--text);font:inherit;font-size:.8rem;font-weight:850;padding:0 10px}.gym-override-note{margin:0;flex-basis:100%;color:var(--muted);font-size:.72rem;font-weight:800}.gym-override-note.custom{color:var(--blue-dark)}.gym-rest{margin-top:18px;padding:30px 18px;border:1px dashed var(--line);border-radius:18px;text-align:center}.gym-rest strong{display:block;font-size:1.15rem}.gym-rest span{display:block;margin-top:6px;color:var(--muted);font-weight:750}
       .gym-exercise-list{display:grid;gap:10px;margin-top:17px}.gym-exercise-row{display:grid;grid-template-columns:minmax(190px,1.25fr) minmax(140px,.9fr) repeat(2,minmax(150px,1fr));gap:10px;align-items:center;padding:13px;border:1px solid var(--line);border-radius:17px;background:rgba(255,255,255,.42)}.gym-exercise-name strong{display:block;font-size:.9rem}.gym-exercise-name span{display:block;margin-top:4px;color:var(--muted);font-size:.72rem;font-weight:850}.gym-prev{font-size:.73rem;color:var(--muted);font-weight:800;line-height:1.4}.gym-prev strong{display:block;color:var(--text);font-size:.73rem}.gym-set-box{display:grid;grid-template-columns:1fr 1fr;gap:6px}.gym-set-box label{display:grid;gap:4px}.gym-set-box label span{font-size:.64rem;color:var(--muted);font-weight:900}.gym-set-input{width:100%;min-width:0;height:38px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.68);color:var(--text);font:inherit;font-size:.8rem;font-weight:850;padding:0 8px}.gym-row-progress{grid-column:2 / -1;display:flex;align-items:center;gap:7px;min-height:20px;color:var(--muted);font-size:.72rem;font-weight:850}.gym-row-progress.good{color:var(--green-dark)}.gym-row-progress.ready{color:var(--blue-dark)}.gym-log-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:15px}.gym-save-actions{display:flex;gap:8px;flex-wrap:wrap}.gym-save-status{margin:0;color:var(--muted);font-size:.8rem;font-weight:850}.gym-save-status.good{color:var(--green-dark)}.gym-save-status.bad{color:var(--red)}.gym-complete-badge{display:inline-flex;padding:7px 10px;border-radius:999px;background:rgba(47,143,86,.1);color:var(--green-dark);font-size:.72rem;font-weight:950}
       .gym-history-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.gym-history-select{min-width:min(320px,100%);height:42px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.62);color:var(--text);font:inherit;font-size:.82rem;font-weight:850;padding:0 11px}.gym-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:14px}.gym-stat{padding:13px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.4)}.gym-stat span{display:block;color:var(--muted);font-size:.67rem;font-weight:900}.gym-stat strong{display:block;margin-top:5px;font-size:1rem}.gym-history-table-wrap{overflow:auto;margin-top:14px;border:1px solid var(--line);border-radius:15px}.gym-history-table{width:100%;border-collapse:collapse;min-width:650px}.gym-history-table th,.gym-history-table td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:.75rem}.gym-history-table th{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em}.gym-history-table td{font-weight:800}.gym-history-table tr:last-child td{border-bottom:0}.gym-pr{color:var(--green-dark);font-weight:950}.gym-empty{padding:25px 16px;text-align:center;color:var(--muted);font-size:.84rem;font-weight:800}
       @media(max-width:980px){.gym-week-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.gym-exercise-row{grid-template-columns:minmax(170px,1fr) minmax(130px,.75fr) minmax(150px,1fr)}.gym-exercise-row>.gym-set-box:last-of-type{grid-column:3}.gym-row-progress{grid-column:2 / -1}.gym-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-      @media(max-width:680px){.forums-hero,.appointments-hero,.gym-hero{padding:17px;align-items:flex-start;flex-direction:column}.feature-card,.gym-week-card,.gym-log-card,.gym-history-card{padding:16px}.feature-two-col{grid-template-columns:1fr}.resource-card-head,.appointment-card-head{flex-direction:column}.resource-add-details{position:static}.resource-add-popdown{position:static;width:100%;margin-top:10px;box-shadow:none}.gym-week-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gym-log-head{display:grid}.gym-date-tools{width:100%}.gym-date-input{flex:1;min-width:130px}.gym-day-override{display:grid;grid-template-columns:1fr}.gym-day-override-field{min-width:0}.gym-day-override .btn{width:100%}.gym-exercise-row{grid-template-columns:1fr 1fr}.gym-exercise-name{grid-column:1 / -1}.gym-prev{grid-column:1 / -1}.gym-set-box{grid-column:auto!important}.gym-row-progress{grid-column:1 / -1}.gym-stat-grid{grid-template-columns:1fr 1fr}.gym-save-actions{width:100%}.gym-save-actions .btn{flex:1}.gym-history-select{width:100%;min-width:0}}
+      @media(max-width:680px){.forums-hero,.appointments-hero,.gym-hero{padding:17px;align-items:flex-start;flex-direction:column}.feature-card,.gym-week-card,.gym-log-card,.gym-history-card,.ghk-vial-card{padding:16px}.feature-two-col,.ghk-vial-grid{grid-template-columns:1fr}.resource-card-head,.appointment-card-head{flex-direction:column}.resource-add-details{position:static}.resource-add-popdown{position:static;width:100%;margin-top:10px;box-shadow:none}.gym-week-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gym-log-head{display:grid}.gym-date-tools{width:100%}.gym-date-input{flex:1;min-width:130px}.gym-day-override{display:grid;grid-template-columns:1fr}.gym-day-override-field{min-width:0}.gym-day-override .btn{width:100%}.gym-exercise-row{grid-template-columns:1fr 1fr}.gym-exercise-name{grid-column:1 / -1}.gym-prev{grid-column:1 / -1}.gym-set-box{grid-column:auto!important}.gym-row-progress{grid-column:1 / -1}.gym-stat-grid{grid-template-columns:1fr 1fr}.gym-save-actions{width:100%}.gym-save-actions .btn{flex:1}.gym-history-select{width:100%;min-width:0}}
     `;
     document.head.appendChild(style);
   }
@@ -210,6 +226,127 @@
     document.querySelectorAll("[data-ghk-day]").forEach(el => el.classList.toggle("today", Number(el.dataset.ghkDay) === day));
     const badge = document.getElementById("ghkTodayBadge");
     if (badge) badge.textContent = day >= 1 && day <= 5 ? "Today · morning" : "Today · no reminder";
+  }
+
+  function ghkVialDateLabel(dateKey) {
+    if (!validDateKey(dateKey)) return "Not set";
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return new Date(year, month - 1, day, 12).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  }
+
+  function renderGhkVialTracker() {
+    const card = document.getElementById("ghkVialTrackerCard");
+    if (!card) return;
+    ensureFeatureState();
+
+    const tracker = state.meta.ghkCuVial;
+    const waterInput = document.getElementById("ghkBacWaterMl");
+    const dateInput = document.getElementById("ghkReconstitutedDate");
+    const active = document.activeElement;
+
+    if (waterInput && active !== waterInput) waterInput.value = tracker.bacWaterMl === "" ? "" : String(tracker.bacWaterMl);
+    if (dateInput && active !== dateInput) dateInput.value = tracker.reconstitutedDate || "";
+
+    const summary = document.getElementById("ghkVialSummary");
+    if (summary) {
+      const waterText = tracker.bacWaterMl === "" ? "BAC water not set" : `${tracker.bacWaterMl} mL BAC water`;
+      const dateText = tracker.reconstitutedDate ? `reconstituted ${ghkVialDateLabel(tracker.reconstitutedDate)}` : "reconstitution date not set";
+      summary.innerHTML = `<strong>Current vial:</strong> ${waterText} · ${dateText}`;
+    }
+  }
+
+  function saveGhkVialTracker() {
+    ensureFeatureState();
+    const waterInput = document.getElementById("ghkBacWaterMl");
+    const dateInput = document.getElementById("ghkReconstitutedDate");
+    const status = document.getElementById("ghkVialStatus");
+
+    const rawWater = String(waterInput?.value || "").trim();
+    const rawDate = String(dateInput?.value || "").trim();
+    const water = rawWater === "" ? "" : Number(rawWater);
+
+    if (rawWater !== "" && (!Number.isFinite(water) || water <= 0 || water > 100)) {
+      if (status) {
+        status.textContent = "Enter a BAC-water amount between 0 and 100 mL.";
+        status.classList.add("bad");
+        status.classList.remove("good");
+      }
+      waterInput?.focus();
+      return;
+    }
+    if (rawDate !== "" && !validDateKey(rawDate)) {
+      if (status) {
+        status.textContent = "Choose a valid reconstitution date.";
+        status.classList.add("bad");
+        status.classList.remove("good");
+      }
+      dateInput?.focus();
+      return;
+    }
+
+    state.meta.ghkCuVial = {
+      bacWaterMl: water === "" ? "" : Math.round(water * 100) / 100,
+      reconstitutedDate: rawDate
+    };
+    persist();
+    renderGhkVialTracker();
+
+    if (status) {
+      status.textContent = "Vial details saved.";
+      status.classList.add("good");
+      status.classList.remove("bad");
+    }
+    if (typeof toast === "function") toast("GHK-Cu vial details saved.");
+  }
+
+  function installGhkVialTracker() {
+    const page = document.querySelector("#ghkCuPage .ghk-page");
+    const schedule = page?.querySelector(".ghk-schedule-card");
+    if (!page || !schedule) return;
+
+    let card = document.getElementById("ghkVialTrackerCard");
+    if (!card) {
+      card = document.createElement("section");
+      card.className = "card ghk-vial-card";
+      card.id = "ghkVialTrackerCard";
+      card.innerHTML = `
+        <div class="panel-title">
+          <div>
+            <p class="eyebrow blue">Vial details</p>
+            <h3>Current GHK-Cu vial</h3>
+          </div>
+        </div>
+        <div class="ghk-vial-grid">
+          <label class="feature-field">
+            <span>BAC water in vial (mL)</span>
+            <input id="ghkBacWaterMl" inputmode="decimal" min="0.01" max="100" step="0.01" type="number" placeholder="e.g. 2"/>
+          </label>
+          <label class="feature-field">
+            <span>Reconstituted date</span>
+            <input id="ghkReconstitutedDate" type="date"/>
+          </label>
+        </div>
+        <p class="ghk-vial-summary" id="ghkVialSummary"></p>
+        <div class="ghk-vial-actions">
+          <button class="btn blue" id="saveGhkVialBtn" type="button">Save vial details</button>
+          <p class="ghk-vial-status" id="ghkVialStatus"></p>
+        </div>`;
+      schedule.insertAdjacentElement("afterend", card);
+      document.getElementById("saveGhkVialBtn")?.addEventListener("click", saveGhkVialTracker);
+      [document.getElementById("ghkBacWaterMl"), document.getElementById("ghkReconstitutedDate")].forEach(input => {
+        input?.addEventListener("keydown", event => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            saveGhkVialTracker();
+          }
+        });
+      });
+    }
+    renderGhkVialTracker();
   }
 
   function installMainTab() {
@@ -871,11 +1008,11 @@
   function renderForums(){const list=document.getElementById("forumResourceList");if(!list)return;ensureFeatureState();const resources=state.meta.forumHub.resources;list.innerHTML="";const badge=document.getElementById("forumLibraryBadge"),hero=document.getElementById("forumResourceCount");if(badge)badge.textContent=`${resources.length} item${resources.length===1?"":"s"}`;if(hero)hero.textContent=`${resources.length} saved`;if(!resources.length){list.innerHTML='<div class="feature-empty">No saved resources yet.</div>';return;}resources.forEach(item=>{const card=document.createElement("article");card.className="resource-card";const ytid=getYouTubeId(item.url);if(ytid){const embed=document.createElement("div");embed.className="resource-embed";const iframe=document.createElement("iframe");iframe.loading="lazy";iframe.src=`https://www.youtube-nocookie.com/embed/${ytid}`;iframe.title=item.title;iframe.allowFullscreen=true;embed.appendChild(iframe);card.appendChild(embed);}const body=document.createElement("div");body.className="resource-card-body";body.innerHTML=`<div class="resource-card-head"><div><h4></h4><div class="resource-meta"></div></div><div class="card-actions"><span class="resource-type-pill">${ytid?"video":item.type}</span><button class="feature-mini-btn danger" type="button">Delete</button></div></div>${item.notes?'<p class="resource-note"></p>':""}<a class="resource-link" target="_blank" rel="noopener noreferrer">Open original ↗</a>`;body.querySelector("h4").textContent=item.title;try{body.querySelector(".resource-meta").textContent=new URL(item.url).hostname.replace(/^www\./,"");}catch{}if(item.notes)body.querySelector(".resource-note").textContent=item.notes;const link=body.querySelector("a");link.href=item.url;body.querySelector("button").onclick=()=>deleteResource(item.id);card.appendChild(body);list.appendChild(card);});}
 
   function installHandlers(){document.getElementById("saveAppointmentBtn")?.addEventListener("click",saveAppointment);document.getElementById("cancelAppointmentEditBtn")?.addEventListener("click",resetAppointmentForm);document.getElementById("saveForumResourceBtn")?.addEventListener("click",saveResource);}
-  function installRenderWrapper(){if(typeof render!=="function"||render.__featureWrapped)return;const base=render;const wrapped=function(...args){const result=base(...args);highlightGhkToday();renderAppointments();renderForums();renderGym();return result;};wrapped.__featureWrapped=true;render=wrapped;}
+  function installRenderWrapper(){if(typeof render!=="function"||render.__featureWrapped)return;const base=render;const wrapped=function(...args){const result=base(...args);highlightGhkToday();renderGhkVialTracker();renderAppointments();renderForums();renderGym();return result;};wrapped.__featureWrapped=true;render=wrapped;}
 
   window.addEventListener("DOMContentLoaded",()=>{
     if(typeof state==="undefined")return;
-    injectStyles();ensureFeatureState();installMeaningfulStateSupport();installMainTab();installGymTab();installAppointmentsPanel();installHandlers();installGymHandlers();installRenderWrapper();highlightGhkToday();
+    injectStyles();ensureFeatureState();installMeaningfulStateSupport();installMainTab();installGymTab();installAppointmentsPanel();installHandlers();installGymHandlers();installRenderWrapper();highlightGhkToday();installGhkVialTracker();
     if(typeof saveLocalState==="function")saveLocalState();renderAppointments();renderForums();renderGym();
   });
 })();
