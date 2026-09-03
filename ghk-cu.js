@@ -209,7 +209,7 @@
       .resource-list,.appointment-list{display:grid;gap:12px;margin-top:14px}.resource-card,.appointment-card{border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.42);overflow:hidden}.resource-card-body,.appointment-card-body{padding:15px}.resource-card-head,.appointment-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.resource-card h4,.appointment-card h4{margin:0}.resource-meta,.appointment-meta{margin-top:5px;color:var(--muted);font-size:.78rem;font-weight:800}.resource-note,.appointment-notes{margin:10px 0 0;color:var(--muted);font-size:.88rem;font-weight:700;line-height:1.5;white-space:pre-wrap}.resource-link{display:inline-flex;margin-top:11px;color:var(--blue-dark);font-size:.84rem;font-weight:900;text-decoration:none}.resource-embed{aspect-ratio:16/9;background:#111}.resource-embed iframe{width:100%;height:100%;border:0;display:block}.resource-type-pill{padding:5px 9px;border-radius:999px;background:var(--blue-soft);color:var(--blue-dark);font-size:.7rem;font-weight:950;text-transform:uppercase}.feature-mini-btn{border:0;border-radius:10px;padding:7px 10px;background:rgba(42,30,18,.07);color:var(--text);font:inherit;font-size:.76rem;font-weight:900;cursor:pointer}.feature-mini-btn.danger{color:var(--red)}.feature-empty{padding:22px 16px;border:1px dashed var(--line);border-radius:16px;color:var(--muted);text-align:center;font-size:.86rem;font-weight:800}
       .forums-library-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.resource-add-details{position:relative}.resource-add-details>summary{list-style:none;cursor:pointer}.resource-add-details>summary::-webkit-details-marker{display:none}.resource-add-popdown{position:absolute;z-index:30;right:0;top:calc(100% + 10px);width:min(390px,calc(100vw - 42px));padding:14px;border:1px solid var(--line);border-radius:17px;background:var(--card);box-shadow:0 18px 50px rgba(55,38,18,.18)}
       .appointment-date-block{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}.appointment-date-chip{width:54px;min-height:58px;border-radius:15px;display:grid;place-items:center;align-content:center;background:var(--blue-soft);color:var(--blue-dark)}.appointment-date-chip strong{font-size:1.25rem;line-height:1}.appointment-date-chip span{font-size:.67rem;font-weight:950;text-transform:uppercase}.appointment-countdown{display:inline-block;margin-top:8px;color:var(--green-dark);font-size:.78rem;font-weight:900}.appointment-card.past{opacity:.62}
-      .ghk-vial-card{padding:20px}.ghk-vial-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.ghk-vial-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.ghk-vial-summary{margin:10px 0 0;color:var(--muted);font-size:.82rem;font-weight:800}.ghk-vial-summary strong{color:var(--text)}.ghk-vial-status{min-height:18px;margin:0;color:var(--muted);font-size:.8rem;font-weight:850}.ghk-vial-status.good{color:var(--green-dark)}.ghk-vial-status.bad{color:var(--red)}.ghk-current-status-card{display:none;margin-top:14px;padding:16px;border:1px solid rgba(37,132,184,.28);border-radius:16px;background:rgba(37,132,184,.07)}.ghk-current-status-card.visible{display:block}.ghk-current-status-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.ghk-current-status-head span{color:var(--blue-dark);font-size:.7rem;font-weight:950;letter-spacing:.06em;text-transform:uppercase}.ghk-current-status-head strong{font-size:.9rem}.ghk-current-status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ghk-current-status-item{padding:12px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.58)}.ghk-current-status-item span{display:block;color:var(--muted);font-size:.68rem;font-weight:900}.ghk-current-status-item strong{display:block;margin-top:5px;font-size:1rem;overflow-wrap:anywhere}
+      .ghk-vial-card{padding:20px}.ghk-vial-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.ghk-vial-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.ghk-vial-summary{margin:10px 0 0;color:var(--muted);font-size:.82rem;font-weight:800}.ghk-vial-summary strong{color:var(--text)}.ghk-vial-status{min-height:18px;margin:0;color:var(--muted);font-size:.8rem;font-weight:850}.ghk-vial-status.good{color:var(--green-dark)}.ghk-vial-status.bad{color:var(--red)}.ghk-current-status-card{display:none;margin-top:14px;padding:16px;border:1px solid rgba(37,132,184,.28);border-radius:16px;background:rgba(37,132,184,.07)}.ghk-current-status-card.visible{display:block}.ghk-current-status-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.ghk-current-status-head span{color:var(--blue-dark);font-size:.7rem;font-weight:950;letter-spacing:.06em;text-transform:uppercase}.ghk-current-status-head strong{font-size:.9rem}.ghk-current-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.ghk-current-status-item{padding:12px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.58)}.ghk-current-status-item span{display:block;color:var(--muted);font-size:.68rem;font-weight:900}.ghk-current-status-item strong{display:block;margin-top:5px;font-size:1rem;overflow-wrap:anywhere}
       .gym-page{display:grid;gap:16px}.gym-hero{padding:24px;display:flex;align-items:center;justify-content:space-between;gap:20px;background:radial-gradient(circle at top right,rgba(37,132,184,.14),transparent 20rem),rgba(255,250,241,.86)}.gym-hero h2{margin:0;font-size:clamp(2rem,5vw,3.1rem);letter-spacing:-.035em}.gym-hero p:not(.eyebrow){margin:9px 0 0;color:var(--muted);font-weight:750;line-height:1.5}.gym-today-badge{padding:12px 16px;border-radius:999px;background:var(--blue-soft);color:var(--blue-dark);font-weight:950;white-space:nowrap}
       .gym-week-card,.gym-log-card,.gym-history-card{padding:20px}.gym-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:14px}.gym-day-card{min-width:0;border:1px solid var(--line);border-radius:15px;padding:12px 9px;background:rgba(255,255,255,.42);cursor:pointer;text-align:left;color:var(--text);font:inherit}.gym-day-card strong,.gym-day-card span{display:block}.gym-day-card strong{font-size:.78rem}.gym-day-card span{margin-top:5px;color:var(--muted);font-size:.7rem;font-weight:850;line-height:1.25}.gym-day-card.today{border-color:rgba(37,132,184,.38);box-shadow:0 0 0 2px rgba(37,132,184,.08)}.gym-day-card.selected{background:var(--blue-soft);border-color:rgba(37,132,184,.42);color:var(--blue-dark)}.gym-day-card.selected span{color:var(--blue-dark)}
       .gym-log-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.gym-date-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.gym-date-input{min-height:40px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.62);color:var(--text);font:inherit;font-size:.8rem;font-weight:850;padding:0 10px}.gym-nav-btn{width:40px;height:40px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.5);color:var(--text);font:inherit;font-weight:950;cursor:pointer}.gym-workout-title{margin:4px 0 0;font-size:1.75rem;letter-spacing:-.025em}.gym-workout-meta{margin:5px 0 0;color:var(--muted);font-size:.82rem;font-weight:800}.gym-day-override{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.34)}.gym-day-override-field{display:grid;gap:5px;min-width:220px;flex:1}.gym-day-override-field>span{color:var(--muted);font-size:.68rem;font-weight:900}.gym-workout-select{width:100%;min-height:40px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.7);color:var(--text);font:inherit;font-size:.8rem;font-weight:850;padding:0 10px}.gym-override-note{margin:0;flex-basis:100%;color:var(--muted);font-size:.72rem;font-weight:800}.gym-override-note.custom{color:var(--blue-dark)}.gym-rest{margin-top:18px;padding:30px 18px;border:1px dashed var(--line);border-radius:18px;text-align:center}.gym-rest strong{display:block;font-size:1.15rem}.gym-rest span{display:block;margin-top:6px;color:var(--muted);font-weight:750}
@@ -238,6 +238,15 @@
     });
   }
 
+  function ghkDaysSinceReconstituted(dateKey) {
+    if (!validDateKey(dateKey)) return null;
+    const [year, month, day] = dateKey.split("-").map(Number);
+    const now = new Date();
+    const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const reconstitutedUtc = Date.UTC(year, month - 1, day);
+    return Math.max(0, Math.floor((todayUtc - reconstitutedUtc) / 86400000));
+  }
+
   function renderGhkVialTracker() {
     const card = document.getElementById("ghkVialTrackerCard");
     if (!card) return;
@@ -261,10 +270,15 @@
     const currentStatus = document.getElementById("ghkCurrentVialStatus");
     const currentWater = document.getElementById("ghkCurrentWaterValue");
     const currentDate = document.getElementById("ghkCurrentDateValue");
+    const currentDays = document.getElementById("ghkCurrentDaysValue");
+    const daysSinceReconstituted = ghkDaysSinceReconstituted(tracker.reconstitutedDate);
     const hasSavedDetails = tracker.bacWaterMl !== "" || Boolean(tracker.reconstitutedDate);
     if (currentStatus) currentStatus.classList.toggle("visible", hasSavedDetails);
     if (currentWater) currentWater.textContent = tracker.bacWaterMl === "" ? "Not set" : `${tracker.bacWaterMl} mL`;
     if (currentDate) currentDate.textContent = tracker.reconstitutedDate ? ghkVialDateLabel(tracker.reconstitutedDate) : "Not set";
+    if (currentDays) currentDays.textContent = daysSinceReconstituted === null
+      ? "Not set"
+      : `${daysSinceReconstituted} day${daysSinceReconstituted === 1 ? "" : "s"}`;
   }
 
   function saveGhkVialTracker() {
@@ -356,6 +370,10 @@
             <div class="ghk-current-status-item">
               <span>Reconstituted</span>
               <strong id="ghkCurrentDateValue">Not set</strong>
+            </div>
+            <div class="ghk-current-status-item">
+              <span>Days since reconstituted</span>
+              <strong id="ghkCurrentDaysValue">Not set</strong>
             </div>
           </div>
         </div>`;
@@ -1032,11 +1050,39 @@
   function renderForums(){const list=document.getElementById("forumResourceList");if(!list)return;ensureFeatureState();const resources=state.meta.forumHub.resources;list.innerHTML="";const badge=document.getElementById("forumLibraryBadge"),hero=document.getElementById("forumResourceCount");if(badge)badge.textContent=`${resources.length} item${resources.length===1?"":"s"}`;if(hero)hero.textContent=`${resources.length} saved`;if(!resources.length){list.innerHTML='<div class="feature-empty">No saved resources yet.</div>';return;}resources.forEach(item=>{const card=document.createElement("article");card.className="resource-card";const ytid=getYouTubeId(item.url);if(ytid){const embed=document.createElement("div");embed.className="resource-embed";const iframe=document.createElement("iframe");iframe.loading="lazy";iframe.src=`https://www.youtube-nocookie.com/embed/${ytid}`;iframe.title=item.title;iframe.allowFullscreen=true;embed.appendChild(iframe);card.appendChild(embed);}const body=document.createElement("div");body.className="resource-card-body";body.innerHTML=`<div class="resource-card-head"><div><h4></h4><div class="resource-meta"></div></div><div class="card-actions"><span class="resource-type-pill">${ytid?"video":item.type}</span><button class="feature-mini-btn danger" type="button">Delete</button></div></div>${item.notes?'<p class="resource-note"></p>':""}<a class="resource-link" target="_blank" rel="noopener noreferrer">Open original ↗</a>`;body.querySelector("h4").textContent=item.title;try{body.querySelector(".resource-meta").textContent=new URL(item.url).hostname.replace(/^www\./,"");}catch{}if(item.notes)body.querySelector(".resource-note").textContent=item.notes;const link=body.querySelector("a");link.href=item.url;body.querySelector("button").onclick=()=>deleteResource(item.id);card.appendChild(body);list.appendChild(card);});}
 
   function installHandlers(){document.getElementById("saveAppointmentBtn")?.addEventListener("click",saveAppointment);document.getElementById("cancelAppointmentEditBtn")?.addEventListener("click",resetAppointmentForm);document.getElementById("saveForumResourceBtn")?.addEventListener("click",saveResource);}
+
+  function installRotationCalendarDeletionFix() {
+    const base = typeof getRotationTasksForDay === "function" ? getRotationTasksForDay : null;
+    if (!base || base.__looksDeletionAware) return;
+
+    const taskIdsByLabel = {
+      "Masseter training": "masseter-training",
+      "Wash bed sheets": "wash-bed-sheets",
+      "Shave + eyebrows": "shave-manage-brows",
+      "Microneedling": "microneedle-eyebrows",
+      "Tretinoin": "tretinoin",
+      "Azelaic acid": "azelaic-acid",
+      "Lip exfoliation": "lip-care"
+    };
+
+    const wrapped = dayKey => {
+      if (typeof getLooksTaskIds !== "function") return base(dayKey);
+      const allowedIds = new Set(getLooksTaskIds(dayKey));
+      return base(dayKey).filter(item => {
+        const taskId = item?.label?.startsWith("Gym:") ? "gym" : taskIdsByLabel[item?.label];
+        return !taskId || allowedIds.has(taskId);
+      });
+    };
+
+    wrapped.__looksDeletionAware = true;
+    window.getRotationTasksForDay = wrapped;
+  }
+
   function installRenderWrapper(){if(typeof render!=="function"||render.__featureWrapped)return;const base=render;const wrapped=function(...args){const result=base(...args);highlightGhkToday();renderGhkVialTracker();renderAppointments();renderForums();renderGym();return result;};wrapped.__featureWrapped=true;render=wrapped;}
 
   window.addEventListener("DOMContentLoaded",()=>{
     if(typeof state==="undefined")return;
-    injectStyles();ensureFeatureState();installMeaningfulStateSupport();installMainTab();installGymTab();installAppointmentsPanel();installHandlers();installGymHandlers();installRenderWrapper();highlightGhkToday();installGhkVialTracker();
+    injectStyles();ensureFeatureState();installMeaningfulStateSupport();installMainTab();installGymTab();installAppointmentsPanel();installHandlers();installGymHandlers();installRotationCalendarDeletionFix();installRenderWrapper();highlightGhkToday();installGhkVialTracker();
     if(typeof saveLocalState==="function")saveLocalState();renderAppointments();renderForums();renderGym();
   });
 })();
