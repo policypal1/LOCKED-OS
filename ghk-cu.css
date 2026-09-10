@@ -249,3 +249,27 @@
     width: 100%;
   }
 }
+
+
+/* Simplified four-day gym tab */
+#gymPage .gym-week-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+#gymPage .gym-day-card[hidden] {
+  display: none !important;
+}
+#gymPage .gym-day-override,
+#gymPage .gym-history-card {
+  display: none !important;
+}
+#gymPage .gym-hero p:not(.eyebrow) {
+  max-width: 640px;
+}
+.gym-day-workout {
+  appearance: auto;
+}
+@media (max-width: 760px) {
+  #gymPage .gym-week-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

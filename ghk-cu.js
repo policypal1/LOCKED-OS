@@ -10,18 +10,41 @@
     if (request.status < 200 || request.status >= 300) throw new Error(`HTTP ${request.status}`);
     let source = request.responseText;
 
-    const upperArmsBlock = `    "Upper + Arms": [
+    const gymWorkoutsBlock = `  const GYM_WORKOUTS = {
+    "Chest + side delts": [
       "Incline Dumbbell Bench Press",
+      "Machine Chest Press",
+      "Cable Fly / Pec Deck",
+      "Cable Lateral Raise",
+      "Machine Lateral Raise"
+    ],
+    "Back + rear delts": [
       "Lat Pulldown",
       "Chest-Supported Row",
-      "Cable Lateral Raise",
-      "Triceps Pressdown",
-      "Cable Curl"
+      "Seated Cable Row, both arms",
+      "Reverse Pec Deck"
     ],
-`;
-    source = source.replace('  const GYM_WORKOUTS = {\n    Push:', '  const GYM_WORKOUTS = {\n' + upperArmsBlock + '    Push:');
-    source = source.replaceAll('["Push", "Pull", "Legs + Abs", "Rest"]', '["Push", "Pull", "Legs + Abs", "Upper + Arms", "Rest"]');
-    source = source.replaceAll('["Push", "Pull", "Legs + Abs"]', '["Push", "Pull", "Legs + Abs", "Upper + Arms"]');
+    Arms: [
+      "Triceps Pressdown",
+      "Overhead Cable Triceps Extension",
+      "Cable Curl",
+      "Incline Dumbbell Curl"
+    ],
+    "Legs + Abs": [
+      "Hack Squat",
+      "Romanian Deadlift",
+      "Leg Extension",
+      "Leg Curl",
+      "Calf Raise",
+      "Cable Crunch / Ab Machine"
+    ]
+  };
+  const GYM_DAY_PLAN = ["Legs + Abs", "Rest", "Chest + side delts", "Back + rear delts", "Rest", "Arms", "Rest"];`;
+    source = source.replace(/  const GYM_WORKOUTS = \{[\s\S]*?\n  \};\n  const GYM_DAY_PLAN = \[[^\n]*\];/, gymWorkoutsBlock);
+    source = source.replaceAll('["Push", "Pull", "Legs + Abs", "Rest"]', '["Chest + side delts", "Back + rear delts", "Arms", "Legs + Abs", "Rest"]');
+    source = source.replaceAll('["Push", "Pull", "Legs + Abs"]', '["Chest + side delts", "Back + rear delts", "Arms", "Legs + Abs"]');
+    source = source.replace('Your Push / Pull / Legs + Abs schedule with set-by-set lift tracking and progression history.', 'Your four-day split with simple workout logging.');
+    source = source.replace('<span class="badge blue">6 training days</span>', '<span class="badge blue">4 days / week</span>');
 
     (0, eval)(source + "\n//# sourceURL=locked-os-pinned-ghk-cu.js");
   } catch (error) {
@@ -33,24 +56,25 @@
   "use strict";
 
   const VOICE_TASK_START = "2026-09-09";
-  const GYM_SCHEDULE_START = "2026-09-09";
+  const GYM_SCHEDULE_START = "2026-09-13";
+  const FIRST_GYM_DAY = "2026-09-10";
   const DAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
   const DEFAULT_GYM_SCHEDULE = {
-    Monday: "Push",
-    Tuesday: "Pull",
-    Thursday: "Legs + Abs",
-    Saturday: "Upper + Arms"
+    Sunday: "Legs + Abs",
+    Tuesday: "Chest + side delts",
+    Wednesday: "Back + rear delts",
+    Friday: "Arms"
   };
-  const GYM_WORKOUT_CHOICES = new Set(["Push", "Pull", "Legs + Abs", "Upper + Arms"]);
+  const GYM_WORKOUT_CHOICES = new Set(["Chest + side delts", "Back + rear delts", "Arms", "Legs + Abs"]);
   const LEGACY_GYM_DAY_PLAN = {
     Sunday: "Legs + Abs",
-    Monday: "Push",
-    Tuesday: "Pull",
-    Wednesday: "Rest",
-    Thursday: "Legs + Abs",
-    Friday: "Push",
-    Saturday: "Pull"
+    Monday: "Rest",
+    Tuesday: "Chest + side delts",
+    Wednesday: "Back + rear delts",
+    Thursday: "Rest",
+    Friday: "Arms",
+    Saturday: "Rest"
   };
 
   const DEFAULT_VOICE_INFO = `10-minute shower voice protocol
@@ -258,8 +282,7 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
       if (dayKey >= VOICE_TASK_START && !routine.morning.some(task => task.id === "voice-training")) {
         const voiceTask = {
           id: "voice-training",
-          title: "Train voice in shower",
-          subtitle: "10-minute pitch + resonance protocol"
+          title: "Train voice in shower"
         };
         const conditionerIndex = routine.morning.findIndex(task => task.id === "conditioner-soap");
         routine.morning.splice(conditionerIndex >= 0 ? conditionerIndex + 1 : 1, 0, voiceTask);
@@ -276,7 +299,7 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
       }
 
       /* Apply the editable gym schedule without changing older days. */
-      if (dayKey >= GYM_SCHEDULE_START) {
+      if (dayKey >= FIRST_GYM_DAY) {
         routine.midday = routine.midday.filter(task => task.id !== "gym");
         const workout = getGymWorkoutForDay(dayKey);
         if (workout) {
@@ -319,13 +342,14 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
     }
 
     function getGymWorkoutForDay(dayKey = getTodayKey()) {
+      if (dayKey === FIRST_GYM_DAY) return "Chest + side delts";
+      if (dayKey < GYM_SCHEDULE_START) return "";
       const schedule = getGymScheduleForDay(dayKey);
-      if (!schedule) return null;
+      if (!schedule) return "";
       return schedule[getRoutineDayName(dayKey)] || "";
     }
 
     function isGymScheduled(dayKey = getTodayKey()) {
-      if (dayKey < GYM_SCHEDULE_START) return true;
       return Boolean(getGymWorkoutForDay(dayKey));
     }
 
@@ -375,13 +399,30 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
       saveState();
     }
 
+    function compactGymWeek() {
+      document.querySelectorAll("#gymWeekGrid .gym-day-card").forEach(card => {
+        const label = String(card.querySelector("span")?.textContent || "");
+        card.hidden = label.startsWith("Rest");
+      });
+    }
+
     function refreshExistingGymUi() {
       const schedule = getGymScheduleForDay(getTodayKey()) || DEFAULT_GYM_SCHEDULE;
       const count = Object.keys(schedule).length;
       const badge = document.querySelector("#gymPage .gym-week-card .badge");
-      if (badge) badge.textContent = `${count} training days`;
+      if (badge) badge.textContent = `${count} days / week`;
       const heroCopy = document.querySelector("#gymPage .gym-hero p:not(.eyebrow)");
-      if (heroCopy) heroCopy.textContent = "Your editable 3–4 day schedule with set-by-set lift tracking and progression history.";
+      if (heroCopy) heroCopy.textContent = "Chest + side delts · Back + rear delts · Arms · Legs + abs.";
+      document.querySelector("#gymPage .gym-day-override")?.remove();
+      document.querySelector("#gymPage .gym-history-card")?.remove();
+      compactGymWeek();
+
+      const grid = document.getElementById("gymWeekGrid");
+      if (grid && grid.dataset.compactObserver !== "true") {
+        grid.dataset.compactObserver = "true";
+        const observer = new MutationObserver(compactGymWeek);
+        observer.observe(grid, { childList: true, subtree: true });
+      }
     }
 
     function installGymTabBridgeHandlers() {
@@ -405,13 +446,13 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
 
     const baseGetWorkoutName = window.getWorkoutName;
     window.getWorkoutName = function(dayKey = getTodayKey()) {
-      if (dayKey < GYM_SCHEDULE_START) return baseGetWorkoutName(dayKey);
+      if (dayKey < FIRST_GYM_DAY) return baseGetWorkoutName(dayKey);
       return getGymWorkoutForDay(dayKey) || "Rest day";
     };
 
     const baseGetWeeklyGymStatus = window.getWeeklyGymStatus;
     window.getWeeklyGymStatus = function(dayKey, day) {
-      if (dayKey < GYM_SCHEDULE_START) {
+      if (dayKey < FIRST_GYM_DAY) {
         const done = new Set(day.looksDone || []);
         if (done.has("gym")) return "Done";
         if (dayKey === getTodayKey()) return "Not yet";
@@ -419,8 +460,10 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
       }
 
       if (!isGymScheduled(dayKey)) return "Rest day";
+      const trackerSessions = Array.isArray(state?.meta?.gymTracker?.sessions) ? state.meta.gymTracker.sessions : [];
+      const logged = trackerSessions.some(session => session?.date === dayKey && session?.completed);
       const done = new Set(day.looksDone || []);
-      if (done.has("gym")) return "Done";
+      if (logged || done.has("gym")) return "Done";
       if (dayKey === getTodayKey()) return "Not yet";
       return "Didn't go";
     };
@@ -448,9 +491,6 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
         existingLabels.add(label.toLowerCase());
       }
 
-      /* Teeth whitening should always appear in the rotation calendar. Avoid duplicate custom whitening chips. */
-      const hasWhitening = items.some(item => /whit(e|ening)|white strips/i.test(String(item.label || "")));
-      if (!hasWhitening) items.push({ label: "Teeth whitening", type: "treatment" });
 
       return items;
     };
@@ -472,11 +512,12 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
       }
 
       const today = getTodayKey();
-      const changes = getGymScheduleChanges().filter(change => change.effectiveDayKey !== today);
-      changes.push({ effectiveDayKey: today, schedule: normalized });
+      const effectiveDayKey = today < GYM_SCHEDULE_START ? GYM_SCHEDULE_START : today;
+      const changes = getGymScheduleChanges().filter(change => change.effectiveDayKey !== effectiveDayKey);
+      changes.push({ effectiveDayKey, schedule: normalized });
       changes.sort((a, b) => a.effectiveDayKey.localeCompare(b.effectiveDayKey));
       state.meta.gymScheduleChanges = changes;
-      syncGymScheduleIntoGymTab(normalized, today);
+      syncGymScheduleIntoGymTab(normalized, effectiveDayKey);
       saveState();
       refreshExistingGymUi();
       return true;
@@ -492,7 +533,7 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
       card.innerHTML = `
         <p class="eyebrow blue">Training</p>
         <h2>Gym schedule</h2>
-        <p>Select 3 or 4 training days and edit what you do on each day. Saving only changes today and future days.</p>
+        <p>Pick 3 or 4 gym days and choose one workout for each day. Changes apply going forward.</p>
         <div class="gym-schedule-editor" id="gymScheduleEditor"></div>
         <p class="gym-schedule-error" id="gymScheduleError" aria-live="polite"></p>
         <div class="gym-schedule-actions">
@@ -517,10 +558,10 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
             <span>${day.slice(0, 3)}</span>
             <small>${active ? "Training" : "Rest"}</small>
           </button>
-          <input class="gym-day-workout" maxlength="80" type="text"
-            value="${escapeHtml(schedule[day] || "")}"
-            placeholder="Workout name"
-            ${active ? "" : "disabled"} />`;
+          <select class="gym-day-workout" ${active ? "" : "disabled"}>
+            <option value="">Choose workout</option>
+            ${[...GYM_WORKOUT_CHOICES].map(name => `<option value="${escapeHtml(name)}"${schedule[day] === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}
+          </select>`;
         editor.appendChild(row);
       }
 
@@ -552,17 +593,16 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
 
           if (turningOn && !input.value.trim()) {
             const suggestions = {
-              Monday: "Push",
-              Tuesday: "Pull",
-              Wednesday: "Upper + Arms",
+              Monday: "Chest + side delts",
+              Tuesday: "Chest + side delts",
+              Wednesday: "Back + rear delts",
               Thursday: "Legs + Abs",
-              Friday: "Upper + Arms",
-              Saturday: "Upper + Arms",
+              Friday: "Arms",
+              Saturday: "Arms",
               Sunday: "Legs + Abs"
             };
-            input.value = suggestions[row.dataset.day] || "Workout";
+            input.value = suggestions[row.dataset.day] || "Chest + side delts";
             input.focus();
-            input.select();
           }
 
           updateCount();
@@ -579,7 +619,7 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
             return;
           }
           if (!GYM_WORKOUT_CHOICES.has(value)) {
-            card.querySelector("#gymScheduleError").textContent = "Use Push, Pull, Legs + Abs, or Upper + Arms.";
+            card.querySelector("#gymScheduleError").textContent = "Use Chest + side delts, Back + rear delts, Arms, or Legs + Abs.";
             row.querySelector(".gym-day-workout").focus();
             return;
           }
@@ -725,8 +765,17 @@ Keep it gentle. Do not scrub cracked, bleeding, or irritated lips, and avoid har
       tightenUpTask(dayKeys);
     };
 
-    const activeGymSchedule = getGymScheduleForDay(getTodayKey()) || { ...DEFAULT_GYM_SCHEDULE };
-    syncGymScheduleIntoGymTab(activeGymSchedule, getTodayKey());
+    ensureGymTrackerBridgeState();
+    if (state.meta.gymSplitVersion !== 2) {
+      const managed = new Set(state.meta.gymRecurringManagedKeys || []);
+      for (const key of managed) delete state.meta.gymTracker.overrides[key];
+      state.meta.gymRecurringManagedKeys = [];
+      state.meta.gymScheduleChanges = [{ effectiveDayKey: GYM_SCHEDULE_START, schedule: { ...DEFAULT_GYM_SCHEDULE } }];
+      state.meta.gymTracker.overrides[FIRST_GYM_DAY] = "Chest + side delts";
+      state.meta.gymTracker.overrides["2026-09-11"] = "Rest";
+      state.meta.gymSplitVersion = 2;
+    }
+    syncGymScheduleIntoGymTab(DEFAULT_GYM_SCHEDULE, GYM_SCHEDULE_START);
     saveState();
 
     installGymEditor();
