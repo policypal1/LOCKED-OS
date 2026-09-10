@@ -1,106 +1,251 @@
-.ghk-tab { border: 1px solid rgba(37,132,184,.22); }
-.ghk-page { display: grid; gap: 16px; }
-.ghk-page h2, .ghk-page h3, .mk-embedded-heading h2 { margin: 0; letter-spacing: -.035em; }
-.ghk-page h2 { font-size: clamp(2rem, 5vw, 3.25rem); }
-.ghk-page h3 { font-size: 1.15rem; }
+@import url("https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@48b687462247c682f2762c86028fdc0f21030f61/ghk-cu.css");
 
-.ghk-hero-card {
-  padding: 24px;
+/* LOCKED OS — voice task, task info, gym scheduling, weekly-review update */
+
+.task-row.showing-info {
+  flex-wrap: wrap;
+}
+
+.task-more-info-panel {
+  width: calc(100% - 16px);
+  margin: 0 8px 9px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255,255,255,.5);
+}
+
+.task-more-info-panel[hidden] {
+  display: none !important;
+}
+
+.task-more-info-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  background:
-    radial-gradient(circle at top right, rgba(37,132,184,.18), transparent 18rem),
-    rgba(255,250,241,.84);
+  gap: 12px;
+  margin-bottom: 10px;
 }
-.ghk-hero-card p:not(.eyebrow) { margin: 10px 0 0; color: var(--muted); font-weight: 750; line-height: 1.5; max-width: 650px; }
-.ghk-hero-badge { padding: 12px 16px; border-radius: 999px; background: var(--blue-soft); color: var(--blue-dark); font-weight: 950; white-space: nowrap; }
 
-.ghk-schedule-card, .ghk-reference-card, .ghk-check-card, .ghk-note-card { padding: 20px; }
-.ghk-schedule-heading { align-items: flex-end; }
-.ghk-week-schedule { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 9px; }
-.ghk-day {
-  min-height: 88px;
-  padding: 13px 10px;
-  display: grid;
-  align-content: center;
-  gap: 5px;
-  text-align: center;
-  border: 1px solid rgba(37,132,184,.2);
-  border-radius: 16px;
-  background: var(--blue-soft);
-}
-.ghk-day strong { font-size: .95rem; }
-.ghk-day span { color: var(--blue-dark); font-size: .78rem; font-weight: 850; line-height: 1.25; }
-.ghk-day.off { border-color: var(--line); background: rgba(255,255,255,.36); }
-.ghk-day.off span { color: var(--muted); }
-.ghk-day.today { outline: 3px solid rgba(37,132,184,.22); border-color: rgba(37,132,184,.55); transform: translateY(-2px); }
-
-.ghk-top-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
-.ghk-reference-list { display: grid; gap: 9px; }
-.ghk-reference-list > div { padding: 13px 14px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.4); }
-.ghk-reference-list strong { display: block; margin-bottom: 4px; }
-.ghk-reference-list span { display: block; color: var(--muted); font-size: .9rem; font-weight: 750; line-height: 1.45; }
-
-.ghk-check-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 9px; }
-.ghk-check-grid > div { padding: 13px; border-radius: 16px; border: 1px solid rgba(182,66,66,.18); background: var(--red-soft); }
-.ghk-check-grid > div.good { border-color: rgba(47,143,86,.22); background: var(--green-soft); }
-.ghk-check-grid strong, .ghk-check-grid span { display: block; }
-.ghk-check-grid span { margin-top: 5px; color: var(--muted); font-size: .82rem; font-weight: 750; line-height: 1.4; }
-.ghk-fine-print { margin: 14px 0 0; color: var(--muted); font-size: .82rem; font-weight: 750; line-height: 1.5; }
-.ghk-note-card { background: linear-gradient(145deg, rgba(37,132,184,.08), rgba(255,250,241,.88)); }
-.ghk-note-card p:not(.eyebrow) { margin: 9px 0 0; color: var(--muted); font-weight: 750; line-height: 1.5; }
-.ghk-note-wide { margin-bottom: 2px; }
-
-.mk-embedded-weight { margin-top: 18px; }
-.mk-embedded-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 0 2px 12px;
-}
-.mk-embedded-heading h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); }
-.mk-embedded-heading > p { margin: 0; color: var(--muted); font-weight: 750; }
-
-.admin-subtabs {
-  width: fit-content;
-  max-width: 100%;
-  display: flex;
-  gap: 7px;
-  margin: 0 0 16px;
-  padding: 6px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(255,250,241,.72);
-  box-shadow: 0 10px 28px rgba(55,38,18,.07);
-}
-.admin-subtab {
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
+.task-more-info-head strong {
+  font-size: .82rem;
   font-weight: 950;
-  white-space: nowrap;
-}
-.admin-subtab.active { background: var(--text); color: var(--card); }
-.admin-subpanel { display: none; }
-.admin-subpanel.active { display: block; animation: pageIn .18s ease both; }
-
-@media (max-width: 900px) {
-  .ghk-check-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .ghk-week-schedule { grid-template-columns: repeat(4, minmax(0,1fr)); }
 }
 
-@media (max-width: 680px) {
-  .ghk-hero-card { align-items: flex-start; flex-direction: column; }
-  .ghk-top-grid { grid-template-columns: 1fr; }
-  .ghk-week-schedule { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .ghk-check-grid { grid-template-columns: 1fr; }
-  .ghk-schedule-card, .ghk-reference-card, .ghk-check-card, .ghk-note-card, .ghk-hero-card { padding: 16px; }
-  .mk-embedded-heading { align-items: flex-start; flex-direction: column; }
-  .admin-subtabs { width: 100%; overflow-x: auto; }
-  .admin-subtab { flex: 1 0 auto; }
+.task-info-close {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(42,30,18,.07);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.task-more-info-text {
+  white-space: pre-wrap;
+  color: var(--muted);
+  font-size: .82rem;
+  line-height: 1.55;
+}
+
+.task-info-edit {
+  margin-top: 12px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--blue-dark);
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.task-info-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.task-info-textarea {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.68);
+  color: var(--text);
+  font: inherit;
+  font-size: .82rem;
+  line-height: 1.5;
+  outline: none;
+}
+
+.task-info-textarea:focus {
+  border-color: rgba(37,132,184,.5);
+  box-shadow: 0 0 0 3px rgba(37,132,184,.1);
+}
+
+.task-info-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* New task is kept visually consistent with existing Looksmaxxing cards. */
+.task-row[data-task-id="voice-training"] .task-subtitle {
+  color: var(--blue-dark);
+}
+
+/* The old sequential workout picker is superseded by the editable weekly schedule. */
+.workout-card .workout-rotation[hidden] {
+  display: none !important;
+}
+
+.gym-card-schedule-hint {
+  margin: 12px 0 8px;
+  color: var(--muted);
+  font-size: .78rem;
+  line-height: 1.45;
+}
+
+.gym-edit-schedule-btn {
+  width: 100%;
+}
+
+.gym-plan-admin-card {
+  align-self: start;
+}
+
+.gym-schedule-editor {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.gym-day-editor-row {
+  display: grid;
+  grid-template-columns: 105px minmax(0,1fr);
+  gap: 9px;
+  align-items: center;
+}
+
+.gym-day-toggle {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.45);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.gym-day-toggle span {
+  font-size: .8rem;
+  font-weight: 950;
+}
+
+.gym-day-toggle small {
+  font-size: .64rem;
+  font-weight: 900;
+}
+
+.gym-day-editor-row.active .gym-day-toggle {
+  border-color: rgba(37,132,184,.38);
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+}
+
+.gym-day-workout {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.62);
+  color: var(--text);
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 850;
+  outline: none;
+}
+
+.gym-day-workout:focus {
+  border-color: rgba(37,132,184,.5);
+  box-shadow: 0 0 0 3px rgba(37,132,184,.1);
+}
+
+.gym-day-workout:disabled {
+  opacity: .45;
+  background: rgba(42,30,18,.035);
+}
+
+.gym-schedule-error {
+  min-height: 20px;
+  margin: 10px 0 0;
+  color: var(--red);
+  font-size: .76rem;
+  font-weight: 850;
+}
+
+.gym-schedule-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.gym-schedule-actions > span {
+  color: var(--muted);
+  font-size: .76rem;
+  font-weight: 850;
+}
+
+.rotation-chip.custom {
+  background: rgba(37,132,184,.1);
+  color: var(--blue-dark);
+  border-color: rgba(37,132,184,.18);
+}
+
+/* New weekly gym labels. */
+.weekly-day-metric.gym-status[class*="didn"] strong {
+  color: var(--red);
+}
+
+.weekly-day-metric.gym-status.rest-day strong {
+  color: var(--muted);
+}
+
+@media (max-width: 560px) {
+  .gym-day-editor-row {
+    grid-template-columns: 90px minmax(0,1fr);
+  }
+
+  .gym-day-toggle {
+    padding: 0 8px;
+  }
+
+  .gym-day-toggle small {
+    display: none;
+  }
+
+  .gym-schedule-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gym-schedule-actions .btn {
+    width: 100%;
+  }
 }
