@@ -1,0 +1,31 @@
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    - cron: "17 6,14,22 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read LOCKED OS state row
+        env:
+          SUPABASE_URL: https://qihajayxjukppcnsrgpi.supabase.co
+          SUPABASE_KEY: sb_publishable_NCPEc56HEwlcQroUnCtp2Q_Niz3sNH6
+        run: |
+          HTTP_CODE=$(curl --silent --show-error \
+            --output /tmp/supabase-response.txt \
+            --write-out "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/locked_os_state_v2?select=id&id=eq.samuel-main" \
+            --header "apikey: $SUPABASE_KEY")
+
+          cat /tmp/supabase-response.txt
+          echo "Supabase returned HTTP $HTTP_CODE"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            exit 1
+          fi
