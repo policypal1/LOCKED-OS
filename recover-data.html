@@ -5,24 +5,42 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>LOCKED OS Data Recovery</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;max-width:850px;margin:40px auto;padding:0 18px;color:#21180f;background:#fff8ec}h1{margin-bottom:6px}.muted{color:#756653}.card{background:#fff;border:1px solid #dacdbb;border-radius:18px;padding:18px;margin:16px 0}.candidate{border-top:1px solid #eee0cf;padding:14px 0}.candidate:first-child{border-top:0}.good{color:#1f6f3f;font-weight:800}.bad{color:#a33737;font-weight:800}button{border:0;border-radius:999px;padding:10px 14px;margin:5px 6px 5px 0;font-weight:800;cursor:pointer;background:#2584b8;color:#fff}button.secondary{background:#eee4d6;color:#21180f}code{word-break:break-all}.warning{font-weight:800;color:#8a5c18}pre{white-space:pre-wrap;word-break:break-word;background:#f5eee4;padding:12px;border-radius:12px;max-height:260px;overflow:auto}
+    body{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;max-width:900px;margin:40px auto;padding:0 18px;color:#21180f;background:#fff8ec}
+    h1{margin-bottom:6px}.muted{color:#756653}.card{background:#fff;border:1px solid #dacdbb;border-radius:18px;padding:18px;margin:16px 0}
+    .candidate{border-top:1px solid #eee0cf;padding:14px 0}.candidate:first-child{border-top:0}.good{color:#1f6f3f;font-weight:800}.bad{color:#a33737;font-weight:800}
+    button,a.button{border:0;border-radius:999px;padding:10px 14px;margin:5px 6px 5px 0;font-weight:800;cursor:pointer;background:#2584b8;color:#fff;text-decoration:none;display:inline-block}
+    button.secondary,a.button.secondary{background:#eee4d6;color:#21180f}.warning{font-weight:800;color:#8a5c18}code{word-break:break-all}
+    .summary{margin:6px 0}.cloud-meta{font-size:.9rem;color:#756653;margin-top:4px}.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    @media(max-width:560px){body{margin-top:20px}.actions{display:grid;grid-template-columns:1fr}.actions button,.actions a{width:100%;box-sizing:border-box;text-align:center}}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <h1>LOCKED OS Data Recovery</h1>
-  <p class="muted">Read-only until you press Restore. This page checks LOCKED OS localStorage on this exact browser/site origin.</p>
+  <p class="muted">This page shows browser-local saves plus append-only Supabase backup history.</p>
   <div class="card">
-    <p class="warning">Important: this file must be hosted on the same domain as LOCKED OS. Opening it as a local file will not show the site's browser storage.</p>
-    <div id="status">Scanning…</div>
+    <p class="warning">Do not clear browser/site data while recovering. Restoring a cloud backup will first archive the current live state through the Supabase backup trigger.</p>
+    <div id="status">Scanning local data…</div>
+    <div class="actions"><a class="button secondary" href="/">Back to LOCKED OS</a></div>
   </div>
+
   <div class="card">
-    <h2>Found local copies</h2>
+    <h2>Current & older browser saves</h2>
     <div id="results"></div>
   </div>
+
   <div class="card">
-    <h2>Recovery snapshots</h2>
+    <h2>Local recovery snapshots</h2>
     <div id="snapshots"></div>
   </div>
+
+  <div class="card">
+    <h2>Cloud backup history</h2>
+    <p class="muted">Available after <code>ENABLE-BACKUPS.sql</code> has been run once in Supabase.</p>
+    <div id="cloudStatus">Checking Supabase backup history…</div>
+    <div id="cloudBackups"></div>
+  </div>
+
 <script>
 "use strict";
 const CURRENT_KEY = "locked_os_daily_checklist_v17";
@@ -34,6 +52,10 @@ const KEYS = [
   "locked_os_daily_checklist_v5","locked_os_daily_checklist_v4"
 ];
 const RECOVERY_KEY = "locked_os_recovery_snapshots_v2";
+const SUPABASE_URL = "https://qihajayxjukppcnsrgpi.supabase.co";
+const SUPABASE_KEY = "sb_publishable_NCPEc56HEwlcQroUnCtp2Q_Niz3sNH6";
+const ROW_ID = "samuel-main";
+const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY) || null;
 
 function parse(raw){try{return JSON.parse(raw)}catch{return null}}
 function summary(s){
@@ -43,34 +65,74 @@ function summary(s){
     days:meaningfulDays,
     custom:Array.isArray(s?.meta?.looksCustomTasks)?s.meta.looksCustomTasks.length:0,
     glucose:Array.isArray(s?.mk677?.glucoseEntries)?s.mk677.glucoseEntries.length:0,
-    labs:Array.isArray(s?.mk677?.labs)?s.mk677.labs.length:0
+    labs:Array.isArray(s?.mk677?.labs)?s.mk677.labs.length:0,
+    gym:Array.isArray(s?.meta?.gymTracker?.sessions)?s.meta.gymTracker.sessions.length:0
   };
 }
-function score(s){const x=summary(s);return x.weights*20+x.days*4+x.custom*10+x.glucose*10+x.labs*10}
-function download(name,obj){const blob=new Blob([JSON.stringify(obj,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-function restore(state){
+function score(s){const x=summary(s);return x.weights*20+x.days*4+x.custom*10+x.glucose*10+x.labs*10+x.gym*5}
+function download(name,obj){
+  const blob=new Blob([JSON.stringify(obj,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function localRestore(state){
   if(!state||typeof state!=="object")return;
-  if(!confirm("Restore this copy into LOCKED OS local storage on this browser? The current v17 value will be downloaded first as a safety backup."))return;
+  if(!confirm("Restore this copy into LOCKED OS local storage on this browser? The current v17 value will be downloaded first."))return;
   const current=parse(localStorage.getItem(CURRENT_KEY));
-  if(current)download(`locked-os-before-restore-${Date.now()}.json`,current);
+  if(current)download(`locked-os-before-local-restore-${Date.now()}.json`,current);
   localStorage.setItem(CURRENT_KEY,JSON.stringify(state));
   localStorage.setItem("locked_os_supabase_dirty_v2","1");
-  alert("Restored locally. Now open LOCKED OS with the fixed ghk-cu.js. It will merge this copy with Supabase and save it.");
+  alert("Restored locally. Open LOCKED OS next; the sync layer will reconcile it with Supabase.");
 }
-function renderCandidate(parent,label,state,extra=""){
+async function cloudRestore(backupId,state){
+  if(!supabaseClient||!state||typeof state!=="object")return;
+  if(!confirm(`Restore cloud backup #${backupId} as the live LOCKED OS state? The database trigger will archive the current live state first.`))return;
+  const current=parse(localStorage.getItem(CURRENT_KEY));
+  if(current)download(`locked-os-before-cloud-restore-${Date.now()}.json`,current);
+  const {error}=await supabaseClient.from("locked_os_state_v2").update({state,updated_at:new Date().toISOString()}).eq("id",ROW_ID);
+  if(error){alert(`Cloud restore failed: ${error.message||error}`);return;}
+  localStorage.setItem(CURRENT_KEY,JSON.stringify(state));
+  localStorage.removeItem("locked_os_supabase_dirty_v2");
+  alert("Cloud backup restored. The previous live state was archived first. You can now return to LOCKED OS.");
+  await loadCloudBackups();
+}
+function renderCandidate(parent,label,state,extra="",cloudBackupId=null){
   const s=summary(state);const div=document.createElement("div");div.className="candidate";
-  div.innerHTML=`<strong>${label}</strong>${extra?`<div class="muted">${extra}</div>`:""}<div>${s.weights} weights · ${s.days} meaningful days · ${s.custom} custom tasks · ${s.glucose} glucose · ${s.labs} labs</div>`;
-  const dl=document.createElement("button");dl.textContent="Download JSON";dl.onclick=()=>download(`locked-os-${label.replace(/[^a-z0-9]+/gi,"-").toLowerCase()}.json`,state);
-  const rs=document.createElement("button");rs.textContent="Restore this copy";rs.className="secondary";rs.onclick=()=>restore(state);
-  div.append(dl,rs);parent.appendChild(div);
+  div.innerHTML=`<strong>${label}</strong>${extra?`<div class="cloud-meta">${extra}</div>`:""}<div class="summary">${s.weights} weights · ${s.days} meaningful days · ${s.custom} custom tasks · ${s.glucose} glucose · ${s.labs} labs · ${s.gym} gym sessions</div>`;
+  const actions=document.createElement("div");actions.className="actions";
+  const dl=document.createElement("button");dl.textContent="Download JSON";dl.onclick=()=>download(`locked-os-${label.replace(/[^a-z0-9]+/gi,"-").toLowerCase()}.json`,state);actions.appendChild(dl);
+  if(cloudBackupId!==null){
+    const rs=document.createElement("button");rs.textContent="Restore this cloud backup";rs.className="secondary";rs.onclick=()=>cloudRestore(cloudBackupId,state);actions.appendChild(rs);
+  }else{
+    const rs=document.createElement("button");rs.textContent="Restore locally";rs.className="secondary";rs.onclick=()=>localRestore(state);actions.appendChild(rs);
+  }
+  div.appendChild(actions);parent.appendChild(div);
 }
+
 const results=document.getElementById("results");let found=[];
 for(const key of KEYS){const state=parse(localStorage.getItem(key));if(state&&typeof state==="object"){found.push({key,state,score:score(state)});renderCandidate(results,key,state)}}
 found.sort((a,b)=>b.score-a.score);
 document.getElementById("status").innerHTML=found.length?`<span class="good">Found ${found.length} local LOCKED OS save${found.length===1?"":"s"}.</span> Best candidate: <code>${found[0].key}</code>.`:`<span class="bad">No v4–v17 local save was found on this browser/origin.</span>`;
 
 const snapshots=document.getElementById("snapshots");const recovery=parse(localStorage.getItem(RECOVERY_KEY));
-if(Array.isArray(recovery)&&recovery.length){recovery.forEach((item,i)=>{const state=item?.state||parse(item?.serialized);if(state)renderCandidate(snapshots,`snapshot-${i+1}`,state,`${item.label||"snapshot"} · ${item.savedAt||"unknown time"}`)})}else{snapshots.innerHTML='<p class="muted">No recovery snapshots exist yet on this browser. The fixed sync file will start creating them automatically.</p>'}
+if(Array.isArray(recovery)&&recovery.length){
+  recovery.forEach((item,i)=>{const state=item?.state||parse(item?.serialized);if(state)renderCandidate(snapshots,`snapshot-${i+1}`,state,`${item.label||"snapshot"} · ${item.savedAt||"unknown time"}`)});
+}else snapshots.innerHTML='<p class="muted">No local recovery snapshots exist yet on this browser.</p>';
+
+async function loadCloudBackups(){
+  const status=document.getElementById("cloudStatus");const parent=document.getElementById("cloudBackups");parent.innerHTML="";
+  if(!supabaseClient){status.innerHTML='<span class="bad">Supabase client could not load.</span>';return;}
+  status.textContent="Loading cloud backup history…";
+  try{
+    const {data,error}=await supabaseClient.from("locked_os_state_backups").select("backup_id,backed_up_at,original_updated_at,operation,state").eq("id",ROW_ID).order("backup_id",{ascending:false}).limit(30);
+    if(error)throw error;
+    if(!Array.isArray(data)||!data.length){status.innerHTML='<span class="bad">Backup table exists, but no backup rows were found yet.</span>';return;}
+    status.innerHTML=`<span class="good">Found ${data.length} recent cloud backup version${data.length===1?"":"s"}.</span>`;
+    data.forEach(row=>renderCandidate(parent,`cloud-backup-${row.backup_id}`,row.state,`${row.operation||"UPDATE"} · backed up ${row.backed_up_at?new Date(row.backed_up_at).toLocaleString():"unknown time"}`,row.backup_id));
+  }catch(error){
+    status.innerHTML=`<span class="bad">Cloud history is not enabled yet.</span> Run <code>ENABLE-BACKUPS.sql</code> once in Supabase. ${error?.message?`<div class="muted">${String(error.message)}</div>`:""}`;
+  }
+}
+loadCloudBackups();
 </script>
 </body>
 </html>
