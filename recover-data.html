@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LOCKED OS Data Recovery</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;max-width:850px;margin:40px auto;padding:0 18px;color:#21180f;background:#fff8ec}h1{margin-bottom:6px}.muted{color:#756653}.card{background:#fff;border:1px solid #dacdbb;border-radius:18px;padding:18px;margin:16px 0}.candidate{border-top:1px solid #eee0cf;padding:14px 0}.candidate:first-child{border-top:0}.good{color:#1f6f3f;font-weight:800}.bad{color:#a33737;font-weight:800}button{border:0;border-radius:999px;padding:10px 14px;margin:5px 6px 5px 0;font-weight:800;cursor:pointer;background:#2584b8;color:#fff}button.secondary{background:#eee4d6;color:#21180f}code{word-break:break-all}.warning{font-weight:800;color:#8a5c18}pre{white-space:pre-wrap;word-break:break-word;background:#f5eee4;padding:12px;border-radius:12px;max-height:260px;overflow:auto}
+  </style>
+</head>
+<body>
+  <h1>LOCKED OS Data Recovery</h1>
+  <p class="muted">Read-only until you press Restore. This page checks LOCKED OS localStorage on this exact browser/site origin.</p>
+  <div class="card">
+    <p class="warning">Important: this file must be hosted on the same domain as LOCKED OS. Opening it as a local file will not show the site's browser storage.</p>
+    <div id="status">Scanning…</div>
+  </div>
+  <div class="card">
+    <h2>Found local copies</h2>
+    <div id="results"></div>
+  </div>
+  <div class="card">
+    <h2>Recovery snapshots</h2>
+    <div id="snapshots"></div>
+  </div>
+<script>
+"use strict";
+const CURRENT_KEY = "locked_os_daily_checklist_v17";
+const KEYS = [
+  "locked_os_daily_checklist_v17","locked_os_daily_checklist_v16","locked_os_daily_checklist_v15",
+  "locked_os_daily_checklist_v14","locked_os_daily_checklist_v13","locked_os_daily_checklist_v12",
+  "locked_os_daily_checklist_v11","locked_os_daily_checklist_v10","locked_os_daily_checklist_v9",
+  "locked_os_daily_checklist_v8","locked_os_daily_checklist_v7","locked_os_daily_checklist_v6",
+  "locked_os_daily_checklist_v5","locked_os_daily_checklist_v4"
+];
+const RECOVERY_KEY = "locked_os_recovery_snapshots_v2";
+
+function parse(raw){try{return JSON.parse(raw)}catch{return null}}
+function summary(s){
+  const meaningfulDays=Object.values(s?.days||{}).filter(d=>d&&((d.done||[]).length||(d.looksDone||[]).length||(d.looksSkipped||[]).length||Number(d.waterOz)>0||d.completed||d.looksCompleted||d.missedReason)).length;
+  return {
+    weights:Object.keys(s?.weights||{}).length,
+    days:meaningfulDays,
+    custom:Array.isArray(s?.meta?.looksCustomTasks)?s.meta.looksCustomTasks.length:0,
+    glucose:Array.isArray(s?.mk677?.glucoseEntries)?s.mk677.glucoseEntries.length:0,
+    labs:Array.isArray(s?.mk677?.labs)?s.mk677.labs.length:0
+  };
+}
+function score(s){const x=summary(s);return x.weights*20+x.days*4+x.custom*10+x.glucose*10+x.labs*10}
+function download(name,obj){const blob=new Blob([JSON.stringify(obj,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function restore(state){
+  if(!state||typeof state!=="object")return;
+  if(!confirm("Restore this copy into LOCKED OS local storage on this browser? The current v17 value will be downloaded first as a safety backup."))return;
+  const current=parse(localStorage.getItem(CURRENT_KEY));
+  if(current)download(`locked-os-before-restore-${Date.now()}.json`,current);
+  localStorage.setItem(CURRENT_KEY,JSON.stringify(state));
+  localStorage.setItem("locked_os_supabase_dirty_v2","1");
+  alert("Restored locally. Now open LOCKED OS with the fixed ghk-cu.js. It will merge this copy with Supabase and save it.");
+}
+function renderCandidate(parent,label,state,extra=""){
+  const s=summary(state);const div=document.createElement("div");div.className="candidate";
+  div.innerHTML=`<strong>${label}</strong>${extra?`<div class="muted">${extra}</div>`:""}<div>${s.weights} weights · ${s.days} meaningful days · ${s.custom} custom tasks · ${s.glucose} glucose · ${s.labs} labs</div>`;
+  const dl=document.createElement("button");dl.textContent="Download JSON";dl.onclick=()=>download(`locked-os-${label.replace(/[^a-z0-9]+/gi,"-").toLowerCase()}.json`,state);
+  const rs=document.createElement("button");rs.textContent="Restore this copy";rs.className="secondary";rs.onclick=()=>restore(state);
+  div.append(dl,rs);parent.appendChild(div);
+}
+const results=document.getElementById("results");let found=[];
+for(const key of KEYS){const state=parse(localStorage.getItem(key));if(state&&typeof state==="object"){found.push({key,state,score:score(state)});renderCandidate(results,key,state)}}
+found.sort((a,b)=>b.score-a.score);
+document.getElementById("status").innerHTML=found.length?`<span class="good">Found ${found.length} local LOCKED OS save${found.length===1?"":"s"}.</span> Best candidate: <code>${found[0].key}</code>.`:`<span class="bad">No v4–v17 local save was found on this browser/origin.</span>`;
+
+const snapshots=document.getElementById("snapshots");const recovery=parse(localStorage.getItem(RECOVERY_KEY));
+if(Array.isArray(recovery)&&recovery.length){recovery.forEach((item,i)=>{const state=item?.state||parse(item?.serialized);if(state)renderCandidate(snapshots,`snapshot-${i+1}`,state,`${item.label||"snapshot"} · ${item.savedAt||"unknown time"}`)})}else{snapshots.innerHTML='<p class="muted">No recovery snapshots exist yet on this browser. The fixed sync file will start creating them automatically.</p>'}
+</script>
+</body>
+</html>
