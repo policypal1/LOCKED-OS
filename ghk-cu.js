@@ -1,66 +1,83 @@
 "use strict";
 
 /*
-  LOCKED OS hotfix — Sept 11
-  Loads the exact current site behavior, then fixes gym schedule persistence,
-  immediate Gym-tab syncing, rotation-calendar filtering/colors, and MK-677 chips.
+  LOCKED OS — Sept 11 gym/UI fix v2
+  Loads the exact previous deployed behavior, then:
+  - fixes the Gym tab so it uses the same new split as Admin
+  - removes the schedule-start UI and extra gym-schedule copy
+  - makes the schedule effective from Friday, Sep 11
+  - keeps rotation-chip text the normal text color; only chip backgrounds vary
 */
 (() => {
-  const pinnedCurrentFile = "https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@956e7d4a72fc88ba31158ce9338ac793b58b8c31/ghk-cu.js";
+  const previousDeploy = "https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@5efbb26c0ba2f5a8551991d6fdb8134c6dbccb09/ghk-cu.js";
   try {
     const request = new XMLHttpRequest();
-    request.open("GET", pinnedCurrentFile, false);
+    request.open("GET", previousDeploy, false);
     request.send(null);
     if (request.status < 200 || request.status >= 300) throw new Error(`HTTP ${request.status}`);
-    (0, eval)(request.responseText + "\n//# sourceURL=locked-os-pre-gym-hotfix.js");
+    (0, eval)(request.responseText + "\n//# sourceURL=locked-os-before-gym-v2.js");
   } catch (error) {
-    console.error("LOCKED OS: could not load the pinned pre-hotfix ghk-cu.js.", error);
+    console.error("LOCKED OS: could not load the previous deployed ghk-cu.js.", error);
   }
 })();
 
 (() => {
   "use strict";
 
-  const FLAG = "__lockedOsSept11GymPersistenceHotfix";
+  const FLAG = "__lockedOsGymUiFixV2";
   if (window[FLAG]) return;
   window[FLAG] = true;
 
-  const FIRST_SUPPORTED_DAY = "2026-09-11";
+  const SCHEDULE_START = "2026-09-11"; // Friday night — fixed, no UI control.
   const DAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const EDITOR_DAY_ORDER = ["Friday", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"];
-  const ALLOWED_WORKOUTS = new Set(["Chest + side delts", "Back + rear delts", "Arms", "Legs + Abs"]);
-  const ALLOWED_OVERRIDES = new Set([...ALLOWED_WORKOUTS, "Rest"]);
-  const FALLBACK_SCHEDULE = {
-    Monday: "Chest + side delts",
-    Wednesday: "Back + rear delts",
-    Friday: "Arms",
-    Saturday: "Legs + Abs"
-  };
-  const LEGACY_GYM_DAY_PLAN = {
-    Sunday: "Legs + Abs",
-    Monday: "Rest",
-    Tuesday: "Chest + side delts",
-    Wednesday: "Back + rear delts",
-    Thursday: "Rest",
-    Friday: "Arms",
-    Saturday: "Rest"
+  const ALLOWED_WORKOUTS = ["Chest + side delts", "Back + rear delts", "Arms", "Legs + Abs"];
+  const ALLOWED_WORKOUT_SET = new Set(ALLOWED_WORKOUTS);
+
+  const WORKOUT_EXERCISES = {
+    "Chest + side delts": [
+      "Incline Dumbbell Bench Press",
+      "Machine Chest Press",
+      "Cable Fly / Pec Deck",
+      "Cable Lateral Raise",
+      "Machine Lateral Raise"
+    ],
+    "Back + rear delts": [
+      "Lat Pulldown",
+      "Chest-Supported Row",
+      "Seated Cable Row, both arms",
+      "Reverse Pec Deck"
+    ],
+    Arms: [
+      "Triceps Pressdown",
+      "Overhead Cable Triceps Extension",
+      "Cable Curl",
+      "Incline Dumbbell Curl"
+    ],
+    "Legs + Abs": [
+      "Hack Squat",
+      "Romanian Deadlift",
+      "Leg Extension",
+      "Leg Curl",
+      "Calf Raise",
+      "Cable Crunch / Ab Machine"
+    ]
   };
 
-  function clone(value) {
-    return JSON.parse(JSON.stringify(value));
-  }
+  let selectedGymDate = "";
 
-  function ensureGymState() {
+  const clone = value => JSON.parse(JSON.stringify(value));
+
+  function ensureState() {
     state.meta = state.meta || {};
     if (!Array.isArray(state.meta.gymScheduleChanges)) state.meta.gymScheduleChanges = [];
-    if (!state.meta.gymTracker || typeof state.meta.gymTracker !== "object" || Array.isArray(state.meta.gymTracker)) {
-      state.meta.gymTracker = { sessions: [], overrides: {} };
+    if (!state.meta.gymTrackerV2 || typeof state.meta.gymTrackerV2 !== "object" || Array.isArray(state.meta.gymTrackerV2)) {
+      state.meta.gymTrackerV2 = { sessions: [], dateOverrides: {} };
     }
-    if (!Array.isArray(state.meta.gymTracker.sessions)) state.meta.gymTracker.sessions = [];
-    if (!state.meta.gymTracker.overrides || typeof state.meta.gymTracker.overrides !== "object" || Array.isArray(state.meta.gymTracker.overrides)) {
-      state.meta.gymTracker.overrides = {};
+    if (!Array.isArray(state.meta.gymTrackerV2.sessions)) state.meta.gymTrackerV2.sessions = [];
+    if (!state.meta.gymTrackerV2.dateOverrides || typeof state.meta.gymTrackerV2.dateOverrides !== "object" || Array.isArray(state.meta.gymTrackerV2.dateOverrides)) {
+      state.meta.gymTrackerV2.dateOverrides = {};
     }
-    if (!Array.isArray(state.meta.gymRecurringManagedKeys)) state.meta.gymRecurringManagedKeys = [];
   }
 
   function normalizeSchedule(schedule) {
@@ -68,13 +85,13 @@
     if (!schedule || typeof schedule !== "object") return output;
     for (const day of DAY_ORDER) {
       const value = String(schedule[day] || "").trim();
-      if (ALLOWED_WORKOUTS.has(value)) output[day] = value;
+      if (ALLOWED_WORKOUT_SET.has(value)) output[day] = value;
     }
     return output;
   }
 
   function getScheduleChanges() {
-    ensureGymState();
+    ensureState();
     return state.meta.gymScheduleChanges
       .filter(change => change && isDateKey(change.effectiveDayKey))
       .map(change => ({
@@ -85,86 +102,44 @@
   }
 
   function scheduleForDay(dayKey = getTodayKey()) {
-    let schedule = dayKey >= FIRST_SUPPORTED_DAY ? { ...FALLBACK_SCHEDULE } : {};
+    let schedule = {};
     for (const change of getScheduleChanges()) {
       if (change.effectiveDayKey <= dayKey) schedule = { ...change.schedule };
       else break;
     }
+
+    /* If older data has no valid schedule yet, preserve the requested 4-day split. */
+    if (!Object.keys(schedule).length && dayKey >= SCHEDULE_START) {
+      schedule = {
+        Monday: "Chest + side delts",
+        Wednesday: "Back + rear delts",
+        Friday: "Arms",
+        Saturday: "Legs + Abs"
+      };
+    }
     return schedule;
   }
 
-  function isManualOverride(dayKey) {
-    ensureGymState();
-    const managed = new Set(state.meta.gymRecurringManagedKeys);
-    return Object.prototype.hasOwnProperty.call(state.meta.gymTracker.overrides, dayKey) && !managed.has(dayKey);
-  }
-
   function workoutForDay(dayKey = getTodayKey()) {
-    ensureGymState();
-    if (isManualOverride(dayKey)) {
-      const manual = state.meta.gymTracker.overrides[dayKey];
-      if (manual === "Rest") return "";
-      if (ALLOWED_WORKOUTS.has(manual)) return manual;
-    }
-    const schedule = scheduleForDay(dayKey);
-    return schedule[getRoutineDayName(dayKey)] || "";
+    ensureState();
+    const manual = state.meta.gymTrackerV2.dateOverrides[dayKey];
+    if (manual === "Rest") return "";
+    if (ALLOWED_WORKOUT_SET.has(manual)) return manual;
+    return scheduleForDay(dayKey)[getRoutineDayName(dayKey)] || "";
   }
 
-  function clearManagedOverridesFrom(startKey) {
-    ensureGymState();
-    const managed = new Set(state.meta.gymRecurringManagedKeys);
-    for (const key of [...managed]) {
-      if (key < startKey) continue;
-      delete state.meta.gymTracker.overrides[key];
-      managed.delete(key);
-    }
-    state.meta.gymRecurringManagedKeys = [...managed].sort();
-  }
-
-  function syncRecurringSchedule(startKey = getTodayKey()) {
-    ensureGymState();
-    clearManagedOverridesFrom(startKey);
-
-    const managed = new Set(state.meta.gymRecurringManagedKeys);
-    const overrides = state.meta.gymTracker.overrides;
-    const startDate = keyToLocalDate(startKey);
-
-    for (let offset = 0; offset < 400; offset += 1) {
-      const dayKey = formatDateKey(addDays(startDate, offset));
-      if (Object.prototype.hasOwnProperty.call(overrides, dayKey) && !managed.has(dayKey)) {
-        /* A date the user manually changed in the Gym tab always wins. */
-        continue;
-      }
-
-      const desired = scheduleForDay(dayKey)[getRoutineDayName(dayKey)] || "Rest";
-      const legacy = LEGACY_GYM_DAY_PLAN[getRoutineDayName(dayKey)] || "Rest";
-
-      if (desired !== legacy) {
-        overrides[dayKey] = desired;
-        managed.add(dayKey);
-      } else {
-        delete overrides[dayKey];
-        managed.delete(dayKey);
-      }
-    }
-
-    state.meta.gymRecurringManagedKeys = [...managed].sort();
-  }
-
-  function collectEditorSchedule() {
+  function collectAdminSchedule() {
     const editor = document.getElementById("gymScheduleEditor");
     if (!editor) return { ok: false, error: "Gym schedule editor is not available." };
 
     const schedule = {};
     const activeRows = [...editor.querySelectorAll(".gym-day-editor-row.active")];
-    if (activeRows.length < 3 || activeRows.length > 4) {
-      return { ok: false, error: "Choose 3 or 4 training days." };
-    }
+    if (!activeRows.length) return { ok: false, error: "Choose at least one gym day." };
 
     for (const row of activeRows) {
       const day = row.dataset.day;
       const value = String(row.querySelector(".gym-day-workout")?.value || "").trim();
-      if (!ALLOWED_WORKOUTS.has(value)) {
+      if (!ALLOWED_WORKOUT_SET.has(value)) {
         return { ok: false, error: `Choose a workout for ${day}.`, focus: row.querySelector(".gym-day-workout") };
       }
       schedule[day] = value;
@@ -172,64 +147,71 @@
     return { ok: true, schedule };
   }
 
-  function saveEditorSchedule() {
-    ensureGymState();
-    const result = collectEditorSchedule();
-    const errorEl = document.getElementById("gymScheduleError");
+  function saveAdminSchedule() {
+    ensureState();
+    const result = collectAdminSchedule();
+    const error = document.getElementById("gymScheduleError");
     if (!result.ok) {
-      if (errorEl) errorEl.textContent = result.error;
+      if (error) error.textContent = result.error;
       result.focus?.focus();
       return;
     }
+    if (error) error.textContent = "";
 
-    const startInput = document.getElementById("gymScheduleStartDate");
-    const startKey = isDateKey(startInput?.value) ? startInput.value : getTodayKey();
-    if (errorEl) errorEl.textContent = "";
-
-    /*
-      One schedule is authoritative from its start date forward. Any previously
-      queued future schedule is removed so it cannot silently reset this one later.
-    */
-    state.meta.gymScheduleChanges = getScheduleChanges()
-      .filter(change => change.effectiveDayKey < startKey);
+    /* One authoritative schedule from Friday night forward. */
+    state.meta.gymScheduleChanges = getScheduleChanges().filter(change => change.effectiveDayKey < SCHEDULE_START);
     state.meta.gymScheduleChanges.push({
-      effectiveDayKey: startKey,
+      effectiveDayKey: SCHEDULE_START,
       schedule: clone(result.schedule)
     });
     state.meta.gymScheduleChanges.sort((a, b) => a.effectiveDayKey.localeCompare(b.effectiveDayKey));
 
-    syncRecurringSchedule(startKey);
     saveState();
-
-    populateEditorForDate(startKey);
-    refreshGymTab();
+    populateAdminEditor();
+    renderGymV2();
     try { render(); } catch (_) {}
     try { if (typeof renderRotationCalendar === "function") renderRotationCalendar(); } catch (_) {}
     try { if (typeof renderWeeklyReview === "function") renderWeeklyReview(); } catch (_) {}
-    if (typeof toast === "function") toast(`Gym schedule saved from ${startKey}.`);
+    if (typeof toast === "function") toast("Gym schedule saved.");
   }
 
-  function refreshGymTab() {
-    const today = getTodayKey();
-    const input = document.getElementById("gymDateInput");
-    if (input) input.value = today;
+  function simplifyAdminGymCard() {
+    const card = document.getElementById("gymScheduleAdminCard");
+    const editor = document.getElementById("gymScheduleEditor");
+    if (!card || !editor) return;
 
-    const todayButton = document.getElementById("gymTodayBtn");
-    if (todayButton) {
-      todayButton.click();
-      return;
+    document.getElementById("gymScheduleStartWrap")?.remove();
+
+    /* Remove the long explanation; keep only the title, editor, errors, and Save button. */
+    [...card.children].forEach(child => {
+      if (
+        child.tagName === "P" &&
+        !child.classList.contains("eyebrow") &&
+        child.id !== "gymScheduleError"
+      ) child.remove();
+    });
+
+    const count = document.getElementById("gymScheduleCount");
+    if (count) count.style.display = "none";
+
+    for (const day of EDITOR_DAY_ORDER) {
+      const row = editor.querySelector(`.gym-day-editor-row[data-day="${day}"]`);
+      if (row) editor.appendChild(row);
     }
 
-    if (input) {
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
+    const oldSave = document.getElementById("saveGymScheduleBtn");
+    if (oldSave && oldSave.dataset.gymV2Bound !== "true") {
+      const button = oldSave.cloneNode(true);
+      button.dataset.gymV2Bound = "true";
+      oldSave.replaceWith(button);
+      button.addEventListener("click", saveAdminSchedule);
     }
   }
 
-  function populateEditorForDate(dayKey = getTodayKey()) {
+  function populateAdminEditor() {
     const editor = document.getElementById("gymScheduleEditor");
     if (!editor) return;
-    const schedule = scheduleForDay(dayKey);
+    const schedule = scheduleForDay(SCHEDULE_START);
 
     for (const row of editor.querySelectorAll(".gym-day-editor-row")) {
       const day = row.dataset.day;
@@ -247,73 +229,16 @@
         select.value = schedule[day] || "";
       }
     }
-
-    const count = Object.keys(schedule).length;
-    const countEl = document.getElementById("gymScheduleCount");
-    if (countEl) countEl.textContent = `${count} training day${count === 1 ? "" : "s"} selected`;
   }
 
-  function reorderGymEditor() {
-    const editor = document.getElementById("gymScheduleEditor");
-    if (!editor) return;
-    for (const day of EDITOR_DAY_ORDER) {
-      const row = editor.querySelector(`.gym-day-editor-row[data-day="${day}"]`);
-      if (row) editor.appendChild(row);
-    }
-  }
-
-  function installStartDateControl() {
-    const card = document.getElementById("gymScheduleAdminCard");
-    const editor = document.getElementById("gymScheduleEditor");
-    if (!card || !editor) return;
-
-    let wrap = document.getElementById("gymScheduleStartWrap");
-    if (!wrap) {
-      wrap = document.createElement("div");
-      wrap.id = "gymScheduleStartWrap";
-      wrap.className = "gym-schedule-start-wrap";
-      wrap.innerHTML = `
-        <label for="gymScheduleStartDate">
-          <span>Schedule starts</span>
-          <input id="gymScheduleStartDate" type="date" />
-        </label>
-        <small>Pick the date this schedule should begin. Set to today for an immediate change.</small>`;
-      card.insertBefore(wrap, editor);
-    }
-
-    const input = document.getElementById("gymScheduleStartDate");
-    if (input && !input.value) input.value = getTodayKey();
-    if (input && input.dataset.hotfixBound !== "true") {
-      input.dataset.hotfixBound = "true";
-      input.addEventListener("change", () => {
-        if (isDateKey(input.value)) populateEditorForDate(input.value);
-      });
-    }
-  }
-
-  function replaceSaveButton() {
-    const oldButton = document.getElementById("saveGymScheduleBtn");
-    if (!oldButton || oldButton.dataset.hotfixBound === "true") return;
-
-    /* Cloning intentionally removes the old handlers that delayed changes to Sep 13. */
-    const button = oldButton.cloneNode(true);
-    button.dataset.hotfixBound = "true";
-    oldButton.replaceWith(button);
-    button.addEventListener("click", saveEditorSchedule);
-  }
-
-  function installRoutineOverrides() {
+  function installRoutineAuthority() {
     if (typeof window.getLooksRoutine !== "function") return;
     const previousGetLooksRoutine = window.getLooksRoutine;
 
     window.getLooksRoutine = function(dayKey = getTodayKey()) {
       const routine = previousGetLooksRoutine(dayKey);
       if (!routine || typeof routine !== "object") return routine;
-
-      /* Final authority for gym: manual date override first, recurring schedule second. */
-      routine.midday = Array.isArray(routine.midday)
-        ? routine.midday.filter(task => task?.id !== "gym")
-        : [];
+      routine.midday = Array.isArray(routine.midday) ? routine.midday.filter(task => task?.id !== "gym") : [];
       const workout = workoutForDay(dayKey);
       if (workout) routine.midday.unshift({ id: "gym", title: `Gym: ${workout}` });
       return routine;
@@ -326,10 +251,9 @@
     window.getWeeklyGymStatus = function(dayKey, day) {
       const workout = workoutForDay(dayKey);
       if (!workout) return "Rest day";
-      const sessions = Array.isArray(state?.meta?.gymTracker?.sessions) ? state.meta.gymTracker.sessions : [];
-      const logged = sessions.some(session => session?.date === dayKey && session?.completed);
+      const session = getSession(dayKey);
       const done = new Set(day?.looksDone || []);
-      if (logged || done.has("gym")) return "Done";
+      if (session?.completed || done.has("gym")) return "Done";
       if (dayKey === getTodayKey()) return "Not yet";
       return "Didn't go";
     };
@@ -340,11 +264,8 @@
       const workout = workoutForDay(dayKey);
       if (workout) items.push({ label: `Gym: ${workout}`, type: "gym" });
 
-      /* MK-677 is Mon-Fri, so it belongs in the rotation calendar. */
       const jsDay = keyToLocalDate(dayKey).getDay();
-      if (jsDay >= 1 && jsDay <= 5) {
-        items.push({ label: "MK-677", type: "mk677" });
-      }
+      if (jsDay >= 1 && jsDay <= 5) items.push({ label: "MK-677", type: "mk677" });
 
       if (typeof getTretinoinDays === "function" && getTretinoinDays(dayKey).includes(dayName)) {
         items.push({ label: "Tretinoin", type: "tretinoin" });
@@ -356,15 +277,12 @@
         items.push({ label: "Microneedling", type: "microneedle" });
         items.push({ label: "Wash bed sheets", type: "sheets" });
       }
-      if (dayName === "Sunday") {
-        items.push({ label: "Lip exfoliation", type: "lips" });
-      }
+      if (dayName === "Sunday") items.push({ label: "Lip exfoliation", type: "lips" });
 
       const customTasks = Array.isArray(state?.meta?.looksCustomTasks) ? state.meta.looksCustomTasks : [];
       const existing = new Set(items.map(item => String(item.label || "").trim().toLowerCase()));
       for (const task of customTasks) {
         const days = Array.isArray(task?.days) ? task.days.filter(day => DAY_ORDER.includes(day)) : [];
-        /* Every-day custom tasks do not belong in a rotation-only calendar. */
         if (!days.length || days.length >= 7 || !days.includes(dayName)) continue;
         const label = String(task?.title || "").trim();
         if (!label || existing.has(label.toLowerCase())) continue;
@@ -375,32 +293,314 @@
     };
   }
 
-  function installStyles() {
-    if (document.getElementById("lockedOsGymPersistenceStyles")) return;
-    const style = document.createElement("style");
-    style.id = "lockedOsGymPersistenceStyles";
-    style.textContent = `
-      .gym-schedule-start-wrap{margin:14px 0 12px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.38)}
-      .gym-schedule-start-wrap label{display:flex;align-items:center;justify-content:space-between;gap:14px;font-weight:900}
-      .gym-schedule-start-wrap label span{color:var(--text)}
-      .gym-schedule-start-wrap input{min-height:40px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.72);padding:0 11px;color:var(--text);font:inherit;font-weight:850}
-      .gym-schedule-start-wrap small{display:block;margin-top:7px;color:var(--muted);font-weight:750;line-height:1.4}
+  function getSession(dateKey) {
+    ensureState();
+    return state.meta.gymTrackerV2.sessions.find(session => session?.date === dateKey) || null;
+  }
 
-      .rotation-chip.gym{background:#e3f4e8!important;color:#1f6f3f!important;border-color:#b9dec6!important}
-      .rotation-chip.mk677{background:#fff1bf!important;color:#765109!important;border-color:#ecd47c!important}
-      .rotation-chip.tretinoin{background:#e8edff!important;color:#435ca8!important;border-color:#c7d1fa!important}
-      .rotation-chip.microneedle{background:#f2e7ff!important;color:#6d3da0!important;border-color:#dac0f4!important}
-      .rotation-chip.sheets{background:#e2f4fb!important;color:#236d88!important;border-color:#b9dfe9!important}
-      .rotation-chip.shave{background:#f2e8dd!important;color:#775231!important;border-color:#dfcbb5!important}
-      .rotation-chip.lips{background:#ffe7ef!important;color:#9a4260!important;border-color:#f3bfd1!important}
-      .rotation-chip.custom{background:#ece8e2!important;color:#5f5448!important;border-color:#d6cec4!important}
+  function getSessionForWrite(dateKey) {
+    ensureState();
+    let session = getSession(dateKey);
+    if (!session) {
+      session = {
+        id: `gym-v2-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        date: dateKey,
+        workout: workoutForDay(dateKey),
+        completed: false,
+        updatedAt: new Date().toISOString(),
+        exercises: []
+      };
+      state.meta.gymTrackerV2.sessions.push(session);
+    }
+    return session;
+  }
 
-      @media(max-width:560px){
-        .gym-schedule-start-wrap label{align-items:stretch;flex-direction:column}
-        .gym-schedule-start-wrap input{width:100%}
+  function exerciseData(session, name) {
+    return session?.exercises?.find(exercise => exercise?.name === name) || null;
+  }
+
+  function previousExercise(name, beforeDate) {
+    ensureState();
+    return [...state.meta.gymTrackerV2.sessions]
+      .filter(session => session?.date < beforeDate)
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .map(session => exerciseData(session, name))
+      .find(Boolean) || null;
+  }
+
+  function setText(set) {
+    return set && Number(set.weight) > 0 && Number(set.reps) > 0
+      ? `${Number(set.weight)} lb × ${Number(set.reps)}`
+      : "—";
+  }
+
+  function selectedDate() {
+    const input = document.getElementById("gymDateInput");
+    const value = String(input?.value || selectedGymDate || getTodayKey());
+    return isDateKey(value) ? value : getTodayKey();
+  }
+
+  function weekDates(dateKey) {
+    const selected = keyToLocalDate(dateKey);
+    const mondayOffset = (selected.getDay() + 6) % 7;
+    const monday = addDays(selected, -mondayOffset);
+    return Array.from({ length: 7 }, (_, index) => formatDateKey(addDays(monday, index)));
+  }
+
+  function renderGymWeekV2() {
+    const grid = document.getElementById("gymWeekGrid");
+    if (!grid) return;
+    const today = getTodayKey();
+    grid.innerHTML = "";
+
+    for (const dateKey of weekDates(selectedGymDate)) {
+      const workout = workoutForDay(dateKey);
+      if (!workout) continue;
+      const session = getSession(dateKey);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `gym-day-card${dateKey === today ? " today" : ""}${dateKey === selectedGymDate ? " selected" : ""}`;
+      button.dataset.gymDate = dateKey;
+      const date = keyToLocalDate(dateKey);
+      const dayName = DAY_ORDER[date.getDay()];
+      button.innerHTML = `<strong>${dayName.slice(0, 3)} · ${date.getMonth() + 1}/${date.getDate()}</strong><span>${escapeHtml(workout)}${session?.completed ? " ✓" : ""}</span>`;
+      button.addEventListener("click", () => {
+        selectedGymDate = dateKey;
+        renderGymV2();
+      });
+      grid.appendChild(button);
+    }
+  }
+
+  function renderGymWorkoutV2() {
+    const body = document.getElementById("gymWorkoutBody");
+    const title = document.getElementById("gymWorkoutTitle");
+    const meta = document.getElementById("gymWorkoutMeta");
+    const input = document.getElementById("gymDateInput");
+    const actions = document.getElementById("gymLogActions");
+    const deleteBtn = document.getElementById("gymDeleteLogBtn");
+    if (!body || !title || !meta || !input || !actions) return;
+
+    const dateKey = selectedGymDate;
+    const workout = workoutForDay(dateKey);
+    const date = keyToLocalDate(dateKey);
+    const dayName = DAY_ORDER[date.getDay()];
+    const session = getSession(dateKey);
+    input.value = dateKey;
+    title.textContent = workout || "Rest day";
+
+    if (deleteBtn) deleteBtn.classList.toggle("hidden", !session);
+
+    if (!workout) {
+      meta.textContent = `${dayName} · recovery day`;
+      body.innerHTML = `<div class="gym-rest"><strong>Rest day</strong><span>No lifting scheduled.</span></div>`;
+      actions.classList.add("hidden");
+      return;
+    }
+
+    const exercises = WORKOUT_EXERCISES[workout] || [];
+    meta.textContent = `${dayName} · ${exercises.length * 2} working sets · 2 sets each · 6–10 reps`;
+    if (session?.completed) meta.textContent += " · Workout completed ✓";
+    actions.classList.remove("hidden");
+
+    const list = document.createElement("div");
+    list.className = "gym-exercise-list";
+
+    for (const exerciseName of exercises) {
+      const current = exerciseData(session, exerciseName) || { name: exerciseName, sets: [] };
+      const previous = previousExercise(exerciseName, dateKey);
+      const row = document.createElement("div");
+      row.className = "gym-exercise-row";
+      row.dataset.exercise = exerciseName;
+
+      const setMarkup = [0, 1].map(index => {
+        const set = current.sets?.[index] || { weight: 0, reps: 0 };
+        return `<div class="gym-set-box">
+          <label><span>Set ${index + 1} lb</span><input class="gym-set-input" data-set="${index}" data-field="weight" inputmode="decimal" min="0" max="2000" step="0.5" type="number" value="${set.weight || ""}" placeholder="Weight"/></label>
+          <label><span>Reps</span><input class="gym-set-input" data-set="${index}" data-field="reps" inputmode="numeric" min="0" max="100" step="1" type="number" value="${set.reps || ""}" placeholder="6–10"/></label>
+        </div>`;
+      }).join("");
+
+      row.innerHTML = `
+        <div class="gym-exercise-name"><strong>${escapeHtml(exerciseName)}</strong><span>2 × 6–10</span></div>
+        <div class="gym-prev"><strong>Previous</strong>${previous ? `${setText(previous.sets?.[0])}<br>${setText(previous.sets?.[1])}` : "No previous log"}</div>
+        ${setMarkup}
+        <div class="gym-row-progress neutral">Track the next clean progression.</div>`;
+      list.appendChild(row);
+    }
+
+    body.innerHTML = "";
+    body.appendChild(list);
+  }
+
+  function collectGymInputs() {
+    const exercises = [];
+    let invalid = false;
+    document.querySelectorAll("#gymWorkoutBody .gym-exercise-row").forEach(row => {
+      const name = row.dataset.exercise || "";
+      const sets = [0, 1].map(index => {
+        const weight = Number(row.querySelector(`[data-set="${index}"][data-field="weight"]`)?.value || 0);
+        const reps = Number(row.querySelector(`[data-set="${index}"][data-field="reps"]`)?.value || 0);
+        return {
+          weight: Number.isFinite(weight) ? Math.max(0, weight) : 0,
+          reps: Number.isFinite(reps) ? Math.max(0, Math.round(reps)) : 0
+        };
+      });
+      if (sets.some(set => (set.weight > 0) !== (set.reps > 0))) invalid = true;
+      if (sets.some(set => set.weight > 0 || set.reps > 0)) exercises.push({ name, sets });
+    });
+    return { exercises, invalid };
+  }
+
+  function saveGymLog(markComplete) {
+    const workout = workoutForDay(selectedGymDate);
+    if (!workout) return;
+    const collected = collectGymInputs();
+    const status = document.getElementById("gymSaveStatus");
+    if (collected.invalid) {
+      if (status) status.textContent = "Each logged set needs both a weight and rep count.";
+      return;
+    }
+    if (!collected.exercises.length) {
+      if (status) status.textContent = "Log at least one set before saving.";
+      return;
+    }
+
+    if (markComplete) {
+      const byName = new Map(collected.exercises.map(exercise => [exercise.name, exercise]));
+      const missing = (WORKOUT_EXERCISES[workout] || []).some(name => {
+        const exercise = byName.get(name);
+        return !exercise || exercise.sets.some(set => !(set.weight > 0 && set.reps > 0));
+      });
+      if (missing) {
+        if (status) status.textContent = "Fill in both working sets for every exercise before marking complete.";
+        return;
       }
+    }
+
+    const session = getSessionForWrite(selectedGymDate);
+    session.workout = workout;
+    session.exercises = (WORKOUT_EXERCISES[workout] || []).map(name => {
+      return collected.exercises.find(exercise => exercise.name === name) || { name, sets: [] };
+    });
+    if (markComplete) session.completed = true;
+    session.updatedAt = new Date().toISOString();
+    saveState();
+    renderGymV2();
+    if (status) status.textContent = markComplete ? "Workout saved and marked complete." : "Workout saved.";
+    if (typeof toast === "function") toast(markComplete ? "Workout completed." : "Workout saved.");
+  }
+
+  function deleteGymLogV2() {
+    ensureState();
+    const before = state.meta.gymTrackerV2.sessions.length;
+    state.meta.gymTrackerV2.sessions = state.meta.gymTrackerV2.sessions.filter(session => session?.date !== selectedGymDate);
+    if (state.meta.gymTrackerV2.sessions.length !== before) saveState();
+    renderGymV2();
+  }
+
+  function replaceGymControls() {
+    const ids = ["gymPrevDayBtn", "gymNextDayBtn", "gymTodayBtn", "gymDateInput", "gymSaveBtn", "gymCompleteBtn", "gymDeleteLogBtn"];
+    const replacements = {};
+    for (const id of ids) {
+      const old = document.getElementById(id);
+      if (!old || old.dataset.gymV2Bound === "true") {
+        if (old) replacements[id] = old;
+        continue;
+      }
+      const fresh = old.cloneNode(true);
+      fresh.dataset.gymV2Bound = "true";
+      old.replaceWith(fresh);
+      replacements[id] = fresh;
+    }
+
+    replacements.gymPrevDayBtn?.addEventListener("click", () => {
+      selectedGymDate = formatDateKey(addDays(keyToLocalDate(selectedGymDate), -1));
+      renderGymV2();
+    });
+    replacements.gymNextDayBtn?.addEventListener("click", () => {
+      selectedGymDate = formatDateKey(addDays(keyToLocalDate(selectedGymDate), 1));
+      renderGymV2();
+    });
+    replacements.gymTodayBtn?.addEventListener("click", () => {
+      selectedGymDate = getTodayKey();
+      renderGymV2();
+    });
+    replacements.gymDateInput?.addEventListener("change", event => {
+      const value = String(event.target.value || "");
+      if (isDateKey(value)) {
+        selectedGymDate = value;
+        renderGymV2();
+      }
+    });
+    replacements.gymSaveBtn?.addEventListener("click", () => saveGymLog(false));
+    replacements.gymCompleteBtn?.addEventListener("click", () => saveGymLog(true));
+    replacements.gymDeleteLogBtn?.addEventListener("click", deleteGymLogV2);
+  }
+
+  function renderGymV2() {
+    const page = document.getElementById("gymPage");
+    if (!page) return;
+    ensureState();
+    if (!isDateKey(selectedGymDate)) selectedGymDate = getTodayKey();
+
+    replaceGymControls();
+
+    const todayBadge = document.getElementById("gymTodayBadge");
+    if (todayBadge) {
+      const workout = workoutForDay(getTodayKey());
+      todayBadge.textContent = workout ? `Today · ${workout}` : "Today · Rest";
+    }
+
+    const weekBadge = page.querySelector(".gym-week-card .badge");
+    if (weekBadge) weekBadge.textContent = `${Object.keys(scheduleForDay(selectedGymDate)).length} days / week`;
+
+    const heroCopy = page.querySelector(".gym-hero p:not(.eyebrow)");
+    if (heroCopy) heroCopy.textContent = "Chest + side delts · Back + rear delts · Arms · Legs + abs.";
+
+    /* The old override control only understands Push/Pull. Keep it out of this version. */
+    page.querySelector(".gym-day-override")?.remove();
+    page.querySelector(".gym-history-card")?.remove();
+
+    renderGymWeekV2();
+    renderGymWorkoutV2();
+  }
+
+  function installChipStyles() {
+    let style = document.getElementById("lockedOsGymUiV2Styles");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "lockedOsGymUiV2Styles";
+      document.head.appendChild(style);
+    }
+    style.textContent = `
+      /* Only the bubble backgrounds are color-coded. Text stays the normal app color. */
+      .rotation-chip.gym{background:rgba(47,143,86,.13)!important;color:var(--text)!important}
+      .rotation-chip.mk677{background:rgba(37,132,184,.13)!important;color:var(--text)!important}
+      .rotation-chip.tretinoin{background:rgba(104,91,180,.13)!important;color:var(--text)!important}
+      .rotation-chip.microneedle{background:rgba(139,92,170,.14)!important;color:var(--text)!important}
+      .rotation-chip.sheets{background:rgba(65,145,157,.13)!important;color:var(--text)!important}
+      .rotation-chip.shave{background:rgba(92,104,120,.11)!important;color:var(--text)!important}
+      .rotation-chip.lips{background:rgba(190,92,130,.12)!important;color:var(--text)!important}
+      .rotation-chip.custom{background:rgba(42,30,18,.07)!important;color:var(--text)!important}
     `;
-    document.head.appendChild(style);
+  }
+
+  function bindPageTabs() {
+    document.querySelectorAll('[data-tab="gymPage"]').forEach(button => {
+      if (button.dataset.gymV2TabBound === "true") return;
+      button.dataset.gymV2TabBound = "true";
+      button.addEventListener("click", () => setTimeout(renderGymV2, 0));
+    });
+
+    document.querySelectorAll('[data-tab="adminPage"], [data-admin-panel="adminRoutinePanel"]').forEach(button => {
+      if (button.dataset.gymV2AdminBound === "true") return;
+      button.dataset.gymV2AdminBound = "true";
+      button.addEventListener("click", () => setTimeout(() => {
+        simplifyAdminGymCard();
+        populateAdminEditor();
+      }, 50));
+    });
   }
 
   function install() {
@@ -411,40 +611,34 @@
       typeof getRoutineDayName !== "function"
     ) return;
 
-    ensureGymState();
-    installStyles();
-    installRoutineOverrides();
+    ensureState();
+    installChipStyles();
+    installRoutineAuthority();
+    simplifyAdminGymCard();
+    populateAdminEditor();
+    bindPageTabs();
 
-    /* Repair stale recurring overrides immediately without touching manual Gym-tab overrides. */
-    syncRecurringSchedule(getTodayKey());
-    saveState();
-
-    installStartDateControl();
-    reorderGymEditor();
-    replaceSaveButton();
-    populateEditorForDate(getTodayKey());
-    refreshGymTab();
-
-    document.querySelectorAll('[data-tab="adminPage"], [data-admin-panel="adminRoutinePanel"]').forEach(button => {
-      if (button.dataset.gymHotfixBound === "true") return;
-      button.dataset.gymHotfixBound = "true";
-      button.addEventListener("click", () => {
-        setTimeout(() => {
-          installStartDateControl();
-          reorderGymEditor();
-          replaceSaveButton();
-          const startInput = document.getElementById("gymScheduleStartDate");
-          populateEditorForDate(isDateKey(startInput?.value) ? startInput.value : getTodayKey());
-        }, 80);
-      });
-    });
+    selectedGymDate = getTodayKey();
+    setTimeout(renderGymV2, 0);
 
     try { render(); } catch (_) {}
     try { if (typeof renderRotationCalendar === "function") renderRotationCalendar(); } catch (_) {}
     try { if (typeof renderWeeklyReview === "function") renderWeeklyReview(); } catch (_) {}
   }
 
-  const start = () => setTimeout(install, 140);
+  const start = () => {
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      install();
+      if (document.getElementById("gymPage") && document.getElementById("gymScheduleEditor")) {
+        clearInterval(timer);
+      } else if (attempts >= 20) {
+        clearInterval(timer);
+      }
+    }, 120);
+  };
+
   if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", start);
   else start();
 })();
