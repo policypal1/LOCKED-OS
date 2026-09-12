@@ -1,576 +1,531 @@
 "use strict";
 
 /*
-  LOCKED OS — Gym sequence + workout recovery fix
-  Loads the clean rebuild that is currently deployed, then makes three focused changes:
-  1) Friday 2026-09-11 is Chest + side delts, with the rotation continuing
-     Sat Back -> Mon Arms -> Wed Legs + Abs -> Fri Chest.
-  2) The top Gym strip shows the next scheduled workouts continuously, not a calendar week.
-  3) Gym sessions are recovered/merged from every known old state format, local recovery
-     snapshots, a dedicated session vault, and recent Supabase backups when available.
+  LOCKED OS — Gym UI final cleanup
+  Base: currently deployed gym recovery build.
+  Fixes:
+  - one horizontal next-workout row
+  - Previous / Next / Today all use one selected workout date
+  - Looksmaxxing Gym becomes read-only (no workout shifter / Set controls)
+  - Friday Sep 11 remains Chest + side delts
+  - current/recovered Gym sessions remain untouched and continue saving to gymClean
 */
 
 (() => {
-  const cleanBase = "https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@0f9a5024ddc995c3adeac4032481dac77d0d2c97/ghk-cu.js";
+  const baseUrl = "https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@863c47dc88bb808d8f4960696774f18dd8f27fea/ghk-cu.js";
   try {
     const request = new XMLHttpRequest();
-    request.open("GET", cleanBase, false);
+    request.open("GET", baseUrl, false);
     request.send(null);
     if (request.status < 200 || request.status >= 300) throw new Error(`HTTP ${request.status}`);
-    (0, eval)(request.responseText + "\n//# sourceURL=locked-os-clean-base-0f9a502.js");
+    (0, eval)(request.responseText + "\n//# sourceURL=locked-os-gym-recovery-base.js");
   } catch (error) {
-    console.error("LOCKED OS: clean base failed to load.", error);
+    console.error("LOCKED OS: could not load current gym recovery base.", error);
   }
 })();
 
 (() => {
   "use strict";
 
-  const FLAG = "__lockedOsGymSequenceRecovery20260911";
+  const FLAG = "__lockedOsGymUiFinal20260911";
   if (window[FLAG]) return;
   window[FLAG] = true;
 
-  const ANCHOR_DATE = "2026-09-11";
-  const VAULT_KEY = "locked_os_gym_sessions_vault_v2";
-  const ROTATION_FLAG = "gymChestRotationAnchored20260911";
-  const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const ROTATION = [
-    "Chest + side delts",
-    "Back + rear delts",
-    "Arms",
-    "Legs + Abs"
-  ];
-  const DESIRED_SCHEDULE = {
+  const START = "2026-09-11";
+  const SCHEDULE = {
     Friday: "Chest + side delts",
     Saturday: "Back + rear delts",
     Monday: "Arms",
     Wednesday: "Legs + Abs"
   };
+  const EXERCISES = {
+    "Chest + side delts": [
+      "Incline Dumbbell Bench Press",
+      "Machine Chest Press",
+      "Cable Fly / Pec Deck",
+      "Cable Lateral Raise",
+      "Machine Lateral Raise"
+    ],
+    "Back + rear delts": [
+      "Lat Pulldown",
+      "Chest-Supported Row",
+      "Seated Cable Row, both arms",
+      "Reverse Pec Deck"
+    ],
+    "Arms": [
+      "Triceps Pressdown",
+      "Overhead Cable Triceps Extension",
+      "Cable Curl",
+      "Incline Dumbbell Curl"
+    ],
+    "Legs + Abs": [
+      "Hack Squat",
+      "Romanian Deadlift",
+      "Leg Extension",
+      "Leg Curl",
+      "Calf Raise",
+      "Cable Crunch / Ab Machine"
+    ]
+  };
+  const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-  const CHEST_EXERCISES = new Set([
-    "Incline Dumbbell Bench Press",
-    "Machine Chest Press",
-    "Cable Fly / Pec Deck",
-    "Cable Lateral Raise",
-    "Machine Lateral Raise"
-  ]);
+  let selectedDate = "";
 
-  let sequenceRefreshTimer = null;
-
-  const clone = value => JSON.parse(JSON.stringify(value));
   const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 
-  function safeArray(value) {
-    return Array.isArray(value) ? value : [];
-  }
-
-  function normalizeWorkoutName(value) {
-    const name = String(value || "").trim();
-    if (ROTATION.includes(name)) return name;
-    if (name === "Push") return "Chest + side delts";
-    if (name === "Pull") return "Back + rear delts";
-    if (name === "Legs") return "Legs + Abs";
-    if (name === "Arms + Abs") return "Arms";
-    return name;
-  }
-
-  function setCompleteness(set) {
-    let score = 0;
-    if (Number(set?.weight) > 0) score += 2;
-    if (Number(set?.reps) > 0) score += 2;
-    return score;
-  }
-
-  function exerciseCompleteness(exercise) {
-    return safeArray(exercise?.sets).reduce((sum, set) => sum + setCompleteness(set), 0);
-  }
-
-  function sessionCompleteness(session) {
-    let score = session?.completed ? 1000 : 0;
-    score += safeArray(session?.exercises).reduce(
-      (sum, exercise) => sum + exerciseCompleteness(exercise),
-      0
-    );
-    return score;
-  }
-
-  function mergeSets(a, b) {
-    const out = [];
-    for (let index = 0; index < Math.max(safeArray(a).length, safeArray(b).length, 2); index += 1) {
-      const left = safeArray(a)[index] || {};
-      const right = safeArray(b)[index] || {};
-      const chosen = setCompleteness(right) > setCompleteness(left) ? right : left;
-      out.push({
-        weight: Number(chosen?.weight) > 0 ? Number(chosen.weight) : 0,
-        reps: Number(chosen?.reps) > 0 ? Math.round(Number(chosen.reps)) : 0
-      });
-    }
-    return out.slice(0, 2);
-  }
-
-  function mergeExercises(a, b) {
-    const map = new Map();
-
-    const ingest = list => {
-      for (const exercise of safeArray(list)) {
-        const name = String(exercise?.name || "").trim();
-        if (!name) continue;
-        const current = map.get(name);
-        if (!current) {
-          map.set(name, { name, sets: mergeSets([], exercise.sets) });
-        } else {
-          current.sets = mergeSets(current.sets, exercise.sets);
-        }
-      }
-    };
-
-    ingest(a);
-    ingest(b);
-    return [...map.values()];
-  }
-
-  function mergeTwoSessions(a, b) {
-    if (!a) return b ? clone(b) : null;
-    if (!b) return clone(a);
-
-    const richer = sessionCompleteness(b) > sessionCompleteness(a) ? b : a;
-    const latestUpdatedAt = [String(a.updatedAt || ""), String(b.updatedAt || "")]
-      .filter(Boolean)
-      .sort()
-      .at(-1) || "";
-
-    return {
-      ...clone(richer),
-      id: richer.id || a.id || b.id || `gym-recovered-${richer.date}`,
-      date: richer.date || a.date || b.date,
-      workout: normalizeWorkoutName(richer.workout || a.workout || b.workout),
-      completed: Boolean(a.completed || b.completed),
-      exercises: mergeExercises(a.exercises, b.exercises),
-      updatedAt: latestUpdatedAt
-    };
-  }
-
-  function normalizeSession(raw, fallbackDate = "") {
-    if (!raw || typeof raw !== "object") return null;
-
-    const date = validDateKey(raw.date)
-      ? raw.date
-      : (validDateKey(raw.dayKey) ? raw.dayKey : fallbackDate);
-
-    if (!validDateKey(date)) return null;
-
-    return {
-      id: String(raw.id || `gym-recovered-${date}`),
-      date,
-      workout: normalizeWorkoutName(raw.workout || raw.workoutName || ""),
-      completed: Boolean(raw.completed || raw.done),
-      exercises: safeArray(raw.exercises).map(exercise => ({
-        name: String(exercise?.name || "").trim(),
-        sets: mergeSets([], exercise?.sets)
-      })).filter(exercise => exercise.name),
-      updatedAt: String(raw.updatedAt || raw.updated_at || raw.savedAt || "")
-    };
-  }
-
-  function mergeSessionCollection(...lists) {
-    const byDate = new Map();
-
-    for (const list of lists) {
-      for (const raw of safeArray(list)) {
-        const session = normalizeSession(raw);
-        if (!session) continue;
-        byDate.set(session.date, mergeTwoSessions(byDate.get(session.date), session));
-      }
-    }
-
-    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
-  }
-
-  function extractSessions(snapshot) {
-    if (!snapshot || typeof snapshot !== "object") return [];
-
-    const meta = snapshot.meta && typeof snapshot.meta === "object" ? snapshot.meta : {};
-    const sessions = [];
-
-    sessions.push(...safeArray(meta.gymClean?.sessions));
-    sessions.push(...safeArray(meta.gymTrackerV2?.sessions));
-    sessions.push(...safeArray(meta.gymTracker?.sessions));
-
-    /*
-      Some very old copies may have date-keyed gym objects.
-    */
-    for (const source of [meta.gymSessions, snapshot.gymSessions]) {
-      if (!source || typeof source !== "object" || Array.isArray(source)) continue;
-      for (const [date, value] of Object.entries(source)) {
-        const session = normalizeSession(value, date);
-        if (session) sessions.push(session);
-      }
-    }
-
-    return sessions;
-  }
-
-  function inspectPossibleSnapshot(value, sessions, depth = 0) {
-    if (depth > 3 || value == null) return;
-
-    if (typeof value === "string") {
-      try {
-        const parsed = JSON.parse(value);
-        inspectPossibleSnapshot(parsed, sessions, depth + 1);
-      } catch (_) {}
-      return;
-    }
-
-    if (Array.isArray(value)) {
-      for (const item of value) inspectPossibleSnapshot(item, sessions, depth + 1);
-      return;
-    }
-
-    if (typeof value !== "object") return;
-
-    sessions.push(...extractSessions(value));
-
-    if (value.state) inspectPossibleSnapshot(value.state, sessions, depth + 1);
-    if (value.serialized) inspectPossibleSnapshot(value.serialized, sessions, depth + 1);
-    if (value.snapshot) inspectPossibleSnapshot(value.snapshot, sessions, depth + 1);
-  }
-
-  function readVaultSessions() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(VAULT_KEY) || "[]");
-      return safeArray(parsed);
-    } catch (_) {
-      return [];
-    }
-  }
-
-  function writeVaultSessions(sessions) {
-    try {
-      localStorage.setItem(VAULT_KEY, JSON.stringify(mergeSessionCollection(sessions)));
-    } catch (error) {
-      console.warn("LOCKED OS: gym vault write failed.", error);
-    }
-  }
-
-  function localRecoverySessions() {
-    const sessions = [];
-
-    /*
-      Current live state first.
-    */
-    sessions.push(...extractSessions(state));
-
-    /*
-      Dedicated gym vault.
-    */
-    sessions.push(...readVaultSessions());
-
-    /*
-      Scan every LOCKED OS localStorage entry. This catches:
-      - v4-v17 app saves
-      - clean recovery snapshots
-      - older recovery-snapshot formats
-      - gym-safe backups from the previous patch
-    */
-    try {
-      for (let index = 0; index < localStorage.length; index += 1) {
-        const key = localStorage.key(index);
-        if (!key || !key.toLowerCase().includes("locked_os")) continue;
-
-        let raw = "";
-        try { raw = localStorage.getItem(key) || ""; } catch (_) {}
-        if (!raw) continue;
-
-        inspectPossibleSnapshot(raw, sessions);
-      }
-    } catch (error) {
-      console.warn("LOCKED OS: local workout recovery scan failed.", error);
-    }
-
-    return mergeSessionCollection(sessions);
-  }
-
-  function ensureGymCleanState() {
+  function ensureGym() {
     state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
     state.meta.gymClean = state.meta.gymClean && typeof state.meta.gymClean === "object"
       ? state.meta.gymClean
       : {};
-
-    if (!state.meta.gymClean.schedule || typeof state.meta.gymClean.schedule !== "object") {
-      state.meta.gymClean.schedule = clone(DESIRED_SCHEDULE);
-    }
-    state.meta.gymClean.sessions = safeArray(state.meta.gymClean.sessions);
-  }
-
-  function markCompletionFromLooks(sessions) {
-    const byDate = new Map(sessions.map(session => [session.date, session]));
-
-    for (const [date, day] of Object.entries(state.days || {})) {
-      if (!validDateKey(date) || !day || typeof day !== "object") continue;
-      const completedInLooks = safeArray(day.looksDone).includes("gym");
-      if (!completedInLooks) continue;
-
-      let session = byDate.get(date);
-      if (!session) {
-        session = {
-          id: `gym-completion-recovered-${date}`,
-          date,
-          workout: date === ANCHOR_DATE ? "Chest + side delts" : "",
-          completed: true,
-          exercises: [],
-          updatedAt: ""
-        };
-        byDate.set(date, session);
-      } else {
-        session.completed = true;
-      }
-    }
-
-    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
-  }
-
-  function forceAnchorSchedule() {
-    ensureGymCleanState();
-
-    if (state.meta[ROTATION_FLAG] === true) return false;
-
-    state.meta.gymClean.schedule = clone(DESIRED_SCHEDULE);
-    state.meta[ROTATION_FLAG] = true;
-    return true;
-  }
-
-  function reconcileRecoveredSessions(extraSessions = []) {
-    ensureGymCleanState();
-
-    const before = JSON.stringify(state.meta.gymClean.sessions || []);
-    const combined = mergeSessionCollection(
-      state.meta.gymClean.sessions,
-      localRecoverySessions(),
-      extraSessions
-    );
-    state.meta.gymClean.sessions = markCompletionFromLooks(combined);
+    state.meta.gymClean.sessions = Array.isArray(state.meta.gymClean.sessions)
+      ? state.meta.gymClean.sessions
+      : [];
 
     /*
-      If the recovered Sept 11 workout clearly contains chest exercises, label
-      it Chest + side delts so the current workout form can populate the sets.
+      Keep the requested training order authoritative. This also guarantees
+      Friday 9/11 is Chest + side delts.
     */
-    const todaySession = state.meta.gymClean.sessions.find(session => session.date === ANCHOR_DATE);
-    if (todaySession) {
-      const chestMatches = safeArray(todaySession.exercises)
-        .filter(exercise => CHEST_EXERCISES.has(exercise.name))
-        .length;
-
-      if (chestMatches >= 2 || !todaySession.workout) {
-        todaySession.workout = "Chest + side delts";
-      }
-    }
-
-    writeVaultSessions(state.meta.gymClean.sessions);
-    return before !== JSON.stringify(state.meta.gymClean.sessions);
+    state.meta.gymClean.schedule = { ...SCHEDULE };
   }
 
-  /*
-    Keep the vault updated before every future app save.
-  */
-  if (typeof saveState === "function" && !saveState.__gymVaultV2) {
-    const baseSaveState = saveState;
-    const wrappedSaveState = function(...args) {
-      ensureGymCleanState();
-      writeVaultSessions(state.meta.gymClean.sessions);
-      return baseSaveState(...args);
-    };
-    wrappedSaveState.__gymVaultV2 = true;
-    saveState = wrappedSaveState;
+  function workoutFor(dayKey) {
+    ensureGym();
+    if (!validDateKey(dayKey) || dayKey < START) return "";
+    return state.meta.gymClean.schedule[getRoutineDayName(dayKey)] || "";
   }
 
-  /*
-    Never let a remote state discard a richer local/vault workout log.
-  */
-  if (typeof applyRemoteState === "function" && !applyRemoteState.__gymVaultV2) {
-    const baseApplyRemoteState = applyRemoteState;
-    const wrappedApplyRemoteState = function(remoteState, ...args) {
-      try {
-        const copy = clone(remoteState || {});
-        copy.meta = copy.meta && typeof copy.meta === "object" ? copy.meta : {};
-        copy.meta.gymClean = copy.meta.gymClean && typeof copy.meta.gymClean === "object"
-          ? copy.meta.gymClean
-          : {};
-
-        copy.meta.gymClean.sessions = mergeSessionCollection(
-          readVaultSessions(),
-          state?.meta?.gymClean?.sessions,
-          copy.meta.gymClean.sessions
-        );
-
-        if (!copy.meta.gymClean.schedule || typeof copy.meta.gymClean.schedule !== "object") {
-          copy.meta.gymClean.schedule = clone(DESIRED_SCHEDULE);
-        }
-
-        const result = baseApplyRemoteState(copy, ...args);
-        reconcileRecoveredSessions();
-        return result;
-      } catch (error) {
-        console.error("LOCKED OS: gym-safe remote merge failed.", error);
-        return baseApplyRemoteState(remoteState, ...args);
-      }
-    };
-    wrappedApplyRemoteState.__gymVaultV2 = true;
-    applyRemoteState = wrappedApplyRemoteState;
-  }
-
-  function workoutForDate(dayKey) {
-    ensureGymCleanState();
-    if (!validDateKey(dayKey) || dayKey < ANCHOR_DATE) return "";
-    return String(state.meta.gymClean.schedule?.[getRoutineDayName(dayKey)] || "");
-  }
-
-  function sessionForDate(dayKey) {
-    ensureGymCleanState();
+  function sessionFor(dayKey) {
+    ensureGym();
     return state.meta.gymClean.sessions.find(session => session?.date === dayKey) || null;
   }
 
-  function nextWorkoutDates(startKey = getTodayKey(), count = 5) {
-    const output = [];
-    let cursor = keyToLocalDate(startKey);
-
-    /*
-      Include the selected/start date when it is a training day.
-    */
-    for (let step = 0; step < 45 && output.length < count; step += 1) {
-      const key = formatDateKey(cursor);
-      const workout = workoutForDate(key);
-      if (workout) output.push({ date: key, workout });
-      cursor = addDays(cursor, 1);
+  function sessionForWrite(dayKey) {
+    ensureGym();
+    let session = sessionFor(dayKey);
+    if (!session) {
+      session = {
+        id: `gym-final-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        date: dayKey,
+        workout: workoutFor(dayKey),
+        completed: false,
+        exercises: [],
+        updatedAt: new Date().toISOString()
+      };
+      state.meta.gymClean.sessions.push(session);
     }
-    return output;
+    return session;
   }
 
-  function renderNextWorkoutStrip() {
+  function adjacentWorkout(dayKey, direction) {
+    let cursor = keyToLocalDate(dayKey);
+    for (let step = 0; step < 60; step += 1) {
+      cursor = addDays(cursor, direction);
+      const key = formatDateKey(cursor);
+      if (key < START) return null;
+      if (workoutFor(key)) return key;
+    }
+    return null;
+  }
+
+  function sequenceFrom(dayKey, count = 5) {
+    const items = [];
+    let cursor = keyToLocalDate(dayKey);
+
+    /*
+      If selected date is a rest day, begin at the next actual workout.
+    */
+    for (let step = 0; step < 60 && items.length < count; step += 1) {
+      const key = formatDateKey(cursor);
+      const workout = workoutFor(key);
+      if (workout) items.push({ date: key, workout });
+      cursor = addDays(cursor, 1);
+    }
+    return items;
+  }
+
+  function previousExercise(name, beforeDate) {
+    ensureGym();
+    const sessions = [...state.meta.gymClean.sessions]
+      .filter(session => validDateKey(session?.date) && session.date < beforeDate)
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    for (const session of sessions) {
+      const match = Array.isArray(session.exercises)
+        ? session.exercises.find(exercise => exercise?.name === name)
+        : null;
+      if (match) return match;
+    }
+    return null;
+  }
+
+  function setText(set) {
+    return Number(set?.weight) > 0 && Number(set?.reps) > 0
+      ? `${Number(set.weight)} lb × ${Number(set.reps)}`
+      : "—";
+  }
+
+  function renderSequence() {
     const grid = document.getElementById("cleanGymWeekGrid");
     if (!grid) return;
 
     const heading = grid.closest(".clean-gym-week-card")?.querySelector(".panel-title h3");
     if (heading) heading.textContent = "Next workouts";
 
-    const today = getTodayKey();
-    const items = nextWorkoutDates(today, 5);
-
+    const items = sequenceFrom(selectedDate || getTodayKey(), 5);
     grid.innerHTML = "";
+
     for (const item of items) {
       const date = keyToLocalDate(item.date);
-      const session = sessionForDate(item.date);
-      const card = document.createElement("div");
-      card.className = `clean-gym-day${item.date === today ? " today selected" : ""}`;
-      card.innerHTML = `
-        <strong>${DAY_NAMES[date.getDay()].slice(0, 3)} · ${date.getMonth() + 1}/${date.getDate()}</strong>
+      const session = sessionFor(item.date);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `clean-gym-day${item.date === selectedDate ? " selected" : ""}${item.date === getTodayKey() ? " today" : ""}`;
+      button.innerHTML = `
+        <strong>${DAYS[date.getDay()].slice(0, 3)} · ${date.getMonth() + 1}/${date.getDate()}</strong>
         <span>${escapeHtml(item.workout)}${session?.completed ? " ✓" : ""}</span>`;
-      grid.appendChild(card);
+      button.addEventListener("click", () => {
+        selectedDate = item.date;
+        renderAllGym();
+      });
+      grid.appendChild(button);
     }
   }
 
-  function scheduleStripRefresh(delay = 0) {
-    clearTimeout(sequenceRefreshTimer);
-    sequenceRefreshTimer = setTimeout(renderNextWorkoutStrip, delay);
+  function renderWorkoutForm() {
+    const body = document.getElementById("cleanGymWorkoutBody");
+    const title = document.getElementById("cleanGymWorkoutTitle");
+    const dateLabel = document.getElementById("cleanGymDateLabel");
+    const actions = document.getElementById("cleanGymActions");
+    const status = document.getElementById("cleanGymSaveStatus");
+    if (!body || !title || !dateLabel || !actions) return;
+
+    if (!validDateKey(selectedDate)) selectedDate = getTodayKey();
+
+    const date = keyToLocalDate(selectedDate);
+    const workout = workoutFor(selectedDate);
+    const session = sessionFor(selectedDate);
+
+    dateLabel.textContent = `${DAYS[date.getDay()]}, ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
+    if (status) status.textContent = "";
+
+    if (!workout) {
+      const next = adjacentWorkout(selectedDate, 1);
+      title.textContent = "Rest day";
+      body.innerHTML = `
+        <div class="clean-gym-rest">
+          <strong>Rest day</strong>
+          <span>${next ? `Next workout: ${escapeHtml(workoutFor(next))}` : "No next workout found."}</span>
+        </div>`;
+      actions.hidden = true;
+      return;
+    }
+
+    actions.hidden = false;
+    title.textContent = workout;
+
+    const list = document.createElement("div");
+    list.className = "clean-gym-exercises";
+
+    for (const name of EXERCISES[workout] || []) {
+      const current = session?.exercises?.find(exercise => exercise?.name === name) || { sets: [] };
+      const previous = previousExercise(name, selectedDate);
+
+      const row = document.createElement("div");
+      row.className = "clean-gym-exercise";
+      row.dataset.exercise = name;
+      row.innerHTML = `
+        <div class="clean-gym-exercise-name">
+          <strong>${escapeHtml(name)}</strong>
+          <span>2 working sets</span>
+        </div>
+        <div class="clean-gym-previous">
+          <span>Previous</span>
+          <strong>${escapeHtml(setText(previous?.sets?.[0]))}<br>${escapeHtml(setText(previous?.sets?.[1]))}</strong>
+        </div>
+        ${[0,1].map(index => {
+          const set = current.sets?.[index] || {};
+          return `
+            <div class="clean-gym-set">
+              <label>
+                <span>Set ${index + 1} lb</span>
+                <input data-set="${index}" data-field="weight" type="number" min="0" max="2000" step="0.5" value="${Number(set.weight) || ""}" placeholder="Weight">
+              </label>
+              <label>
+                <span>Reps</span>
+                <input data-set="${index}" data-field="reps" type="number" min="0" max="100" step="1" value="${Number(set.reps) || ""}" placeholder="Reps">
+              </label>
+            </div>`;
+        }).join("")}`;
+      list.appendChild(row);
+    }
+
+    body.innerHTML = "";
+    body.appendChild(list);
   }
 
-  /*
-    The clean rebuild re-renders its week strip after navigation/save. Refresh
-    the sequential strip immediately afterward without a MutationObserver.
-  */
-  document.addEventListener("click", event => {
-    if (
-      event.target.closest("#cleanGymPrev") ||
-      event.target.closest("#cleanGymNext") ||
-      event.target.closest("#cleanGymToday") ||
-      event.target.closest("#cleanGymSave") ||
-      event.target.closest("#cleanGymComplete") ||
-      event.target.closest(".clean-modal-save") ||
-      event.target.closest('[data-tab="gymPage"]')
-    ) {
-      scheduleStripRefresh(25);
+  function renderHistory() {
+    const list = document.getElementById("cleanGymHistory");
+    if (!list) return;
+
+    ensureGym();
+    const sessions = [...state.meta.gymClean.sessions]
+      .filter(session => validDateKey(session?.date))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 10);
+
+    if (!sessions.length) {
+      list.innerHTML = '<div class="clean-gym-empty">No saved workouts yet.</div>';
+      return;
     }
 
-    if (
-      event.target.closest("#cleanGymSave") ||
-      event.target.closest("#cleanGymComplete")
-    ) {
-      setTimeout(() => {
-        reconcileRecoveredSessions();
-        writeVaultSessions(state.meta?.gymClean?.sessions || []);
-      }, 30);
+    list.innerHTML = "";
+    for (const session of sessions) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "clean-gym-history-row";
+      button.innerHTML = `
+        <span>${escapeHtml(session.date)}</span>
+        <strong>${escapeHtml(session.workout || workoutFor(session.date) || "Workout")}${session.completed ? " ✓" : ""}</strong>`;
+      button.addEventListener("click", () => {
+        selectedDate = session.date;
+        renderAllGym();
+      });
+      list.appendChild(button);
     }
-  });
+  }
 
-  /*
-    Replace the Gym schedule gear's initial mapping once so Friday starts on
-    Chest + side delts. After this one migration the user can edit the schedule
-    normally and it will not be forced again.
-  */
-  function installAnchorAndRecover() {
-    if (typeof state === "undefined" || typeof saveState !== "function") return;
+  function renderAllGym() {
+    ensureGym();
+    const badge = document.getElementById("cleanGymTodayBadge");
+    if (badge) badge.textContent = workoutFor(getTodayKey()) || "Rest day";
 
-    ensureGymCleanState();
-    const scheduleChanged = forceAnchorSchedule();
-    const recoveryChanged = reconcileRecoveredSessions();
+    renderSequence();
+    renderWorkoutForm();
+    renderHistory();
+  }
 
-    if (scheduleChanged || recoveryChanged) {
-      saveState();
+  function collectForm() {
+    const exercises = [];
+    let invalid = false;
+
+    document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise").forEach(row => {
+      const sets = [0, 1].map(index => {
+        const weight = Number(row.querySelector(`[data-set="${index}"][data-field="weight"]`)?.value || 0);
+        const reps = Number(row.querySelector(`[data-set="${index}"][data-field="reps"]`)?.value || 0);
+        if ((weight > 0) !== (reps > 0)) invalid = true;
+        return {
+          weight: Number.isFinite(weight) ? Math.max(0, weight) : 0,
+          reps: Number.isFinite(reps) ? Math.max(0, Math.round(reps)) : 0
+        };
+      });
+      exercises.push({ name: row.dataset.exercise || "", sets });
+    });
+
+    return { exercises, invalid };
+  }
+
+  function saveWorkout(markComplete) {
+    const workout = workoutFor(selectedDate);
+    const status = document.getElementById("cleanGymSaveStatus");
+    if (!workout) return;
+
+    const collected = collectForm();
+    if (collected.invalid) {
+      if (status) status.textContent = "Each entered set needs both weight and reps.";
+      return;
+    }
+
+    if (markComplete) {
+      const missing = collected.exercises.some(exercise =>
+        exercise.sets.some(set => !(set.weight > 0 && set.reps > 0))
+      );
+      if (missing) {
+        if (status) status.textContent = "Fill both sets for every exercise before completing.";
+        return;
+      }
+    }
+
+    const session = sessionForWrite(selectedDate);
+    session.workout = workout;
+    session.exercises = collected.exercises;
+    if (markComplete) session.completed = true;
+    session.updatedAt = new Date().toISOString();
+
+    saveState();
+
+    if (status) {
+      status.textContent = markComplete
+        ? "Workout saved and completed."
+        : "Workout saved.";
+    }
+
+    if (typeof toast === "function") {
+      toast(markComplete ? "Workout completed." : "Workout saved.");
+    }
+
+    renderSequence();
+    renderHistory();
+    try { renderWeeklyReview(); } catch (_) {}
+  }
+
+  function replaceControl(id, handler) {
+    const old = document.getElementById(id);
+    if (!old) return;
+    const fresh = old.cloneNode(true);
+    old.replaceWith(fresh);
+    fresh.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      handler();
+    });
+  }
+
+  function installNavigation() {
+    replaceControl("cleanGymPrev", () => {
+      const target = adjacentWorkout(selectedDate || getTodayKey(), -1);
+      if (target) {
+        selectedDate = target;
+        renderAllGym();
+      } else if (typeof toast === "function") {
+        toast("No earlier workout.");
+      }
+    });
+
+    replaceControl("cleanGymNext", () => {
+      const target = adjacentWorkout(selectedDate || getTodayKey(), 1);
+      if (target) {
+        selectedDate = target;
+        renderAllGym();
+      }
+    });
+
+    replaceControl("cleanGymToday", () => {
+      selectedDate = getTodayKey();
+      renderAllGym();
+    });
+
+    replaceControl("cleanGymSave", () => saveWorkout(false));
+    replaceControl("cleanGymComplete", () => saveWorkout(true));
+  }
+
+  function makeLooksGymReadOnly() {
+    /*
+      User wants Gym scheduling controlled only from the Gym page.
+      Keep the current workout name visible, but remove every shifter/Set action.
+    */
+    const ids = [
+      "workoutPrevBtn",
+      "workoutNextBtn",
+      "setWorkoutBtn",
+      "workoutRotationStatus"
+    ];
+
+    for (const id of ids) {
+      const element = document.getElementById(id);
+      if (element) element.style.display = "none";
+    }
+
+    const preview = document.getElementById("workoutPreviewName");
+    if (preview) {
+      preview.textContent = workoutFor(getTodayKey()) || "Rest day";
+      preview.setAttribute("aria-live", "polite");
     }
 
     /*
-      Ensure the Looksmaxxing workout label uses the same mapping even if it was
-      rendered just before this patch initialized.
+      If the old controls sit in their own toolbar/container, collapse the
+      container only when it contains no other useful visible controls.
     */
-    try { if (typeof render === "function") render(); } catch (_) {}
-    scheduleStripRefresh(25);
-  }
-
-  async function recoverFromSupabaseBackups() {
-    if (!supabaseClient || typeof state === "undefined") return;
-
-    try {
-      const { data, error } = await supabaseClient
-        .from("locked_os_state_backups")
-        .select("state, backed_up_at")
-        .eq("id", SUPABASE_ROW_ID)
-        .order("backup_id", { ascending: false })
-        .limit(50);
-
-      if (error || !Array.isArray(data) || !data.length) return;
-
-      const sessions = [];
-      for (const row of data) {
-        sessions.push(...extractSessions(row?.state));
-      }
-
-      if (!sessions.length) return;
-
-      const changed = reconcileRecoveredSessions(sessions);
-      if (changed) {
-        saveState();
-        try { if (typeof render === "function") render(); } catch (_) {}
-        scheduleStripRefresh(25);
-
-        const today = state.meta?.gymClean?.sessions?.find(session => session.date === ANCHOR_DATE);
-        if (today && sessionCompleteness(today) > 0 && typeof toast === "function") {
-          toast("Recovered saved workout data from backup.");
-        }
-      }
-    } catch (error) {
-      /*
-        Backup table is optional. Local recovery still works if it is absent.
-      */
-      console.warn("LOCKED OS: cloud workout-backup recovery unavailable.", error);
+    for (const id of ["workoutPrevBtn", "workoutNextBtn", "setWorkoutBtn"]) {
+      const el = document.getElementById(id);
+      const parent = el?.parentElement;
+      if (!parent) continue;
+      const visibleUseful = [...parent.children].some(child => {
+        if (child === el) return false;
+        const childId = child.id || "";
+        if (["workoutPrevBtn","workoutNextBtn","setWorkoutBtn","workoutRotationStatus"].includes(childId)) return false;
+        return child.offsetParent !== null;
+      });
+      if (!visibleUseful) parent.style.display = "none";
     }
   }
 
-  const start = () => {
-    setTimeout(() => {
-      installAnchorAndRecover();
-      recoverFromSupabaseBackups();
-    }, 80);
-  };
+  function installStyles() {
+    if (document.getElementById("gymUiFinalStyles")) return;
+    const style = document.createElement("style");
+    style.id = "gymUiFinalStyles";
+    style.textContent = `
+      /* Always one horizontal workout row. Never wrap Friday 9/18 underneath. */
+      #cleanGymWeekGrid.clean-gym-week,
+      #cleanGymWeekGrid {
+        display:flex!important;
+        flex-wrap:nowrap!important;
+        gap:9px!important;
+        overflow-x:auto!important;
+        overflow-y:hidden!important;
+        padding-bottom:3px;
+        scrollbar-width:thin;
+      }
+      #cleanGymWeekGrid .clean-gym-day {
+        flex:1 0 150px!important;
+        min-width:150px!important;
+        max-width:none!important;
+      }
+      @media(min-width:1050px){
+        #cleanGymWeekGrid .clean-gym-day {
+          flex:1 1 0!important;
+          min-width:0!important;
+        }
+      }
 
+      /* Looksmaxxing Gym is display-only. */
+      #workoutPrevBtn,
+      #workoutNextBtn,
+      #setWorkoutBtn,
+      #workoutRotationStatus {
+        display:none!important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function install() {
+    if (typeof state === "undefined") return;
+
+    ensureGym();
+    selectedDate = getTodayKey();
+
+    installStyles();
+    installNavigation();
+    makeLooksGymReadOnly();
+    renderAllGym();
+
+    /*
+      Re-apply read-only Looks Gym after full app renders, because renderLooks()
+      can rewrite the workout preview text.
+    */
+    document.querySelectorAll('[data-tab="looksPage"],[data-tab="gymPage"]').forEach(button => {
+      if (button.dataset.gymUiFinalBound === "true") return;
+      button.dataset.gymUiFinalBound = "true";
+      button.addEventListener("click", () => setTimeout(() => {
+        makeLooksGymReadOnly();
+        if (button.dataset.tab === "gymPage") {
+          installNavigation();
+          renderAllGym();
+        }
+      }, 0));
+    });
+
+    /*
+      A save elsewhere in the app can trigger render(); keep the Looks controls
+      hidden without observing the entire DOM.
+    */
+    window.addEventListener("focus", () => {
+      makeLooksGymReadOnly();
+    });
+  }
+
+  const start = () => setTimeout(install, 100);
   if (document.readyState === "loading") {
     window.addEventListener("DOMContentLoaded", start);
   } else {
