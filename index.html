@@ -270,6 +270,43 @@
   .looks-task-modal-actions .btn { width: 100%; }
 }
 
+
+/* Requested Looksmaxxing task information + Arms neck detail. */
+.looks-task-info-textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.6);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.5;
+  resize: vertical;
+  outline: 0;
+}
+.looks-task-info-textarea:focus {
+  border-color: rgba(37,132,184,.55);
+  box-shadow: 0 0 0 3px rgba(37,132,184,.11);
+}
+.looks-task-info-textarea[readonly] {
+  background: rgba(42,30,18,.035);
+  cursor: default;
+}
+.looks-task-info-name {
+  margin: -4px 0 14px;
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 850;
+}
+.workout-neck-detail {
+  margin: -6px 0 14px;
+  color: var(--blue-dark);
+  font-size: .82rem;
+  font-weight: 900;
+}
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="app.js"></script>
@@ -1089,5 +1126,257 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 </script>
+
+<script id="lockedOsRequestedTaskPatch">
+"use strict";
+
+/* Requested 2026-09-11 changes only: Arms neck work, per-task info, reliable task deletion. */
+window.addEventListener("DOMContentLoaded", () => {
+  const originalEnsureLooksTaskCustomizationState = ensureLooksTaskCustomizationState;
+  ensureLooksTaskCustomizationState = function() {
+    originalEnsureLooksTaskCustomizationState();
+    if (!state.meta.looksTaskInfo || typeof state.meta.looksTaskInfo !== "object" || Array.isArray(state.meta.looksTaskInfo)) {
+      state.meta.looksTaskInfo = {};
+    }
+  };
+
+  function getLooksTaskInfo(taskId) {
+    const value = state?.meta?.looksTaskInfo?.[String(taskId || "")];
+    return typeof value === "string" ? value.trim() : "";
+  }
+
+  function closeLooksTaskInfoModal() {
+    document.getElementById("looksTaskInfoModalBackdrop")?.remove();
+  }
+
+  function saveLooksTaskInfo(taskId, value) {
+    ensureLooksTaskCustomizationState();
+    const id = String(taskId || "").trim();
+    if (!id) return;
+    const cleaned = String(value || "").trim().slice(0, 5000);
+    if (cleaned) state.meta.looksTaskInfo[id] = cleaned;
+    else delete state.meta.looksTaskInfo[id];
+    saveState();
+    closeLooksTaskInfoModal();
+    renderLooks();
+    toast(cleaned ? "Information saved." : "Information removed.");
+  }
+
+  function openLooksTaskInfoModal(task) {
+    closeLooksTaskInfoModal();
+    const taskId = String(task?.id || "").trim();
+    if (!taskId) return;
+    const existing = getLooksTaskInfo(taskId);
+    const hasExisting = Boolean(existing);
+
+    const backdrop = document.createElement("div");
+    backdrop.id = "looksTaskInfoModalBackdrop";
+    backdrop.className = "looks-task-modal-backdrop";
+    backdrop.innerHTML = `
+      <section class="looks-task-modal" role="dialog" aria-modal="true" aria-labelledby="looksTaskInfoTitle">
+        <div class="looks-task-modal-head">
+          <div>
+            <p class="eyebrow blue">Task information</p>
+            <h3 id="looksTaskInfoTitle">${hasExisting ? "More information" : "Add more information"}</h3>
+          </div>
+          <button class="looks-task-modal-close" id="looksTaskInfoClose" type="button" aria-label="Close">×</button>
+        </div>
+        <p class="looks-task-info-name"></p>
+        <label class="looks-task-modal-field">
+          <span>Information</span>
+          <textarea class="looks-task-info-textarea" id="looksTaskInfoText" maxlength="5000" placeholder="Add notes, instructions, details, or anything else you want saved for this task."></textarea>
+        </label>
+        <div class="looks-task-modal-actions" id="looksTaskInfoActions"></div>
+      </section>`;
+    document.body.appendChild(backdrop);
+
+    const name = backdrop.querySelector(".looks-task-info-name");
+    if (name) name.textContent = task.title || taskId;
+    const textarea = document.getElementById("looksTaskInfoText");
+    const actions = document.getElementById("looksTaskInfoActions");
+    textarea.value = existing;
+
+    const close = () => closeLooksTaskInfoModal();
+    const showViewMode = () => {
+      textarea.readOnly = true;
+      actions.innerHTML = "";
+      const closeButton = document.createElement("button");
+      closeButton.type = "button";
+      closeButton.className = "btn secondary";
+      closeButton.textContent = "Close";
+      closeButton.addEventListener("click", close);
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.className = "btn blue";
+      editButton.textContent = "Edit information";
+      editButton.addEventListener("click", showEditMode);
+      actions.append(closeButton, editButton);
+    };
+    const showEditMode = () => {
+      textarea.readOnly = false;
+      actions.innerHTML = "";
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.className = "btn secondary";
+      cancelButton.textContent = "Cancel";
+      cancelButton.addEventListener("click", () => {
+        if (hasExisting) {
+          textarea.value = existing;
+          showViewMode();
+        } else {
+          close();
+        }
+      });
+      const saveButton = document.createElement("button");
+      saveButton.type = "button";
+      saveButton.className = "btn blue";
+      saveButton.textContent = "Save information";
+      saveButton.addEventListener("click", () => saveLooksTaskInfo(taskId, textarea.value));
+      actions.append(cancelButton, saveButton);
+      requestAnimationFrame(() => textarea.focus());
+    };
+
+    document.getElementById("looksTaskInfoClose")?.addEventListener("click", close);
+    backdrop.addEventListener("click", event => {
+      if (event.target === backdrop) close();
+    });
+    if (hasExisting) showViewMode();
+    else showEditMode();
+  }
+
+  const originalCreateTaskRow = createTaskRow;
+  createTaskRow = function(task, done, skipped, theme, onToggle, onSkip, onEdit, controls = {}) {
+    const row = originalCreateTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit, controls);
+    if (theme !== "looks-task") return row;
+
+    const menu = row.querySelector("details.task-menu");
+    const popover = menu?.querySelector(".task-menu-popover");
+    if (!popover) return row;
+
+    const infoButton = document.createElement("button");
+    infoButton.type = "button";
+    infoButton.className = "task-menu-action info-action";
+    infoButton.textContent = getLooksTaskInfo(task.id) ? "See more information" : "Add more information";
+    infoButton.addEventListener("click", event => {
+      event.stopPropagation();
+      menu.open = false;
+      openLooksTaskInfoModal(task);
+    });
+
+    const deleteButton = popover.querySelector(".delete-action");
+    popover.insertBefore(infoButton, deleteButton || null);
+    return row;
+  };
+
+  /* Always tombstone a deleted task, including custom tasks, so stale synced copies cannot reappear. */
+  deleteLooksTask = function(task, section) {
+    ensureLooksTaskCustomizationState();
+    const taskId = String(task?.id || "").trim();
+    if (!taskId) return;
+
+    state.meta.looksCustomTasks = state.meta.looksCustomTasks.filter(item => String(item?.id || "") !== taskId);
+    if (!state.meta.looksDeletedTaskIds.includes(taskId)) state.meta.looksDeletedTaskIds.push(taskId);
+    delete state.meta.looksTaskEdits[taskId];
+    delete state.meta.looksTaskInfo[taskId];
+
+    for (const key of ["morning", "midday", "night"]) {
+      const order = Array.isArray(state.meta.looksTaskOrder[key]) ? state.meta.looksTaskOrder[key] : [];
+      state.meta.looksTaskOrder[key] = order.filter(id => String(id) !== taskId);
+    }
+
+    for (const day of Object.values(state.days || {})) {
+      if (!day || typeof day !== "object") continue;
+      day.looksDone = (day.looksDone || []).filter(id => String(id) !== taskId);
+      day.looksSkipped = (day.looksSkipped || []).filter(id => String(id) !== taskId);
+    }
+
+    const selectedKey = typeof lockedOsLooksKey === "function" ? lockedOsLooksKey() : getTodayKey();
+    const selectedDay = ensureDay(selectedKey);
+    selectedDay.looksCompleted = getResolvedSet(selectedDay, "looks").size === getLooksTaskIds(selectedKey).length;
+    saveState();
+    queueSupabaseSave(0);
+    render();
+    toast("Task deleted.");
+  };
+
+  /* Preserve deletion tombstones if a stale remote snapshot arrives during sync. */
+  const originalApplyRemoteState = applyRemoteState;
+  applyRemoteState = function(remoteState, statusMessage, options = {}) {
+    if (remoteState && typeof remoteState === "object") {
+      const localDeleted = Array.isArray(state?.meta?.looksDeletedTaskIds) ? state.meta.looksDeletedTaskIds : [];
+      const localInfo = state?.meta?.looksTaskInfo && typeof state.meta.looksTaskInfo === "object" && !Array.isArray(state.meta.looksTaskInfo)
+        ? state.meta.looksTaskInfo
+        : {};
+      const preservePendingInfo = typeof hasPendingLocalChanges === "function" && hasPendingLocalChanges();
+
+      if (localDeleted.length || (preservePendingInfo && Object.keys(localInfo).length)) {
+        remoteState = JSON.parse(JSON.stringify(remoteState));
+        remoteState.meta = remoteState.meta && typeof remoteState.meta === "object" ? remoteState.meta : {};
+        const remoteDeleted = Array.isArray(remoteState.meta.looksDeletedTaskIds) ? remoteState.meta.looksDeletedTaskIds : [];
+        const deleted = [...new Set([...remoteDeleted, ...localDeleted].map(id => String(id || "").trim()).filter(Boolean))];
+        remoteState.meta.looksDeletedTaskIds = deleted;
+        if (Array.isArray(remoteState.meta.looksCustomTasks)) {
+          const deletedSet = new Set(deleted);
+          remoteState.meta.looksCustomTasks = remoteState.meta.looksCustomTasks.filter(item => !deletedSet.has(String(item?.id || "")));
+        }
+        if (remoteState.meta.looksTaskEdits && typeof remoteState.meta.looksTaskEdits === "object") {
+          deleted.forEach(id => delete remoteState.meta.looksTaskEdits[id]);
+        }
+        if (preservePendingInfo && Object.keys(localInfo).length) {
+          const remoteInfo = remoteState.meta.looksTaskInfo && typeof remoteState.meta.looksTaskInfo === "object" && !Array.isArray(remoteState.meta.looksTaskInfo)
+            ? remoteState.meta.looksTaskInfo
+            : {};
+          remoteState.meta.looksTaskInfo = { ...remoteInfo, ...localInfo };
+        }
+        if (remoteState.meta.looksTaskInfo && typeof remoteState.meta.looksTaskInfo === "object") {
+          deleted.forEach(id => delete remoteState.meta.looksTaskInfo[id]);
+        }
+      }
+    }
+    return originalApplyRemoteState(remoteState, statusMessage, options);
+  };
+
+  const originalHasMeaningfulState = hasMeaningfulState;
+  hasMeaningfulState = function(snapshot) {
+    const info = snapshot?.meta?.looksTaskInfo;
+    if (info && typeof info === "object" && !Array.isArray(info) && Object.values(info).some(value => String(value || "").trim())) return true;
+    return originalHasMeaningfulState(snapshot);
+  };
+
+  /* Keep the current rotation exactly the same, but Arms now includes neck work. */
+  const originalFormatWorkoutName = formatWorkoutName;
+  formatWorkoutName = function(index, dayKey = getTodayKey()) {
+    const name = originalFormatWorkoutName(index, dayKey);
+    return name === "Arms + Abs" ? "Arms + Abs + Neck" : name;
+  };
+
+  function renderArmsNeckDetail() {
+    const workoutName = document.getElementById("workoutName");
+    if (!workoutName) return;
+    let detail = document.getElementById("workoutNeckDetail");
+    if (!detail) {
+      detail = document.createElement("p");
+      detail.id = "workoutNeckDetail";
+      detail.className = "workout-neck-detail";
+      workoutName.insertAdjacentElement("afterend", detail);
+    }
+    const key = typeof lockedOsLooksKey === "function" ? lockedOsLooksKey() : getTodayKey();
+    const isArmsDay = getWorkoutName(key) === "Arms + Abs + Neck";
+    detail.textContent = isArmsDay ? "Neck curls · 3 sets" : "";
+    detail.hidden = !isArmsDay;
+  }
+
+  const originalRenderLooks = renderLooks;
+  renderLooks = function() {
+    originalRenderLooks();
+    renderArmsNeckDetail();
+  };
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && document.getElementById("looksTaskInfoModalBackdrop")) closeLooksTaskInfoModal();
+  });
+});
+</script>
+
 </body>
 </html>
