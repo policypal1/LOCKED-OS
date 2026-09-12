@@ -1,831 +1,933 @@
 "use strict";
 
 /*
-  LOCKED OS — Gym navigation + workout log fix
-  Base: deployed build da69fb13012b5f276558e39146d9085bab4857bb
+  LOCKED OS — TASK STABILITY FIX
+  Base: currently deployed build 5c4cc98e2feaf218cc35c8261952c6fad2828363
 
-  Changes:
-  - Stable one-row workout strip with selected-card highlight.
-  - Previous/Next/Today and card clicks use one selected date.
-  - Selected workout card auto-scrolls into view.
-  - Recent workouts open a read-only log modal with all saved sets.
-  - Existing gymClean sessions / vault / Supabase recovery stay intact.
+  Purpose:
+  - deleted custom tasks cannot be resurrected by an older Supabase state
+  - checked/skipped task state cannot be rolled back by an older remote day record
+  - task edits / schedules / ordering are versioned
+  - task state gets a dedicated local vault
+  - check/skip/delete use one immediate authoritative state update
 */
 
 (() => {
-  const baseUrl = "https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@da69fb13012b5f276558e39146d9085bab4857bb/ghk-cu.js";
+  const baseUrl = "https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@5c4cc98e2feaf218cc35c8261952c6fad2828363/ghk-cu.js";
   try {
     const request = new XMLHttpRequest();
     request.open("GET", baseUrl, false);
     request.send(null);
     if (request.status < 200 || request.status >= 300) throw new Error(`HTTP ${request.status}`);
-    (0, eval)(request.responseText + "\n//# sourceURL=locked-os-gym-ui-base-da69fb.js");
+    (0, eval)(request.responseText + "\n//# sourceURL=locked-os-task-stability-base.js");
   } catch (error) {
-    console.error("LOCKED OS: could not load current Gym UI base.", error);
+    console.error("LOCKED OS: task stability base failed to load.", error);
   }
 })();
 
 (() => {
   "use strict";
 
-  const FLAG = "__lockedOsGymLogNavFix20260911";
+  const FLAG = "__lockedOsTaskStability20260911";
   if (window[FLAG]) return;
   window[FLAG] = true;
 
-  const START = "2026-09-11";
-  const SCHEDULE = {
-    Friday: "Chest + side delts",
-    Saturday: "Back + rear delts",
-    Monday: "Arms",
-    Wednesday: "Legs + Abs"
-  };
-  const EXERCISES = {
-    "Chest + side delts": [
-      "Incline Dumbbell Bench Press",
-      "Machine Chest Press",
-      "Cable Fly / Pec Deck",
-      "Cable Lateral Raise",
-      "Machine Lateral Raise"
-    ],
-    "Back + rear delts": [
-      "Lat Pulldown",
-      "Chest-Supported Row",
-      "Seated Cable Row, both arms",
-      "Reverse Pec Deck"
-    ],
-    "Arms": [
-      "Triceps Pressdown",
-      "Overhead Cable Triceps Extension",
-      "Cable Curl",
-      "Incline Dumbbell Curl"
-    ],
-    "Legs + Abs": [
-      "Hack Squat",
-      "Romanian Deadlift",
-      "Leg Extension",
-      "Leg Curl",
-      "Calf Raise",
-      "Cable Crunch / Ab Machine"
-    ]
-  };
-  const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const VAULT_KEY = "locked_os_task_vault_v1";
+  const CUSTOM_SCHEDULE_META = "customTaskSchedules";
+  const ENTITY_VERSIONS = "taskEntityVersions";
+  const TOMBSTONES = "taskTombstones";
+  const DAY_VERSIONS = "taskDayVersions";
+  const ORDER_VERSIONS = "taskOrderVersions";
+  const SECTIONS = ["morning", "midday", "night"];
+  const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-  let uiSelectedDate = "";
-  let stripAnchorDate = "";
+  let baseline = null;
+  let lastMutationIso = "";
+  let installFinished = false;
 
+  const clone = value => JSON.parse(JSON.stringify(value));
   const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 
-  function ensureGym() {
-    state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
-    state.meta.gymClean = state.meta.gymClean && typeof state.meta.gymClean === "object"
-      ? state.meta.gymClean
-      : {};
-    state.meta.gymClean.sessions = Array.isArray(state.meta.gymClean.sessions)
-      ? state.meta.gymClean.sessions
-      : [];
-    state.meta.gymClean.schedule = { ...SCHEDULE };
-  }
-
-  function workoutFor(dayKey) {
-    ensureGym();
-    if (!validDateKey(dayKey) || dayKey < START) return "";
-    return state.meta.gymClean.schedule[getRoutineDayName(dayKey)] || "";
-  }
-
-  function sessionFor(dayKey) {
-    ensureGym();
-    return state.meta.gymClean.sessions.find(session => session?.date === dayKey) || null;
-  }
-
-  function sessionForWrite(dayKey) {
-    ensureGym();
-    let session = sessionFor(dayKey);
-    if (!session) {
-      session = {
-        id: `gym-log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        date: dayKey,
-        workout: workoutFor(dayKey),
-        completed: false,
-        exercises: [],
-        updatedAt: new Date().toISOString()
-      };
-      state.meta.gymClean.sessions.push(session);
+  function isoNow() {
+    const now = new Date().toISOString();
+    if (now > lastMutationIso) {
+      lastMutationIso = now;
+      return now;
     }
-    return session;
+    // ISO timestamps have millisecond resolution; ensure strictly increasing
+    // versions even if two actions occur in the same millisecond.
+    const bumped = new Date(new Date(lastMutationIso).getTime() + 1).toISOString();
+    lastMutationIso = bumped;
+    return bumped;
   }
 
-  function adjacentWorkout(dayKey, direction) {
-    let cursor = keyToLocalDate(dayKey);
-    for (let step = 0; step < 90; step += 1) {
-      cursor = addDays(cursor, direction);
-      const key = formatDateKey(cursor);
-      if (key < START) return null;
-      if (workoutFor(key)) return key;
+  function newer(a, b) {
+    const left = String(a || "");
+    const right = String(b || "");
+    return left >= right ? left : right;
+  }
+
+  function isNewer(a, b) {
+    return String(a || "") > String(b || "");
+  }
+
+  function ensureTaskMeta(target = state) {
+    if (!target || typeof target !== "object") return;
+    target.days = target.days && typeof target.days === "object" ? target.days : {};
+    target.meta = target.meta && typeof target.meta === "object" ? target.meta : {};
+
+    if (!Array.isArray(target.meta.looksCustomTasks)) target.meta.looksCustomTasks = [];
+    if (!target.meta.looksTaskEdits || typeof target.meta.looksTaskEdits !== "object" || Array.isArray(target.meta.looksTaskEdits)) {
+      target.meta.looksTaskEdits = {};
     }
-    return null;
-  }
-
-  function firstWorkoutOnOrAfter(dayKey) {
-    if (validDateKey(dayKey) && workoutFor(dayKey)) return dayKey;
-    let cursor = keyToLocalDate(validDateKey(dayKey) ? dayKey : getTodayKey());
-    for (let step = 0; step < 30; step += 1) {
-      const key = formatDateKey(cursor);
-      if (workoutFor(key)) return key;
-      cursor = addDays(cursor, 1);
+    if (!Array.isArray(target.meta.looksDeletedTaskIds)) target.meta.looksDeletedTaskIds = [];
+    if (!target.meta.looksTaskOrder || typeof target.meta.looksTaskOrder !== "object" || Array.isArray(target.meta.looksTaskOrder)) {
+      target.meta.looksTaskOrder = { morning: [], midday: [], night: [] };
     }
-    return START;
-  }
-
-  function stripDates(anchorKey, count = 5) {
-    const items = [];
-    let key = firstWorkoutOnOrAfter(anchorKey);
-
-    while (key && items.length < count) {
-      items.push({ date: key, workout: workoutFor(key) });
-      key = adjacentWorkout(key, 1);
+    if (!target.meta[CUSTOM_SCHEDULE_META] || typeof target.meta[CUSTOM_SCHEDULE_META] !== "object" || Array.isArray(target.meta[CUSTOM_SCHEDULE_META])) {
+      target.meta[CUSTOM_SCHEDULE_META] = {};
     }
-    return items;
-  }
+    if (!target.meta[ENTITY_VERSIONS] || typeof target.meta[ENTITY_VERSIONS] !== "object" || Array.isArray(target.meta[ENTITY_VERSIONS])) {
+      target.meta[ENTITY_VERSIONS] = {};
+    }
+    if (!target.meta[TOMBSTONES] || typeof target.meta[TOMBSTONES] !== "object" || Array.isArray(target.meta[TOMBSTONES])) {
+      target.meta[TOMBSTONES] = {};
+    }
+    if (!target.meta[DAY_VERSIONS] || typeof target.meta[DAY_VERSIONS] !== "object" || Array.isArray(target.meta[DAY_VERSIONS])) {
+      target.meta[DAY_VERSIONS] = {};
+    }
+    if (!target.meta[ORDER_VERSIONS] || typeof target.meta[ORDER_VERSIONS] !== "object" || Array.isArray(target.meta[ORDER_VERSIONS])) {
+      target.meta[ORDER_VERSIONS] = {};
+    }
 
-  function stripContains(dayKey) {
-    return stripDates(stripAnchorDate || getTodayKey(), 5).some(item => item.date === dayKey);
-  }
-
-  function ensureSelectedVisible() {
-    if (!validDateKey(uiSelectedDate)) uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
-    if (!validDateKey(stripAnchorDate)) stripAnchorDate = firstWorkoutOnOrAfter(getTodayKey());
-
-    if (!stripContains(uiSelectedDate)) {
-      /*
-        When moving outside the current 5 cards, shift the window so the
-        selected workout is visible as the first card.
-      */
-      stripAnchorDate = uiSelectedDate;
+    for (const section of SECTIONS) {
+      if (!Array.isArray(target.meta.looksTaskOrder[section])) target.meta.looksTaskOrder[section] = [];
     }
   }
 
-  function previousExercise(name, beforeDate) {
-    ensureGym();
-    const sessions = [...state.meta.gymClean.sessions]
-      .filter(session => validDateKey(session?.date) && session.date < beforeDate)
-      .sort((a, b) => b.date.localeCompare(a.date));
-
-    for (const session of sessions) {
-      const match = Array.isArray(session.exercises)
-        ? session.exercises.find(exercise => exercise?.name === name)
-        : null;
-      if (match) return match;
-    }
-    return null;
+  function customTaskMap(snapshot = state) {
+    ensureTaskMeta(snapshot);
+    return new Map(
+      snapshot.meta.looksCustomTasks
+        .filter(task => task && task.id)
+        .map(task => [String(task.id), task])
+    );
   }
 
-  function setText(set) {
-    return Number(set?.weight) > 0 && Number(set?.reps) > 0
-      ? `${Number(set.weight)} lb × ${Number(set.reps)}`
-      : "—";
+  function knownEntityIds(snapshot = state) {
+    ensureTaskMeta(snapshot);
+    const ids = new Set();
+
+    for (const task of snapshot.meta.looksCustomTasks) {
+      if (task?.id) ids.add(String(task.id));
+    }
+    Object.keys(snapshot.meta.looksTaskEdits || {}).forEach(id => ids.add(id));
+    Object.keys(snapshot.meta[CUSTOM_SCHEDULE_META] || {}).forEach(id => ids.add(id));
+    Object.keys(snapshot.meta[ENTITY_VERSIONS] || {}).forEach(id => ids.add(id));
+    Object.keys(snapshot.meta[TOMBSTONES] || {}).forEach(id => ids.add(id));
+    (snapshot.meta.looksDeletedTaskIds || []).forEach(id => ids.add(String(id)));
+
+    return ids;
   }
 
-  function formatDate(dayKey) {
-    const date = keyToLocalDate(dayKey);
-    return `${DAYS[date.getDay()]}, ${date.toLocaleDateString(undefined, {
-      month: "long",
-      day: "numeric",
-      year: "numeric"
-    })}`;
+  function normalizeDays(value) {
+    if (!Array.isArray(value)) return [];
+    const set = new Set(value.map(day => String(day || "").trim()));
+    return DAY_NAMES.filter(day => set.has(day));
   }
 
-  function renderStableStrip({ scroll = true } = {}) {
-    const grid = document.getElementById("cleanGymWeekGrid");
-    if (!grid) return;
+  function entityDescriptor(snapshot, id) {
+    ensureTaskMeta(snapshot);
+    const task = snapshot.meta.looksCustomTasks.find(item => String(item?.id || "") === id) || null;
+    const edit = Object.prototype.hasOwnProperty.call(snapshot.meta.looksTaskEdits, id)
+      ? String(snapshot.meta.looksTaskEdits[id] ?? "")
+      : null;
+    const scheduled = normalizeDays(
+      task?.days?.length
+        ? task.days
+        : snapshot.meta[CUSTOM_SCHEDULE_META]?.[id]
+    );
+    const deletedBuiltin = snapshot.meta.looksDeletedTaskIds.includes(id);
 
-    ensureSelectedVisible();
-
-    const heading = grid.closest(".clean-gym-week-card")?.querySelector(".panel-title h3");
-    if (heading) heading.textContent = "Next workouts";
-
-    const items = stripDates(stripAnchorDate, 5);
-    grid.innerHTML = "";
-
-    for (const item of items) {
-      const date = keyToLocalDate(item.date);
-      const session = sessionFor(item.date);
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.gymStripDate = item.date;
-      button.className =
-        `clean-gym-day gym-strip-card` +
-        `${item.date === uiSelectedDate ? " selected gym-strip-selected" : ""}` +
-        `${item.date === getTodayKey() ? " today" : ""}`;
-
-      button.innerHTML = `
-        <strong>${DAYS[date.getDay()].slice(0, 3)} · ${date.getMonth() + 1}/${date.getDate()}</strong>
-        <span>${escapeHtml(item.workout)}${session?.completed ? " ✓" : ""}</span>`;
-
-      button.addEventListener("click", event => {
-        event.preventDefault();
-        event.stopPropagation();
-        uiSelectedDate = item.date;
-        renderGymUi();
-      });
-
-      grid.appendChild(button);
-    }
-
-    if (scroll) {
-      requestAnimationFrame(() => {
-        const selected = grid.querySelector(`[data-gym-strip-date="${CSS.escape(uiSelectedDate)}"]`);
-        selected?.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-          inline: "center"
-        });
-      });
-    }
+    return {
+      task: task ? {
+        id: String(task.id),
+        section: String(task.section || ""),
+        title: String(task.title || ""),
+        custom: true,
+        ...(scheduled.length ? { days: scheduled } : {})
+      } : null,
+      edit,
+      days: scheduled,
+      deletedBuiltin
+    };
   }
 
-  function renderWorkoutForm() {
-    const body = document.getElementById("cleanGymWorkoutBody");
-    const title = document.getElementById("cleanGymWorkoutTitle");
-    const dateLabel = document.getElementById("cleanGymDateLabel");
-    const actions = document.getElementById("cleanGymActions");
-    const status = document.getElementById("cleanGymSaveStatus");
-    if (!body || !title || !dateLabel || !actions) return;
-
-    if (!validDateKey(uiSelectedDate)) {
-      uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
-    }
-
-    const workout = workoutFor(uiSelectedDate);
-    const session = sessionFor(uiSelectedDate);
-
-    dateLabel.textContent = formatDate(uiSelectedDate);
-    if (status) status.textContent = "";
-
-    if (!workout) {
-      title.textContent = "Rest day";
-      body.innerHTML = '<div class="clean-gym-rest"><strong>Rest day</strong></div>';
-      actions.hidden = true;
-      return;
-    }
-
-    actions.hidden = false;
-    title.textContent = workout;
-
-    const list = document.createElement("div");
-    list.className = "clean-gym-exercises";
-
-    for (const name of EXERCISES[workout] || []) {
-      const current = session?.exercises?.find(exercise => exercise?.name === name) || { sets: [] };
-      const previous = previousExercise(name, uiSelectedDate);
-
-      const row = document.createElement("div");
-      row.className = "clean-gym-exercise";
-      row.dataset.exercise = name;
-
-      row.innerHTML = `
-        <div class="clean-gym-exercise-name">
-          <strong>${escapeHtml(name)}</strong>
-          <span>2 working sets</span>
-        </div>
-        <div class="clean-gym-previous">
-          <span>Previous</span>
-          <strong>${escapeHtml(setText(previous?.sets?.[0]))}<br>${escapeHtml(setText(previous?.sets?.[1]))}</strong>
-        </div>
-        ${[0, 1].map(index => {
-          const set = current.sets?.[index] || {};
-          return `
-            <div class="clean-gym-set">
-              <label>
-                <span>Set ${index + 1} lb</span>
-                <input data-set="${index}" data-field="weight" type="number" min="0" max="2000" step="0.5"
-                  value="${Number(set.weight) || ""}" placeholder="Weight">
-              </label>
-              <label>
-                <span>Reps</span>
-                <input data-set="${index}" data-field="reps" type="number" min="0" max="100" step="1"
-                  value="${Number(set.reps) || ""}" placeholder="Reps">
-              </label>
-            </div>`;
-        }).join("")}`;
-
-      list.appendChild(row);
-    }
-
-    body.innerHTML = "";
-    body.appendChild(list);
+  function entityFingerprint(snapshot, id) {
+    return JSON.stringify(entityDescriptor(snapshot, id));
   }
 
-  function renderHistory() {
-    const list = document.getElementById("cleanGymHistory");
-    if (!list) return;
-
-    ensureGym();
-    const sessions = [...state.meta.gymClean.sessions]
-      .filter(session => validDateKey(session?.date))
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 12);
-
-    if (!sessions.length) {
-      list.innerHTML = '<div class="clean-gym-empty">No saved workout logs yet.</div>';
-      return;
-    }
-
-    list.innerHTML = "";
-
-    for (const session of sessions) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "clean-gym-history-row gym-log-row";
-
-      const setCount = (session.exercises || []).reduce(
-        (total, exercise) =>
-          total + (exercise.sets || []).filter(set => Number(set?.weight) > 0 && Number(set?.reps) > 0).length,
-        0
-      );
-
-      button.innerHTML = `
-        <div class="gym-log-row-copy">
-          <span>${escapeHtml(session.date)}</span>
-          <strong>${escapeHtml(session.workout || workoutFor(session.date) || "Workout")}${session.completed ? " ✓" : ""}</strong>
-          <small>${setCount ? `${setCount} logged set${setCount === 1 ? "" : "s"}` : "Open workout log"}</small>
-        </div>
-        <span class="gym-log-open">View log →</span>`;
-
-      button.addEventListener("click", event => {
-        event.preventDefault();
-        openWorkoutLog(session.date);
-      });
-
-      list.appendChild(button);
-    }
+  function orderFingerprint(snapshot, section) {
+    ensureTaskMeta(snapshot);
+    return JSON.stringify(snapshot.meta.looksTaskOrder?.[section] || []);
   }
 
-  function renderGymUi() {
-    ensureGym();
-    ensureSelectedVisible();
-
-    const badge = document.getElementById("cleanGymTodayBadge");
-    if (badge) badge.textContent = workoutFor(getTodayKey()) || "Rest day";
-
-    renderStableStrip();
-    renderWorkoutForm();
-    renderHistory();
-  }
-
-  function collectForm() {
-    const exercises = [];
-    let invalid = false;
-
-    document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise").forEach(row => {
-      const sets = [0, 1].map(index => {
-        const weight = Number(
-          row.querySelector(`[data-set="${index}"][data-field="weight"]`)?.value || 0
-        );
-        const reps = Number(
-          row.querySelector(`[data-set="${index}"][data-field="reps"]`)?.value || 0
-        );
-
-        if ((weight > 0) !== (reps > 0)) invalid = true;
-
-        return {
-          weight: Number.isFinite(weight) ? Math.max(0, weight) : 0,
-          reps: Number.isFinite(reps) ? Math.max(0, Math.round(reps)) : 0
-        };
-      });
-
-      exercises.push({
-        name: row.dataset.exercise || "",
-        sets
-      });
+  function dayFingerprint(snapshot, dayKey) {
+    const day = snapshot?.days?.[dayKey];
+    if (!day || typeof day !== "object") return "";
+    return JSON.stringify({
+      done: Array.isArray(day.done) ? day.done : [],
+      skipped: Array.isArray(day.skipped) ? day.skipped : [],
+      looksDone: Array.isArray(day.looksDone) ? day.looksDone : [],
+      looksSkipped: Array.isArray(day.looksSkipped) ? day.looksSkipped : [],
+      waterOz: Number(day.waterOz) || 0,
+      completed: Boolean(day.completed),
+      looksCompleted: Boolean(day.looksCompleted),
+      missedReason: String(day.missedReason || "")
     });
-
-    return { exercises, invalid };
   }
 
-  function saveWorkout(markComplete) {
-    const workout = workoutFor(uiSelectedDate);
-    const status = document.getElementById("cleanGymSaveStatus");
-    if (!workout) return;
-
-    const collected = collectForm();
-
-    if (collected.invalid) {
-      if (status) status.textContent = "Each entered set needs both weight and reps.";
-      return;
+  function captureBaseline(snapshot = state) {
+    ensureTaskMeta(snapshot);
+    const entities = {};
+    for (const id of knownEntityIds(snapshot)) {
+      entities[id] = entityFingerprint(snapshot, id);
     }
 
-    if (markComplete) {
-      const missing = collected.exercises.some(exercise =>
-        exercise.sets.some(set => !(set.weight > 0 && set.reps > 0))
-      );
+    const orders = {};
+    for (const section of SECTIONS) {
+      orders[section] = orderFingerprint(snapshot, section);
+    }
 
-      if (missing) {
-        if (status) status.textContent = "Fill both sets for every exercise before completing.";
-        return;
+    const days = {};
+    for (const key of Object.keys(snapshot.days || {})) {
+      if (validDateKey(key)) days[key] = dayFingerprint(snapshot, key);
+    }
+
+    return { entities, orders, days };
+  }
+
+  function inferAndStampMutations() {
+    ensureTaskMeta();
+    if (!baseline) {
+      baseline = captureBaseline();
+      return false;
+    }
+
+    const now = isoNow();
+    let changed = false;
+
+    const currentIds = knownEntityIds(state);
+    const previousIds = new Set(Object.keys(baseline.entities || {}));
+    const allIds = new Set([...currentIds, ...previousIds]);
+
+    for (const id of allIds) {
+      const before = baseline.entities?.[id] ?? JSON.stringify({
+        task: null, edit: null, days: [], deletedBuiltin: false
+      });
+      const after = entityFingerprint(state, id);
+
+      if (before === after) continue;
+
+      state.meta[ENTITY_VERSIONS][id] = now;
+      changed = true;
+
+      let beforeObject = null;
+      let afterObject = null;
+      try { beforeObject = JSON.parse(before); } catch (_) {}
+      try { afterObject = JSON.parse(after); } catch (_) {}
+
+      const customWasRemoved = Boolean(beforeObject?.task && !afterObject?.task);
+      const builtinWasDeleted = Boolean(!beforeObject?.deletedBuiltin && afterObject?.deletedBuiltin);
+
+      if (customWasRemoved || builtinWasDeleted) {
+        state.meta[TOMBSTONES][id] = now;
+      } else {
+        const tombstone = String(state.meta[TOMBSTONES][id] || "");
+        if (tombstone && String(now) > tombstone) {
+          delete state.meta[TOMBSTONES][id];
+        }
       }
     }
 
-    const session = sessionForWrite(uiSelectedDate);
-    session.workout = workout;
-    session.exercises = collected.exercises;
-    if (markComplete) session.completed = true;
-    session.updatedAt = new Date().toISOString();
+    for (const section of SECTIONS) {
+      const before = baseline.orders?.[section] ?? "[]";
+      const after = orderFingerprint(state, section);
+      if (before !== after) {
+        state.meta[ORDER_VERSIONS][section] = now;
+        changed = true;
+      }
+    }
+
+    const dayKeys = new Set([
+      ...Object.keys(baseline.days || {}),
+      ...Object.keys(state.days || {}).filter(validDateKey)
+    ]);
+
+    for (const dayKey of dayKeys) {
+      const before = baseline.days?.[dayKey] ?? "";
+      const after = dayFingerprint(state, dayKey);
+      if (before !== after) {
+        state.meta[DAY_VERSIONS][dayKey] = now;
+        changed = true;
+      }
+    }
+
+    baseline = captureBaseline();
+    return changed;
+  }
+
+  function cleanTaskIdEverywhere(snapshot, id, { builtinDelete = false } = {}) {
+    ensureTaskMeta(snapshot);
+
+    snapshot.meta.looksCustomTasks = snapshot.meta.looksCustomTasks
+      .filter(task => String(task?.id || "") !== id);
+
+    delete snapshot.meta.looksTaskEdits[id];
+    delete snapshot.meta[CUSTOM_SCHEDULE_META][id];
+
+    if (builtinDelete && !snapshot.meta.looksDeletedTaskIds.includes(id)) {
+      snapshot.meta.looksDeletedTaskIds.push(id);
+    }
+
+    for (const section of SECTIONS) {
+      snapshot.meta.looksTaskOrder[section] = snapshot.meta.looksTaskOrder[section]
+        .filter(taskId => String(taskId) !== id);
+    }
+
+    for (const day of Object.values(snapshot.days || {})) {
+      if (!day || typeof day !== "object") continue;
+      if (Array.isArray(day.looksDone)) day.looksDone = day.looksDone.filter(taskId => String(taskId) !== id);
+      if (Array.isArray(day.looksSkipped)) day.looksSkipped = day.looksSkipped.filter(taskId => String(taskId) !== id);
+    }
+  }
+
+  function enforceTombstones(snapshot = state) {
+    ensureTaskMeta(snapshot);
+    let changed = false;
+
+    const customIds = new Set(
+      snapshot.meta.looksCustomTasks
+        .map(task => String(task?.id || ""))
+        .filter(Boolean)
+    );
+
+    for (const [id, tombstoneVersion] of Object.entries(snapshot.meta[TOMBSTONES])) {
+      if (!tombstoneVersion) continue;
+
+      const entityVersion = String(snapshot.meta[ENTITY_VERSIONS][id] || "");
+      if (entityVersion && entityVersion > tombstoneVersion) continue;
+
+      const before = entityFingerprint(snapshot, id);
+      cleanTaskIdEverywhere(snapshot, id, { builtinDelete: !customIds.has(id) });
+      const after = entityFingerprint(snapshot, id);
+
+      if (before !== after) changed = true;
+    }
+
+    return changed;
+  }
+
+  function vaultPayload() {
+    ensureTaskMeta();
+    return {
+      savedAt: new Date().toISOString(),
+      meta: {
+        looksCustomTasks: clone(state.meta.looksCustomTasks),
+        looksTaskEdits: clone(state.meta.looksTaskEdits),
+        looksDeletedTaskIds: clone(state.meta.looksDeletedTaskIds),
+        looksTaskOrder: clone(state.meta.looksTaskOrder),
+        [CUSTOM_SCHEDULE_META]: clone(state.meta[CUSTOM_SCHEDULE_META]),
+        [ENTITY_VERSIONS]: clone(state.meta[ENTITY_VERSIONS]),
+        [TOMBSTONES]: clone(state.meta[TOMBSTONES]),
+        [DAY_VERSIONS]: clone(state.meta[DAY_VERSIONS]),
+        [ORDER_VERSIONS]: clone(state.meta[ORDER_VERSIONS])
+      },
+      days: clone(state.days || {})
+    };
+  }
+
+  function writeVault() {
+    try {
+      localStorage.setItem(VAULT_KEY, JSON.stringify(vaultPayload()));
+    } catch (error) {
+      console.warn("LOCKED OS: task vault could not be written.", error);
+    }
+  }
+
+  function readVault() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(VAULT_KEY) || "null");
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function applyEntityFrom(source, target, id) {
+    ensureTaskMeta(source);
+    ensureTaskMeta(target);
+
+    const sourceTask = source.meta.looksCustomTasks
+      .find(task => String(task?.id || "") === id) || null;
+
+    target.meta.looksCustomTasks = target.meta.looksCustomTasks
+      .filter(task => String(task?.id || "") !== id);
+
+    if (sourceTask) target.meta.looksCustomTasks.push(clone(sourceTask));
+
+    if (Object.prototype.hasOwnProperty.call(source.meta.looksTaskEdits, id)) {
+      target.meta.looksTaskEdits[id] = source.meta.looksTaskEdits[id];
+    } else {
+      delete target.meta.looksTaskEdits[id];
+    }
+
+    if (Object.prototype.hasOwnProperty.call(source.meta[CUSTOM_SCHEDULE_META], id)) {
+      target.meta[CUSTOM_SCHEDULE_META][id] = clone(source.meta[CUSTOM_SCHEDULE_META][id]);
+    } else {
+      delete target.meta[CUSTOM_SCHEDULE_META][id];
+    }
+
+    const sourceDeleted = source.meta.looksDeletedTaskIds.includes(id);
+    target.meta.looksDeletedTaskIds = target.meta.looksDeletedTaskIds.filter(taskId => String(taskId) !== id);
+    if (sourceDeleted) target.meta.looksDeletedTaskIds.push(id);
+  }
+
+  function mergeTaskAwareRemote(remoteInput) {
+    const remote = clone(remoteInput || {});
+    ensureTaskMeta();
+    ensureTaskMeta(remote);
+
+    /*
+      Merge version metadata first.
+    */
+    const mergedEntityVersions = {};
+    const mergedTombstones = {};
+    const allIds = new Set([
+      ...knownEntityIds(state),
+      ...knownEntityIds(remote)
+    ]);
+
+    for (const id of allIds) {
+      mergedEntityVersions[id] = newer(
+        state.meta[ENTITY_VERSIONS][id],
+        remote.meta[ENTITY_VERSIONS][id]
+      );
+      mergedTombstones[id] = newer(
+        state.meta[TOMBSTONES][id],
+        remote.meta[TOMBSTONES][id]
+      );
+    }
+
+    remote.meta[ENTITY_VERSIONS] = mergedEntityVersions;
+    remote.meta[TOMBSTONES] = Object.fromEntries(
+      Object.entries(mergedTombstones).filter(([, value]) => Boolean(value))
+    );
+
+    /*
+      For each task/config entity, whichever device has the newer mutation
+      version wins. If neither side has version metadata yet, keep the remote
+      side as the legacy tie-breaker.
+    */
+    for (const id of allIds) {
+      const localVersion = String(state.meta[ENTITY_VERSIONS][id] || "");
+      const remoteVersion = String(remoteInput?.meta?.[ENTITY_VERSIONS]?.[id] || "");
+
+      if (isNewer(localVersion, remoteVersion)) {
+        applyEntityFrom(state, remote, id);
+      }
+
+      const tombstone = String(remote.meta[TOMBSTONES][id] || "");
+      const winningEntityVersion = String(remote.meta[ENTITY_VERSIONS][id] || "");
+
+      if (tombstone && (!winningEntityVersion || tombstone >= winningEntityVersion)) {
+        const localCustom = customTaskMap(state).has(id);
+        const remoteCustom = customTaskMap(remote).has(id);
+        cleanTaskIdEverywhere(remote, id, {
+          builtinDelete: !localCustom && !remoteCustom
+        });
+      }
+    }
+
+    /*
+      Task order is versioned per section.
+    */
+    for (const section of SECTIONS) {
+      const localVersion = String(state.meta[ORDER_VERSIONS][section] || "");
+      const remoteVersion = String(remoteInput?.meta?.[ORDER_VERSIONS]?.[section] || "");
+
+      if (isNewer(localVersion, remoteVersion)) {
+        remote.meta.looksTaskOrder[section] = clone(state.meta.looksTaskOrder[section]);
+      }
+
+      remote.meta[ORDER_VERSIONS][section] = newer(localVersion, remoteVersion);
+    }
+
+    /*
+      Daily checkbox/skip state is versioned per day. A stale remote event can
+      no longer replace a day that was just changed locally.
+    */
+    const dayKeys = new Set([
+      ...Object.keys(state.days || {}).filter(validDateKey),
+      ...Object.keys(remote.days || {}).filter(validDateKey),
+      ...Object.keys(state.meta[DAY_VERSIONS] || {}).filter(validDateKey),
+      ...Object.keys(remote.meta[DAY_VERSIONS] || {}).filter(validDateKey)
+    ]);
+
+    for (const dayKey of dayKeys) {
+      const localVersion = String(state.meta[DAY_VERSIONS][dayKey] || "");
+      const remoteVersion = String(remoteInput?.meta?.[DAY_VERSIONS]?.[dayKey] || "");
+
+      if (isNewer(localVersion, remoteVersion) && state.days?.[dayKey]) {
+        remote.days[dayKey] = clone(state.days[dayKey]);
+      }
+
+      remote.meta[DAY_VERSIONS][dayKey] = newer(localVersion, remoteVersion);
+    }
+
+    enforceTombstones(remote);
+    return remote;
+  }
+
+  function applyVaultIfNewer() {
+    const vault = readVault();
+    if (!vault?.meta) return false;
+
+    ensureTaskMeta();
+    ensureTaskMeta(vault);
+
+    let changed = false;
+
+    const allIds = new Set([
+      ...knownEntityIds(state),
+      ...knownEntityIds(vault)
+    ]);
+
+    for (const id of allIds) {
+      const currentVersion = String(state.meta[ENTITY_VERSIONS][id] || "");
+      const vaultVersion = String(vault.meta[ENTITY_VERSIONS][id] || "");
+
+      if (isNewer(vaultVersion, currentVersion)) {
+        applyEntityFrom(vault, state, id);
+        state.meta[ENTITY_VERSIONS][id] = vaultVersion;
+        changed = true;
+      }
+
+      const tombstone = newer(
+        state.meta[TOMBSTONES][id],
+        vault.meta[TOMBSTONES][id]
+      );
+      if (tombstone) state.meta[TOMBSTONES][id] = tombstone;
+    }
+
+    for (const section of SECTIONS) {
+      const currentVersion = String(state.meta[ORDER_VERSIONS][section] || "");
+      const vaultVersion = String(vault.meta[ORDER_VERSIONS][section] || "");
+
+      if (isNewer(vaultVersion, currentVersion)) {
+        state.meta.looksTaskOrder[section] = clone(vault.meta.looksTaskOrder?.[section] || []);
+        state.meta[ORDER_VERSIONS][section] = vaultVersion;
+        changed = true;
+      }
+    }
+
+    for (const [dayKey, vaultVersionValue] of Object.entries(vault.meta[DAY_VERSIONS] || {})) {
+      if (!validDateKey(dayKey)) continue;
+
+      const currentVersion = String(state.meta[DAY_VERSIONS][dayKey] || "");
+      const vaultVersion = String(vaultVersionValue || "");
+
+      if (isNewer(vaultVersion, currentVersion) && vault.days?.[dayKey]) {
+        state.days[dayKey] = clone(vault.days[dayKey]);
+        state.meta[DAY_VERSIONS][dayKey] = vaultVersion;
+        changed = true;
+      }
+    }
+
+    if (enforceTombstones(state)) changed = true;
+    return changed;
+  }
+
+  function parseRecoveryEntry(entry) {
+    if (!entry) return null;
+    if (entry.state && typeof entry.state === "object") return entry.state;
+
+    for (const key of ["serialized", "snapshot"]) {
+      if (typeof entry[key] === "string") {
+        try {
+          const parsed = JSON.parse(entry[key]);
+          if (parsed && typeof parsed === "object") return parsed;
+        } catch (_) {}
+      } else if (entry[key] && typeof entry[key] === "object") {
+        return entry[key];
+      }
+    }
+
+    return null;
+  }
+
+  /*
+    Recover a very recent local deletion that was already resurrected by the
+    older union-merge bug before this fix loaded. We only infer removals from
+    consecutive local-change snapshots within the last two hours.
+  */
+  function recoverRecentDeletionTombstones() {
+    ensureTaskMeta();
+
+    let changed = false;
+    const candidateKeys = [
+      "locked_os_recovery_snapshots_clean",
+      "locked_os_recovery_snapshots_v2"
+    ];
+
+    for (const storageKey of candidateKeys) {
+      let entries = [];
+      try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || "[]");
+        if (Array.isArray(parsed)) entries = parsed;
+      } catch (_) {}
+
+      const localChanges = entries
+        .filter(entry => {
+          const label = String(entry?.label || "").toLowerCase();
+          const savedAt = Date.parse(entry?.savedAt || "");
+          return (
+            label.includes("local-change") &&
+            Number.isFinite(savedAt) &&
+            Date.now() - savedAt <= 2 * 60 * 60 * 1000
+          );
+        })
+        .map(entry => ({
+          entry,
+          savedAt: Date.parse(entry.savedAt),
+          state: parseRecoveryEntry(entry)
+        }))
+        .filter(item => item.state)
+        .sort((a, b) => a.savedAt - b.savedAt);
+
+      for (let index = 1; index < localChanges.length; index += 1) {
+        const before = localChanges[index - 1];
+        const after = localChanges[index];
+
+        const beforeIds = new Set(
+          (before.state?.meta?.looksCustomTasks || [])
+            .map(task => String(task?.id || ""))
+            .filter(Boolean)
+        );
+        const afterIds = new Set(
+          (after.state?.meta?.looksCustomTasks || [])
+            .map(task => String(task?.id || ""))
+            .filter(Boolean)
+        );
+
+        for (const id of beforeIds) {
+          if (afterIds.has(id)) continue;
+          if (!customTaskMap(state).has(id)) continue;
+
+          const version = new Date(after.savedAt).toISOString();
+          state.meta[TOMBSTONES][id] = newer(state.meta[TOMBSTONES][id], version);
+          state.meta[ENTITY_VERSIONS][id] = newer(state.meta[ENTITY_VERSIONS][id], version);
+          cleanTaskIdEverywhere(state, id);
+          changed = true;
+        }
+      }
+    }
+
+    return changed;
+  }
+
+  /*
+    Make the current routine incapable of displaying a tombstoned task even if
+    another legacy layer somehow reintroduces it into an intermediate list.
+  */
+  if (typeof getLooksRoutine === "function" && !getLooksRoutine.__taskStabilityFilter) {
+    const baseGetLooksRoutine = getLooksRoutine;
+    const wrappedGetLooksRoutine = function(dayKey = getTodayKey()) {
+      const routine = baseGetLooksRoutine(dayKey);
+      ensureTaskMeta();
+
+      const tombstones = state.meta[TOMBSTONES];
+      for (const section of SECTIONS) {
+        if (!Array.isArray(routine?.[section])) continue;
+        routine[section] = routine[section].filter(task => {
+          const id = String(task?.id || "");
+          const tombstone = String(tombstones[id] || "");
+          const entityVersion = String(state.meta[ENTITY_VERSIONS][id] || "");
+          return !tombstone || (entityVersion && entityVersion > tombstone);
+        });
+      }
+
+      return routine;
+    };
+    wrappedGetLooksRoutine.__taskStabilityFilter = true;
+    getLooksRoutine = wrappedGetLooksRoutine;
+  }
+
+  /*
+    Replace Looks checkbox/skip handling with one immediate state transaction.
+  */
+  setLooksStatus = function(task, status) {
+    const dayKey = getTodayKey();
+    const day = ensureDay(dayKey);
+    const done = new Set(day.looksDone || []);
+    const skipped = new Set(day.looksSkipped || []);
+
+    if (status === "done") {
+      if (done.has(task.id)) {
+        done.delete(task.id);
+      } else {
+        done.add(task.id);
+        skipped.delete(task.id);
+      }
+    } else if (status === "skipped") {
+      if (skipped.has(task.id)) {
+        skipped.delete(task.id);
+      } else {
+        skipped.add(task.id);
+        done.delete(task.id);
+      }
+    } else {
+      return;
+    }
+
+    if (
+      task.meta === "morningWater" &&
+      status === "done" &&
+      done.has(task.id) &&
+      day.waterOz < LOOKS_MORNING_WATER_OZ
+    ) {
+      day.waterOz = LOOKS_MORNING_WATER_OZ;
+    }
+
+    day.looksDone = [...done];
+    day.looksSkipped = [...skipped];
+
+    if (typeof syncWaterTask === "function") {
+      syncWaterTask(day, dayKey);
+    }
+
+    const allowedCount = getLooksTaskIds(dayKey).length;
+    day.looksCompleted = getResolvedSet(day, "looks").size === allowedCount;
 
     saveState();
 
-    if (status) {
-      status.textContent = markComplete
-        ? "Workout saved and completed."
-        : "Workout saved.";
-    }
+    /*
+      Full immediate render removes stale row state and installs one fresh click
+      handler per row. No 420ms delayed render race.
+    */
+    try { render(); } catch (error) { console.error("LOCKED OS task render failed:", error); }
+  };
 
-    if (typeof toast === "function") {
-      toast(markComplete ? "Workout completed." : "Workout saved.");
-    }
+  /*
+    Main checklist checkboxes get the same immediate transaction behavior.
+  */
+  toggleMainTask = function(taskId) {
+    const dayKey = getTodayKey();
+    const day = ensureDay(dayKey);
+    const done = new Set(day.done || []);
 
-    renderStableStrip({ scroll: false });
-    renderHistory();
-    try { renderWeeklyReview(); } catch (_) {}
-  }
+    if (done.has(taskId)) done.delete(taskId);
+    else done.add(taskId);
 
-  function openWorkoutLog(dayKey) {
-    const session = sessionFor(dayKey);
-    if (!session) return;
+    day.done = [...done];
+    day.skipped = [];
+    day.completed = day.done.length === TASK_IDS.length;
 
-    document.querySelector(".gym-log-modal-backdrop")?.remove();
+    saveState();
+    try { render(); } catch (error) { console.error("LOCKED OS main task render failed:", error); }
+  };
 
-    const modal = document.createElement("div");
-    modal.className = "gym-log-modal-backdrop";
+  /*
+    Deletion is now explicit and permanent until a genuinely newer edit is
+    created. This is the critical fix for "delete -> refresh -> task is back".
+  */
+  deleteLooksTask = function(task, section) {
+    ensureLooksTaskCustomizationState();
+    ensureTaskMeta();
 
-    const exerciseRows = (session.exercises || []).map(exercise => {
-      const sets = (exercise.sets || []).slice(0, 2);
-      return `
-        <div class="gym-log-exercise">
-          <div class="gym-log-exercise-name">${escapeHtml(exercise.name || "Exercise")}</div>
-          <div class="gym-log-sets">
-            ${[0, 1].map(index => {
-              const set = sets[index];
-              return `
-                <div class="gym-log-set">
-                  <span>Set ${index + 1}</span>
-                  <strong>${escapeHtml(setText(set))}</strong>
-                </div>`;
-            }).join("")}
-          </div>
-        </div>`;
-    }).join("");
+    const id = String(task?.id || "");
+    if (!id) return;
 
-    modal.innerHTML = `
-      <section class="gym-log-modal" role="dialog" aria-modal="true" aria-labelledby="gymLogModalTitle">
-        <div class="gym-log-modal-head">
-          <div>
-            <p class="eyebrow blue">Workout log</p>
-            <h3 id="gymLogModalTitle">${escapeHtml(session.workout || workoutFor(dayKey) || "Workout")}</h3>
-            <p>${escapeHtml(formatDate(dayKey))}</p>
-          </div>
-          <button class="gym-log-close" type="button" aria-label="Close">×</button>
-        </div>
+    const version = isoNow();
+    const isCustom = Boolean(task?.custom || id.startsWith("custom-"));
 
-        <div class="gym-log-status ${session.completed ? "complete" : ""}">
-          ${session.completed ? "✓ Completed workout" : "Saved workout"}
-        </div>
+    state.meta[TOMBSTONES][id] = version;
+    state.meta[ENTITY_VERSIONS][id] = version;
 
-        <div class="gym-log-exercises">
-          ${exerciseRows || '<div class="clean-gym-empty">This saved log has no set data.</div>'}
-        </div>
-
-        <div class="gym-log-modal-actions">
-          <button class="btn secondary gym-log-edit" type="button">Open in workout editor</button>
-          <button class="btn blue gym-log-done" type="button">Done</button>
-        </div>
-      </section>`;
-
-    document.body.appendChild(modal);
-
-    const close = () => modal.remove();
-
-    modal.addEventListener("click", event => {
-      if (event.target === modal) close();
+    cleanTaskIdEverywhere(state, id, {
+      builtinDelete: !isCustom
     });
 
-    modal.querySelector(".gym-log-close")?.addEventListener("click", close);
-    modal.querySelector(".gym-log-done")?.addEventListener("click", close);
-    modal.querySelector(".gym-log-edit")?.addEventListener("click", () => {
-      uiSelectedDate = dayKey;
-      if (!stripContains(dayKey)) stripAnchorDate = dayKey;
-      close();
-      renderGymUi();
-      document.querySelector(".clean-gym-log-card")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start"
-      });
-    });
+    const today = ensureDay();
+    today.looksCompleted =
+      getResolvedSet(today, "looks").size === getLooksTaskIds().length;
+
+    saveState();
+
+    try { render(); } catch (error) { console.error("LOCKED OS delete render failed:", error); }
+    try { if (typeof renderRotationCalendar === "function") renderRotationCalendar(); } catch (_) {}
+
+    if (typeof toast === "function") toast("Task deleted.");
+  };
+
+  /*
+    Make edit versioning explicit. Generic mutation detection also catches it,
+    but stamping here means the version is already present in the same save.
+  */
+  if (typeof saveLooksTaskEdit === "function") {
+    const baseSaveLooksTaskEdit = saveLooksTaskEdit;
+    saveLooksTaskEdit = function(task, nextTitle) {
+      ensureTaskMeta();
+      const id = String(task?.id || "");
+      if (id) {
+        const version = isoNow();
+        state.meta[ENTITY_VERSIONS][id] = version;
+        delete state.meta[TOMBSTONES][id];
+      }
+      return baseSaveLooksTaskEdit(task, nextTitle);
+    };
   }
 
-  function replaceControl(id, handler) {
-    const old = document.getElementById(id);
-    if (!old) return;
-
-    const fresh = old.cloneNode(true);
-    old.replaceWith(fresh);
-
-    fresh.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      handler();
-    }, { capture: true });
+  /*
+    Order changes are stamped before the base saver runs.
+  */
+  if (typeof saveLooksTaskOrder === "function") {
+    const baseSaveLooksTaskOrder = saveLooksTaskOrder;
+    saveLooksTaskOrder = function(section, orderedIds) {
+      ensureTaskMeta();
+      if (SECTIONS.includes(section)) {
+        state.meta[ORDER_VERSIONS][section] = isoNow();
+      }
+      return baseSaveLooksTaskOrder(section, orderedIds);
+    };
   }
 
-  function installControls() {
-    replaceControl("cleanGymPrev", () => {
-      const target = adjacentWorkout(uiSelectedDate || firstWorkoutOnOrAfter(getTodayKey()), -1);
-      if (!target) {
-        if (typeof toast === "function") toast("No earlier workout.");
-        return;
-      }
+  /*
+    New custom tasks receive a version immediately after creation. The clean
+    schedule wrapper underneath still handles selected weekdays.
+  */
+  if (typeof addLooksTask === "function") {
+    const baseAddLooksTask = addLooksTask;
+    addLooksTask = function(...args) {
+      ensureTaskMeta();
+      const beforeIds = new Set(
+        state.meta.looksCustomTasks.map(task => String(task?.id || ""))
+      );
 
-      uiSelectedDate = target;
+      const result = baseAddLooksTask(...args);
 
-      /*
-        Keep the selected workout in the current 5-card window if possible.
-        If it falls outside, shift the strip window.
-      */
-      if (!stripContains(target)) stripAnchorDate = target;
-      renderGymUi();
-    });
+      ensureTaskMeta();
+      const created = [...state.meta.looksCustomTasks]
+        .reverse()
+        .find(task => task?.id && !beforeIds.has(String(task.id)));
 
-    replaceControl("cleanGymNext", () => {
-      const target = adjacentWorkout(uiSelectedDate || firstWorkoutOnOrAfter(getTodayKey()), 1);
-      if (!target) return;
+      if (created) {
+        const id = String(created.id);
+        state.meta[ENTITY_VERSIONS][id] = isoNow();
+        delete state.meta[TOMBSTONES][id];
 
-      uiSelectedDate = target;
-      if (!stripContains(target)) stripAnchorDate = target;
-      renderGymUi();
-    });
-
-    replaceControl("cleanGymToday", () => {
-      uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
-      stripAnchorDate = firstWorkoutOnOrAfter(getTodayKey());
-      renderGymUi();
-    });
-
-    replaceControl("cleanGymSave", () => saveWorkout(false));
-    replaceControl("cleanGymComplete", () => saveWorkout(true));
-  }
-
-  function keepLooksGymReadOnly() {
-    for (const id of [
-      "workoutPrevBtn",
-      "workoutNextBtn",
-      "setWorkoutBtn",
-      "workoutRotationStatus"
-    ]) {
-      const element = document.getElementById(id);
-      if (element) element.style.display = "none";
-    }
-
-    const preview = document.getElementById("workoutPreviewName");
-    if (preview) preview.textContent = workoutFor(getTodayKey()) || "Rest day";
-  }
-
-  function installStyles() {
-    if (document.getElementById("gymLogNavFixStyles")) return;
-
-    const style = document.createElement("style");
-    style.id = "gymLogNavFixStyles";
-    style.textContent = `
-      #cleanGymWeekGrid {
-        display:flex!important;
-        flex-wrap:nowrap!important;
-        overflow-x:auto!important;
-        overflow-y:hidden!important;
-        gap:9px!important;
-        scroll-behavior:smooth;
-        scrollbar-width:thin;
-        padding:2px 2px 7px;
-      }
-
-      #cleanGymWeekGrid .gym-strip-card {
-        flex:0 0 160px!important;
-        min-width:160px!important;
-        max-width:160px!important;
-        transition:border-color .15s ease, background .15s ease, transform .15s ease;
-      }
-
-      #cleanGymWeekGrid .gym-strip-card.gym-strip-selected {
-        background:var(--blue-soft)!important;
-        border-color:rgba(37,132,184,.65)!important;
-        box-shadow:0 0 0 2px rgba(37,132,184,.12);
-        transform:translateY(-1px);
-      }
-
-      @media(min-width:1050px){
-        #cleanGymWeekGrid .gym-strip-card {
-          flex:1 1 0!important;
-          min-width:0!important;
-          max-width:none!important;
-        }
-      }
-
-      .gym-log-row {
-        align-items:center!important;
-        text-align:left;
-      }
-
-      .gym-log-row-copy {
-        display:grid;
-        gap:2px;
-      }
-
-      .gym-log-row-copy span,
-      .gym-log-row-copy small {
-        color:var(--muted);
-        font-weight:800;
-      }
-
-      .gym-log-row-copy small {
-        font-size:.72rem;
-      }
-
-      .gym-log-open {
-        color:var(--blue);
-        font-size:.76rem;
-        font-weight:900!important;
-        white-space:nowrap;
-      }
-
-      .gym-log-modal-backdrop {
-        position:fixed;
-        inset:0;
-        z-index:10020;
-        display:grid;
-        place-items:center;
-        padding:18px;
-        background:rgba(20,16,12,.48);
-        backdrop-filter:blur(8px);
-      }
-
-      .gym-log-modal {
-        width:min(680px,100%);
-        max-height:90vh;
-        overflow:auto;
-        padding:20px;
-        border:1px solid var(--line);
-        border-radius:24px;
-        background:var(--card);
-        box-shadow:0 26px 90px rgba(20,14,8,.28);
-      }
-
-      .gym-log-modal-head {
-        display:flex;
-        justify-content:space-between;
-        align-items:flex-start;
-        gap:15px;
-      }
-
-      .gym-log-modal-head h3 {
-        margin:0;
-        font-size:1.75rem;
-      }
-
-      .gym-log-modal-head p:not(.eyebrow) {
-        margin:5px 0 0;
-        color:var(--muted);
-        font-weight:800;
-      }
-
-      .gym-log-close {
-        width:36px;
-        height:36px;
-        border:0;
-        border-radius:999px;
-        background:rgba(42,30,18,.07);
-        color:var(--text);
-        font-size:1.4rem;
-        cursor:pointer;
-      }
-
-      .gym-log-status {
-        display:inline-flex;
-        margin:15px 0 12px;
-        padding:7px 10px;
-        border-radius:999px;
-        background:rgba(42,30,18,.07);
-        font-size:.75rem;
-        font-weight:900;
-      }
-
-      .gym-log-status.complete {
-        background:var(--blue-soft);
-      }
-
-      .gym-log-exercises {
-        display:grid;
-        gap:8px;
-      }
-
-      .gym-log-exercise {
-        display:grid;
-        grid-template-columns:minmax(160px,1fr) minmax(220px,1fr);
-        gap:12px;
-        align-items:center;
-        padding:12px 13px;
-        border:1px solid var(--line);
-        border-radius:15px;
-        background:rgba(255,255,255,.42);
-      }
-
-      .gym-log-exercise-name {
-        font-weight:900;
-      }
-
-      .gym-log-sets {
-        display:grid;
-        grid-template-columns:1fr 1fr;
-        gap:8px;
-      }
-
-      .gym-log-set {
-        display:grid;
-        gap:2px;
-        padding:8px 9px;
-        border-radius:11px;
-        background:rgba(42,30,18,.045);
-      }
-
-      .gym-log-set span {
-        color:var(--muted);
-        font-size:.68rem;
-        font-weight:900;
-      }
-
-      .gym-log-set strong {
-        font-size:.82rem;
-      }
-
-      .gym-log-modal-actions {
-        display:flex;
-        justify-content:flex-end;
-        gap:8px;
-        margin-top:17px;
-      }
-
-      @media(max-width:600px){
-        .gym-log-exercise {
-          grid-template-columns:1fr;
+        const days = normalizeDays(
+          created.days?.length
+            ? created.days
+            : state.meta[CUSTOM_SCHEDULE_META]?.[id]
+        );
+        if (days.length) {
+          created.days = days;
+          state.meta[CUSTOM_SCHEDULE_META][id] = days;
         }
 
-        .gym-log-modal-actions {
-          display:grid;
-          grid-template-columns:1fr 1fr;
-        }
+        saveState();
+        try { render(); } catch (_) {}
+        try { if (typeof renderRotationCalendar === "function") renderRotationCalendar(); } catch (_) {}
       }
 
-      #workoutPrevBtn,
-      #workoutNextBtn,
-      #setWorkoutBtn,
-      #workoutRotationStatus {
-        display:none!important;
-      }
-    `;
+      return result;
+    };
+  }
 
-    document.head.appendChild(style);
+  /*
+    Generic save wrapper catches every remaining task mutation, including any
+    weekday editor installed by earlier layers.
+  */
+  if (typeof saveState === "function" && !saveState.__taskStabilityWrapped) {
+    const baseSaveState = saveState;
+    const wrappedSaveState = function(...args) {
+      ensureTaskMeta();
+      inferAndStampMutations();
+      enforceTombstones(state);
+      writeVault();
+
+      const result = baseSaveState(...args);
+
+      baseline = captureBaseline();
+      return result;
+    };
+    wrappedSaveState.__taskStabilityWrapped = true;
+    saveState = wrappedSaveState;
+  }
+
+  /*
+    Preprocess every remote state using per-task/per-day versions before the
+    existing sync layer sees it.
+  */
+  if (typeof applyRemoteState === "function" && !applyRemoteState.__taskStabilityWrapped) {
+    const baseApplyRemoteState = applyRemoteState;
+    const wrappedApplyRemoteState = function(remoteState, ...args) {
+      const mergedRemote = mergeTaskAwareRemote(remoteState);
+      const result = baseApplyRemoteState(mergedRemote, ...args);
+
+      ensureTaskMeta();
+      enforceTombstones(state);
+      writeVault();
+      baseline = captureBaseline();
+
+      if (!mainApp.classList.contains("hidden")) {
+        try { render(); } catch (_) {}
+      }
+
+      return result;
+    };
+    wrappedApplyRemoteState.__taskStabilityWrapped = true;
+    applyRemoteState = wrappedApplyRemoteState;
   }
 
   function install() {
     if (typeof state === "undefined") return;
 
-    ensureGym();
+    ensureTaskMeta();
 
-    uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
-    stripAnchorDate = firstWorkoutOnOrAfter(getTodayKey());
+    /*
+      Apply any task state that was already safely written to the dedicated
+      vault before a stale remote state arrived.
+    */
+    let changed = applyVaultIfNewer();
 
-    installStyles();
-    installControls();
-    keepLooksGymReadOnly();
-    renderGymUi();
+    /*
+      Repair a task deleted moments ago that the old union merge resurrected.
+    */
+    if (recoverRecentDeletionTombstones()) changed = true;
+    if (enforceTombstones(state)) changed = true;
 
-    document.querySelectorAll('[data-tab="gymPage"],[data-tab="looksPage"]').forEach(button => {
-      if (button.dataset.gymLogNavFixBound === "true") return;
-      button.dataset.gymLogNavFixBound = "true";
+    baseline = captureBaseline();
+    writeVault();
 
-      button.addEventListener("click", () => {
-        setTimeout(() => {
-          keepLooksGymReadOnly();
+    if (changed) {
+      /*
+        Save the repaired state back through the normal protected sync path.
+      */
+      saveState();
+    } else if (typeof saveLocalState === "function") {
+      saveLocalState();
+    }
 
-          if (button.dataset.tab === "gymPage") {
-            installControls();
-            renderGymUi();
-          }
-        }, 0);
-      });
-    });
+    try {
+      if (!mainApp.classList.contains("hidden")) render();
+    } catch (_) {}
 
-    window.addEventListener("focus", keepLooksGymReadOnly);
+    installFinished = true;
   }
 
-  const start = () => setTimeout(install, 120);
+  const start = () => setTimeout(install, 150);
 
   if (document.readyState === "loading") {
     window.addEventListener("DOMContentLoaded", start);
