@@ -1540,5 +1540,139 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
+
+<script id="lockedOsDeletionRenderGuard">
+"use strict";
+
+/* Final render guard for Looksmaxxing deletions.
+   Deleted tasks are blocked at the last possible rendering step, not only in saved state. */
+window.addEventListener("DOMContentLoaded", () => {
+  const normalizeDeletedTaskTitle = value => String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+
+  function ensureDeletionGuardState() {
+    ensureLooksTaskCustomizationState();
+    state.meta.looksDeletedTaskIds = Array.isArray(state.meta.looksDeletedTaskIds)
+      ? [...new Set(state.meta.looksDeletedTaskIds.map(value => String(value || "").trim()).filter(Boolean))]
+      : [];
+    state.meta.looksDeletedTaskTitles = Array.isArray(state.meta.looksDeletedTaskTitles)
+      ? [...new Set(state.meta.looksDeletedTaskTitles.map(normalizeDeletedTaskTitle).filter(Boolean))]
+      : [];
+  }
+
+  function getDeletionGuardSets() {
+    ensureDeletionGuardState();
+    return {
+      ids: new Set(state.meta.looksDeletedTaskIds),
+      titles: new Set(state.meta.looksDeletedTaskTitles)
+    };
+  }
+
+  function isTaskPermanentlyDeleted(task) {
+    if (!task) return false;
+    const { ids, titles } = getDeletionGuardSets();
+    const id = String(task.id || "").trim();
+    const rawTitle = normalizeDeletedTaskTitle(task.title);
+    let displayTitle = rawTitle;
+    try { displayTitle = normalizeDeletedTaskTitle(getLooksTaskTitle(task)); } catch {}
+    return Boolean(
+      (id && ids.has(id)) ||
+      (rawTitle && titles.has(rawTitle)) ||
+      (displayTitle && titles.has(displayTitle))
+    );
+  }
+
+  function purgeDeletedTaskRows() {
+    const { ids, titles } = getDeletionGuardSets();
+    document.querySelectorAll("#looksMorningList .looks-task, #looksMiddayList .looks-task, #looksNightList .looks-task").forEach(row => {
+      const id = String(row.dataset.taskId || "").trim();
+      const title = normalizeDeletedTaskTitle(row.querySelector(".task-title")?.textContent || "");
+      if ((id && ids.has(id)) || (title && titles.has(title))) row.remove();
+    });
+  }
+
+  /* Block deleted tasks at the actual list renderer. */
+  const renderLooksTaskListBeforeDeletionGuard = renderLooksTaskList;
+  renderLooksTaskList = function(element, tasks, day, section) {
+    const filteredTasks = Array.isArray(tasks) ? tasks.filter(task => !isTaskPermanentlyDeleted(task)) : [];
+    const result = renderLooksTaskListBeforeDeletionGuard(element, filteredTasks, day, section);
+    purgeDeletedTaskRows();
+    return result;
+  };
+
+  /* Make progress/count logic use the same final deletion rule. */
+  getLooksTaskIds = function(dayKey = getTodayKey()) {
+    const routine = getLooksRoutine(dayKey);
+    return [...(routine.morning || []), ...(routine.midday || []), ...(routine.night || [])]
+      .filter(task => !isTaskPermanentlyDeleted(task))
+      .map(task => task.id);
+  };
+
+  /* Remove the row immediately after Delete, before any async sync activity can occur. */
+  const deleteLooksTaskBeforeDeletionGuard = deleteLooksTask;
+  deleteLooksTask = function(task, section) {
+    const taskId = String(task?.id || "").trim();
+    const taskTitles = new Set([
+      normalizeDeletedTaskTitle(task?.title),
+      normalizeDeletedTaskTitle((() => { try { return getLooksTaskTitle(task); } catch { return ""; } })())
+    ].filter(Boolean));
+
+    deleteLooksTaskBeforeDeletionGuard(task, section);
+
+    ensureDeletionGuardState();
+    if (taskId && !state.meta.looksDeletedTaskIds.includes(taskId)) state.meta.looksDeletedTaskIds.push(taskId);
+    for (const title of taskTitles) {
+      if (!state.meta.looksDeletedTaskTitles.includes(title)) state.meta.looksDeletedTaskTitles.push(title);
+    }
+
+    purgeDeletedTaskRows();
+    saveLocalState();
+    queueSupabaseSave(0);
+  };
+
+  /* This is the specific stuck task already deleted repeatedly. Keep it permanently tombstoned. */
+  ensureDeletionGuardState();
+  const azelaicId = "azelaic-acid";
+  const azelaicTitle = normalizeDeletedTaskTitle("Apply azelaic acid");
+  if (!state.meta.looksDeletedTaskIds.includes(azelaicId)) state.meta.looksDeletedTaskIds.push(azelaicId);
+  if (!state.meta.looksDeletedTaskTitles.includes(azelaicTitle)) state.meta.looksDeletedTaskTitles.push(azelaicTitle);
+
+  state.meta.looksCustomTasks = (state.meta.looksCustomTasks || []).filter(task => {
+    const id = String(task?.id || "").trim();
+    const raw = normalizeDeletedTaskTitle(task?.title);
+    const edited = normalizeDeletedTaskTitle(state.meta.looksTaskEdits?.[id]);
+    return id !== azelaicId && raw !== azelaicTitle && edited !== azelaicTitle;
+  });
+  delete state.meta.looksTaskEdits?.[azelaicId];
+  delete state.meta.looksTaskInfo?.[azelaicId];
+  for (const section of ["morning", "midday", "night"]) {
+    const order = Array.isArray(state.meta.looksTaskOrder?.[section]) ? state.meta.looksTaskOrder[section] : [];
+    state.meta.looksTaskOrder[section] = order.filter(id => String(id || "") !== azelaicId);
+  }
+  for (const day of Object.values(state.days || {})) {
+    if (!day || typeof day !== "object") continue;
+    day.looksDone = (day.looksDone || []).filter(id => String(id || "") !== azelaicId);
+    day.looksSkipped = (day.looksSkipped || []).filter(id => String(id || "") !== azelaicId);
+  }
+  saveLocalState();
+
+  /* Last-resort DOM guard: if any other existing code inserts a deleted task later, remove it immediately. */
+  const observer = new MutationObserver(() => purgeDeletedTaskRows());
+  ["looksMorningList", "looksMiddayList", "looksNightList"].forEach(id => {
+    const list = document.getElementById(id);
+    if (list) observer.observe(list, { childList: true, subtree: true });
+  });
+
+  const renderLooksBeforeDeletionGuard = renderLooks;
+  renderLooks = function() {
+    const result = renderLooksBeforeDeletionGuard();
+    purgeDeletedTaskRows();
+    return result;
+  };
+
+  renderLooks();
+  purgeDeletedTaskRows();
+});
+</script>
+
 </body>
 </html>
