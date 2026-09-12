@@ -1378,5 +1378,167 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
+
+<script id="lockedOsDeletionHardFix">
+"use strict";
+
+/* Hard-delete Looksmaxxing tasks even when a stale/custom copy comes back with a different id. */
+window.addEventListener("DOMContentLoaded", () => {
+  const normalizeDeleteTitle = value => String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+
+  function ensureHardDeleteState() {
+    ensureLooksTaskCustomizationState();
+    state.meta.looksDeletedTaskTitles = Array.isArray(state.meta.looksDeletedTaskTitles)
+      ? [...new Set(state.meta.looksDeletedTaskTitles.map(normalizeDeleteTitle).filter(Boolean))]
+      : [];
+  }
+
+  const routineBeforeHardDelete = getLooksRoutine;
+  getLooksRoutine = function(dayKey = getTodayKey()) {
+    const routine = routineBeforeHardDelete(dayKey);
+    ensureHardDeleteState();
+    const deletedIds = new Set((state.meta.looksDeletedTaskIds || []).map(id => String(id || "")));
+    const deletedTitles = new Set((state.meta.looksDeletedTaskTitles || []).map(normalizeDeleteTitle));
+    const keep = task => {
+      const id = String(task?.id || "");
+      const rawTitle = normalizeDeleteTitle(task?.title);
+      const displayTitle = normalizeDeleteTitle(getLooksTaskTitle(task));
+      return !deletedIds.has(id) && !deletedTitles.has(rawTitle) && !deletedTitles.has(displayTitle);
+    };
+    return {
+      morning: (routine.morning || []).filter(keep),
+      midday: (routine.midday || []).filter(keep),
+      night: (routine.night || []).filter(keep)
+    };
+  };
+
+  const addLooksTaskBeforeHardDelete = addLooksTask;
+  addLooksTask = function(section, title, afterTaskId = null, days = LOCKED_OS_LOOKS_DAY_ORDER) {
+    ensureHardDeleteState();
+    const titleKey = normalizeDeleteTitle(title);
+    if (titleKey) {
+      state.meta.looksDeletedTaskTitles = state.meta.looksDeletedTaskTitles.filter(item => normalizeDeleteTitle(item) !== titleKey);
+    }
+    return addLooksTaskBeforeHardDelete(section, title, afterTaskId, days);
+  };
+
+  deleteLooksTask = function(task, section) {
+    ensureHardDeleteState();
+    const taskId = String(task?.id || "").trim();
+    const displayTitle = String(getLooksTaskTitle(task) || task?.title || "").trim();
+    const rawTitle = String(task?.title || "").trim();
+    const titleKeys = new Set([normalizeDeleteTitle(displayTitle), normalizeDeleteTitle(rawTitle)].filter(Boolean));
+    const idsToDelete = new Set(taskId ? [taskId] : []);
+
+    /* Catch duplicated/stale custom copies of the same visible task. */
+    for (const item of state.meta.looksCustomTasks || []) {
+      const id = String(item?.id || "").trim();
+      const edited = String(state.meta.looksTaskEdits?.[id] || "").trim();
+      const itemTitles = [item?.title, edited].map(normalizeDeleteTitle).filter(Boolean);
+      if (id === taskId || itemTitles.some(title => titleKeys.has(title))) idsToDelete.add(id);
+    }
+
+    /* Catch any currently generated copy with the same title, even if its id differs. */
+    try {
+      const key = typeof lockedOsLooksKey === "function" ? lockedOsLooksKey() : getTodayKey();
+      const routine = routineBeforeHardDelete(key);
+      for (const item of [...(routine.morning || []), ...(routine.midday || []), ...(routine.night || [])]) {
+        const itemTitles = [item?.title, getLooksTaskTitle(item)].map(normalizeDeleteTitle).filter(Boolean);
+        if (String(item?.id || "") === taskId || itemTitles.some(title => titleKeys.has(title))) {
+          idsToDelete.add(String(item.id || ""));
+        }
+      }
+    } catch (error) {
+      console.warn("Could not scan routine during hard delete:", error);
+    }
+
+    state.meta.looksCustomTasks = (state.meta.looksCustomTasks || []).filter(item => {
+      const id = String(item?.id || "");
+      const edited = String(state.meta.looksTaskEdits?.[id] || "").trim();
+      const sameTitle = [item?.title, edited].map(normalizeDeleteTitle).filter(Boolean).some(title => titleKeys.has(title));
+      return !idsToDelete.has(id) && !sameTitle;
+    });
+
+    const deletedIds = new Set((state.meta.looksDeletedTaskIds || []).map(id => String(id || "")));
+    idsToDelete.forEach(id => { if (id) deletedIds.add(id); });
+    state.meta.looksDeletedTaskIds = [...deletedIds];
+
+    const deletedTitles = new Set((state.meta.looksDeletedTaskTitles || []).map(normalizeDeleteTitle));
+    titleKeys.forEach(title => deletedTitles.add(title));
+    state.meta.looksDeletedTaskTitles = [...deletedTitles];
+
+    for (const id of idsToDelete) {
+      delete state.meta.looksTaskEdits[id];
+      if (state.meta.looksTaskInfo) delete state.meta.looksTaskInfo[id];
+    }
+
+    for (const key of ["morning", "midday", "night"]) {
+      const order = Array.isArray(state.meta.looksTaskOrder[key]) ? state.meta.looksTaskOrder[key] : [];
+      state.meta.looksTaskOrder[key] = order.filter(id => !idsToDelete.has(String(id || "")));
+    }
+
+    for (const day of Object.values(state.days || {})) {
+      if (!day || typeof day !== "object") continue;
+      day.looksDone = (day.looksDone || []).filter(id => !idsToDelete.has(String(id || "")));
+      day.looksSkipped = (day.looksSkipped || []).filter(id => !idsToDelete.has(String(id || "")));
+    }
+
+    saveState();
+    saveLocalState();
+    render();
+    queueSupabaseSave(0);
+    toast("Task permanently deleted.");
+  };
+
+  /* Preserve title tombstones too, so a stale Supabase snapshot cannot recreate the task under a new id. */
+  /* The specific stuck task the user has already deleted repeatedly: remove it on load too. */
+  ensureHardDeleteState();
+  const stuckAzelaicTitle = normalizeDeleteTitle("Apply azelaic acid");
+  let hardDeleteMigrated = false;
+  if (!state.meta.looksDeletedTaskTitles.includes(stuckAzelaicTitle)) {
+    state.meta.looksDeletedTaskTitles.push(stuckAzelaicTitle);
+    hardDeleteMigrated = true;
+  }
+  if (!state.meta.looksDeletedTaskIds.includes("azelaic-acid")) {
+    state.meta.looksDeletedTaskIds.push("azelaic-acid");
+    hardDeleteMigrated = true;
+  }
+  const customCountBefore = state.meta.looksCustomTasks.length;
+  state.meta.looksCustomTasks = state.meta.looksCustomTasks.filter(item => {
+    const id = String(item?.id || "");
+    const edited = String(state.meta.looksTaskEdits?.[id] || "").trim();
+    return ![item?.title, edited].map(normalizeDeleteTitle).includes(stuckAzelaicTitle);
+  });
+  if (state.meta.looksCustomTasks.length !== customCountBefore) hardDeleteMigrated = true;
+  if (hardDeleteMigrated) {
+    saveState();
+    queueSupabaseSave(0);
+  }
+
+  const applyRemoteStateBeforeHardDelete = applyRemoteState;
+  applyRemoteState = function(remoteState, statusMessage, options = {}) {
+    ensureHardDeleteState();
+    const localTitles = new Set((state.meta.looksDeletedTaskTitles || []).map(normalizeDeleteTitle).filter(Boolean));
+    if (remoteState && typeof remoteState === "object" && localTitles.size) {
+      remoteState = JSON.parse(JSON.stringify(remoteState));
+      remoteState.meta = remoteState.meta && typeof remoteState.meta === "object" ? remoteState.meta : {};
+      const remoteTitles = new Set((remoteState.meta.looksDeletedTaskTitles || []).map(normalizeDeleteTitle).filter(Boolean));
+      localTitles.forEach(title => remoteTitles.add(title));
+      remoteState.meta.looksDeletedTaskTitles = [...remoteTitles];
+
+      if (Array.isArray(remoteState.meta.looksCustomTasks)) {
+        remoteState.meta.looksCustomTasks = remoteState.meta.looksCustomTasks.filter(item => {
+          const id = String(item?.id || "");
+          const edited = String(remoteState.meta.looksTaskEdits?.[id] || "").trim();
+          const titles = [item?.title, edited].map(normalizeDeleteTitle).filter(Boolean);
+          return !titles.some(title => remoteTitles.has(title));
+        });
+      }
+    }
+    return applyRemoteStateBeforeHardDelete(remoteState, statusMessage, options);
+  };
+});
+</script>
+
 </body>
 </html>
