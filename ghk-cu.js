@@ -1,33 +1,34 @@
 "use strict";
 
 /*
-  LOCKED OS — Gym UI final cleanup
-  Base: currently deployed gym recovery build.
-  Fixes:
-  - one horizontal next-workout row
-  - Previous / Next / Today all use one selected workout date
-  - Looksmaxxing Gym becomes read-only (no workout shifter / Set controls)
-  - Friday Sep 11 remains Chest + side delts
-  - current/recovered Gym sessions remain untouched and continue saving to gymClean
+  LOCKED OS — Gym navigation + workout log fix
+  Base: deployed build da69fb13012b5f276558e39146d9085bab4857bb
+
+  Changes:
+  - Stable one-row workout strip with selected-card highlight.
+  - Previous/Next/Today and card clicks use one selected date.
+  - Selected workout card auto-scrolls into view.
+  - Recent workouts open a read-only log modal with all saved sets.
+  - Existing gymClean sessions / vault / Supabase recovery stay intact.
 */
 
 (() => {
-  const baseUrl = "https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@863c47dc88bb808d8f4960696774f18dd8f27fea/ghk-cu.js";
+  const baseUrl = "https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@da69fb13012b5f276558e39146d9085bab4857bb/ghk-cu.js";
   try {
     const request = new XMLHttpRequest();
     request.open("GET", baseUrl, false);
     request.send(null);
     if (request.status < 200 || request.status >= 300) throw new Error(`HTTP ${request.status}`);
-    (0, eval)(request.responseText + "\n//# sourceURL=locked-os-gym-recovery-base.js");
+    (0, eval)(request.responseText + "\n//# sourceURL=locked-os-gym-ui-base-da69fb.js");
   } catch (error) {
-    console.error("LOCKED OS: could not load current gym recovery base.", error);
+    console.error("LOCKED OS: could not load current Gym UI base.", error);
   }
 })();
 
 (() => {
   "use strict";
 
-  const FLAG = "__lockedOsGymUiFinal20260911";
+  const FLAG = "__lockedOsGymLogNavFix20260911";
   if (window[FLAG]) return;
   window[FLAG] = true;
 
@@ -69,7 +70,8 @@
   };
   const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-  let selectedDate = "";
+  let uiSelectedDate = "";
+  let stripAnchorDate = "";
 
   const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 
@@ -81,11 +83,6 @@
     state.meta.gymClean.sessions = Array.isArray(state.meta.gymClean.sessions)
       ? state.meta.gymClean.sessions
       : [];
-
-    /*
-      Keep the requested training order authoritative. This also guarantees
-      Friday 9/11 is Chest + side delts.
-    */
     state.meta.gymClean.schedule = { ...SCHEDULE };
   }
 
@@ -105,7 +102,7 @@
     let session = sessionFor(dayKey);
     if (!session) {
       session = {
-        id: `gym-final-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        id: `gym-log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
         date: dayKey,
         workout: workoutFor(dayKey),
         completed: false,
@@ -119,7 +116,7 @@
 
   function adjacentWorkout(dayKey, direction) {
     let cursor = keyToLocalDate(dayKey);
-    for (let step = 0; step < 60; step += 1) {
+    for (let step = 0; step < 90; step += 1) {
       cursor = addDays(cursor, direction);
       const key = formatDateKey(cursor);
       if (key < START) return null;
@@ -128,20 +125,43 @@
     return null;
   }
 
-  function sequenceFrom(dayKey, count = 5) {
-    const items = [];
-    let cursor = keyToLocalDate(dayKey);
-
-    /*
-      If selected date is a rest day, begin at the next actual workout.
-    */
-    for (let step = 0; step < 60 && items.length < count; step += 1) {
+  function firstWorkoutOnOrAfter(dayKey) {
+    if (validDateKey(dayKey) && workoutFor(dayKey)) return dayKey;
+    let cursor = keyToLocalDate(validDateKey(dayKey) ? dayKey : getTodayKey());
+    for (let step = 0; step < 30; step += 1) {
       const key = formatDateKey(cursor);
-      const workout = workoutFor(key);
-      if (workout) items.push({ date: key, workout });
+      if (workoutFor(key)) return key;
       cursor = addDays(cursor, 1);
     }
+    return START;
+  }
+
+  function stripDates(anchorKey, count = 5) {
+    const items = [];
+    let key = firstWorkoutOnOrAfter(anchorKey);
+
+    while (key && items.length < count) {
+      items.push({ date: key, workout: workoutFor(key) });
+      key = adjacentWorkout(key, 1);
+    }
     return items;
+  }
+
+  function stripContains(dayKey) {
+    return stripDates(stripAnchorDate || getTodayKey(), 5).some(item => item.date === dayKey);
+  }
+
+  function ensureSelectedVisible() {
+    if (!validDateKey(uiSelectedDate)) uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
+    if (!validDateKey(stripAnchorDate)) stripAnchorDate = firstWorkoutOnOrAfter(getTodayKey());
+
+    if (!stripContains(uiSelectedDate)) {
+      /*
+        When moving outside the current 5 cards, shift the window so the
+        selected workout is visible as the first card.
+      */
+      stripAnchorDate = uiSelectedDate;
+    }
   }
 
   function previousExercise(name, beforeDate) {
@@ -165,14 +185,25 @@
       : "—";
   }
 
-  function renderSequence() {
+  function formatDate(dayKey) {
+    const date = keyToLocalDate(dayKey);
+    return `${DAYS[date.getDay()]}, ${date.toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric"
+    })}`;
+  }
+
+  function renderStableStrip({ scroll = true } = {}) {
     const grid = document.getElementById("cleanGymWeekGrid");
     if (!grid) return;
+
+    ensureSelectedVisible();
 
     const heading = grid.closest(".clean-gym-week-card")?.querySelector(".panel-title h3");
     if (heading) heading.textContent = "Next workouts";
 
-    const items = sequenceFrom(selectedDate || getTodayKey(), 5);
+    const items = stripDates(stripAnchorDate, 5);
     grid.innerHTML = "";
 
     for (const item of items) {
@@ -180,15 +211,35 @@
       const session = sessionFor(item.date);
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `clean-gym-day${item.date === selectedDate ? " selected" : ""}${item.date === getTodayKey() ? " today" : ""}`;
+      button.dataset.gymStripDate = item.date;
+      button.className =
+        `clean-gym-day gym-strip-card` +
+        `${item.date === uiSelectedDate ? " selected gym-strip-selected" : ""}` +
+        `${item.date === getTodayKey() ? " today" : ""}`;
+
       button.innerHTML = `
         <strong>${DAYS[date.getDay()].slice(0, 3)} · ${date.getMonth() + 1}/${date.getDate()}</strong>
         <span>${escapeHtml(item.workout)}${session?.completed ? " ✓" : ""}</span>`;
-      button.addEventListener("click", () => {
-        selectedDate = item.date;
-        renderAllGym();
+
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        uiSelectedDate = item.date;
+        renderGymUi();
       });
+
       grid.appendChild(button);
+    }
+
+    if (scroll) {
+      requestAnimationFrame(() => {
+        const selected = grid.querySelector(`[data-gym-strip-date="${CSS.escape(uiSelectedDate)}"]`);
+        selected?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center"
+        });
+      });
     }
   }
 
@@ -200,23 +251,19 @@
     const status = document.getElementById("cleanGymSaveStatus");
     if (!body || !title || !dateLabel || !actions) return;
 
-    if (!validDateKey(selectedDate)) selectedDate = getTodayKey();
+    if (!validDateKey(uiSelectedDate)) {
+      uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
+    }
 
-    const date = keyToLocalDate(selectedDate);
-    const workout = workoutFor(selectedDate);
-    const session = sessionFor(selectedDate);
+    const workout = workoutFor(uiSelectedDate);
+    const session = sessionFor(uiSelectedDate);
 
-    dateLabel.textContent = `${DAYS[date.getDay()]}, ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
+    dateLabel.textContent = formatDate(uiSelectedDate);
     if (status) status.textContent = "";
 
     if (!workout) {
-      const next = adjacentWorkout(selectedDate, 1);
       title.textContent = "Rest day";
-      body.innerHTML = `
-        <div class="clean-gym-rest">
-          <strong>Rest day</strong>
-          <span>${next ? `Next workout: ${escapeHtml(workoutFor(next))}` : "No next workout found."}</span>
-        </div>`;
+      body.innerHTML = '<div class="clean-gym-rest"><strong>Rest day</strong></div>';
       actions.hidden = true;
       return;
     }
@@ -229,11 +276,12 @@
 
     for (const name of EXERCISES[workout] || []) {
       const current = session?.exercises?.find(exercise => exercise?.name === name) || { sets: [] };
-      const previous = previousExercise(name, selectedDate);
+      const previous = previousExercise(name, uiSelectedDate);
 
       const row = document.createElement("div");
       row.className = "clean-gym-exercise";
       row.dataset.exercise = name;
+
       row.innerHTML = `
         <div class="clean-gym-exercise-name">
           <strong>${escapeHtml(name)}</strong>
@@ -243,20 +291,23 @@
           <span>Previous</span>
           <strong>${escapeHtml(setText(previous?.sets?.[0]))}<br>${escapeHtml(setText(previous?.sets?.[1]))}</strong>
         </div>
-        ${[0,1].map(index => {
+        ${[0, 1].map(index => {
           const set = current.sets?.[index] || {};
           return `
             <div class="clean-gym-set">
               <label>
                 <span>Set ${index + 1} lb</span>
-                <input data-set="${index}" data-field="weight" type="number" min="0" max="2000" step="0.5" value="${Number(set.weight) || ""}" placeholder="Weight">
+                <input data-set="${index}" data-field="weight" type="number" min="0" max="2000" step="0.5"
+                  value="${Number(set.weight) || ""}" placeholder="Weight">
               </label>
               <label>
                 <span>Reps</span>
-                <input data-set="${index}" data-field="reps" type="number" min="0" max="100" step="1" value="${Number(set.reps) || ""}" placeholder="Reps">
+                <input data-set="${index}" data-field="reps" type="number" min="0" max="100" step="1"
+                  value="${Number(set.reps) || ""}" placeholder="Reps">
               </label>
             </div>`;
         }).join("")}`;
+
       list.appendChild(row);
     }
 
@@ -272,35 +323,51 @@
     const sessions = [...state.meta.gymClean.sessions]
       .filter(session => validDateKey(session?.date))
       .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 10);
+      .slice(0, 12);
 
     if (!sessions.length) {
-      list.innerHTML = '<div class="clean-gym-empty">No saved workouts yet.</div>';
+      list.innerHTML = '<div class="clean-gym-empty">No saved workout logs yet.</div>';
       return;
     }
 
     list.innerHTML = "";
+
     for (const session of sessions) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "clean-gym-history-row";
+      button.className = "clean-gym-history-row gym-log-row";
+
+      const setCount = (session.exercises || []).reduce(
+        (total, exercise) =>
+          total + (exercise.sets || []).filter(set => Number(set?.weight) > 0 && Number(set?.reps) > 0).length,
+        0
+      );
+
       button.innerHTML = `
-        <span>${escapeHtml(session.date)}</span>
-        <strong>${escapeHtml(session.workout || workoutFor(session.date) || "Workout")}${session.completed ? " ✓" : ""}</strong>`;
-      button.addEventListener("click", () => {
-        selectedDate = session.date;
-        renderAllGym();
+        <div class="gym-log-row-copy">
+          <span>${escapeHtml(session.date)}</span>
+          <strong>${escapeHtml(session.workout || workoutFor(session.date) || "Workout")}${session.completed ? " ✓" : ""}</strong>
+          <small>${setCount ? `${setCount} logged set${setCount === 1 ? "" : "s"}` : "Open workout log"}</small>
+        </div>
+        <span class="gym-log-open">View log →</span>`;
+
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        openWorkoutLog(session.date);
       });
+
       list.appendChild(button);
     }
   }
 
-  function renderAllGym() {
+  function renderGymUi() {
     ensureGym();
+    ensureSelectedVisible();
+
     const badge = document.getElementById("cleanGymTodayBadge");
     if (badge) badge.textContent = workoutFor(getTodayKey()) || "Rest day";
 
-    renderSequence();
+    renderStableStrip();
     renderWorkoutForm();
     renderHistory();
   }
@@ -311,26 +378,37 @@
 
     document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise").forEach(row => {
       const sets = [0, 1].map(index => {
-        const weight = Number(row.querySelector(`[data-set="${index}"][data-field="weight"]`)?.value || 0);
-        const reps = Number(row.querySelector(`[data-set="${index}"][data-field="reps"]`)?.value || 0);
+        const weight = Number(
+          row.querySelector(`[data-set="${index}"][data-field="weight"]`)?.value || 0
+        );
+        const reps = Number(
+          row.querySelector(`[data-set="${index}"][data-field="reps"]`)?.value || 0
+        );
+
         if ((weight > 0) !== (reps > 0)) invalid = true;
+
         return {
           weight: Number.isFinite(weight) ? Math.max(0, weight) : 0,
           reps: Number.isFinite(reps) ? Math.max(0, Math.round(reps)) : 0
         };
       });
-      exercises.push({ name: row.dataset.exercise || "", sets });
+
+      exercises.push({
+        name: row.dataset.exercise || "",
+        sets
+      });
     });
 
     return { exercises, invalid };
   }
 
   function saveWorkout(markComplete) {
-    const workout = workoutFor(selectedDate);
+    const workout = workoutFor(uiSelectedDate);
     const status = document.getElementById("cleanGymSaveStatus");
     if (!workout) return;
 
     const collected = collectForm();
+
     if (collected.invalid) {
       if (status) status.textContent = "Each entered set needs both weight and reps.";
       return;
@@ -340,13 +418,14 @@
       const missing = collected.exercises.some(exercise =>
         exercise.sets.some(set => !(set.weight > 0 && set.reps > 0))
       );
+
       if (missing) {
         if (status) status.textContent = "Fill both sets for every exercise before completing.";
         return;
       }
     }
 
-    const session = sessionForWrite(selectedDate);
+    const session = sessionForWrite(uiSelectedDate);
     session.workout = workout;
     session.exercises = collected.exercises;
     if (markComplete) session.completed = true;
@@ -364,121 +443,345 @@
       toast(markComplete ? "Workout completed." : "Workout saved.");
     }
 
-    renderSequence();
+    renderStableStrip({ scroll: false });
     renderHistory();
     try { renderWeeklyReview(); } catch (_) {}
+  }
+
+  function openWorkoutLog(dayKey) {
+    const session = sessionFor(dayKey);
+    if (!session) return;
+
+    document.querySelector(".gym-log-modal-backdrop")?.remove();
+
+    const modal = document.createElement("div");
+    modal.className = "gym-log-modal-backdrop";
+
+    const exerciseRows = (session.exercises || []).map(exercise => {
+      const sets = (exercise.sets || []).slice(0, 2);
+      return `
+        <div class="gym-log-exercise">
+          <div class="gym-log-exercise-name">${escapeHtml(exercise.name || "Exercise")}</div>
+          <div class="gym-log-sets">
+            ${[0, 1].map(index => {
+              const set = sets[index];
+              return `
+                <div class="gym-log-set">
+                  <span>Set ${index + 1}</span>
+                  <strong>${escapeHtml(setText(set))}</strong>
+                </div>`;
+            }).join("")}
+          </div>
+        </div>`;
+    }).join("");
+
+    modal.innerHTML = `
+      <section class="gym-log-modal" role="dialog" aria-modal="true" aria-labelledby="gymLogModalTitle">
+        <div class="gym-log-modal-head">
+          <div>
+            <p class="eyebrow blue">Workout log</p>
+            <h3 id="gymLogModalTitle">${escapeHtml(session.workout || workoutFor(dayKey) || "Workout")}</h3>
+            <p>${escapeHtml(formatDate(dayKey))}</p>
+          </div>
+          <button class="gym-log-close" type="button" aria-label="Close">×</button>
+        </div>
+
+        <div class="gym-log-status ${session.completed ? "complete" : ""}">
+          ${session.completed ? "✓ Completed workout" : "Saved workout"}
+        </div>
+
+        <div class="gym-log-exercises">
+          ${exerciseRows || '<div class="clean-gym-empty">This saved log has no set data.</div>'}
+        </div>
+
+        <div class="gym-log-modal-actions">
+          <button class="btn secondary gym-log-edit" type="button">Open in workout editor</button>
+          <button class="btn blue gym-log-done" type="button">Done</button>
+        </div>
+      </section>`;
+
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+
+    modal.addEventListener("click", event => {
+      if (event.target === modal) close();
+    });
+
+    modal.querySelector(".gym-log-close")?.addEventListener("click", close);
+    modal.querySelector(".gym-log-done")?.addEventListener("click", close);
+    modal.querySelector(".gym-log-edit")?.addEventListener("click", () => {
+      uiSelectedDate = dayKey;
+      if (!stripContains(dayKey)) stripAnchorDate = dayKey;
+      close();
+      renderGymUi();
+      document.querySelector(".clean-gym-log-card")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    });
   }
 
   function replaceControl(id, handler) {
     const old = document.getElementById(id);
     if (!old) return;
+
     const fresh = old.cloneNode(true);
     old.replaceWith(fresh);
+
     fresh.addEventListener("click", event => {
       event.preventDefault();
+      event.stopPropagation();
       event.stopImmediatePropagation();
       handler();
-    });
+    }, { capture: true });
   }
 
-  function installNavigation() {
+  function installControls() {
     replaceControl("cleanGymPrev", () => {
-      const target = adjacentWorkout(selectedDate || getTodayKey(), -1);
-      if (target) {
-        selectedDate = target;
-        renderAllGym();
-      } else if (typeof toast === "function") {
-        toast("No earlier workout.");
+      const target = adjacentWorkout(uiSelectedDate || firstWorkoutOnOrAfter(getTodayKey()), -1);
+      if (!target) {
+        if (typeof toast === "function") toast("No earlier workout.");
+        return;
       }
+
+      uiSelectedDate = target;
+
+      /*
+        Keep the selected workout in the current 5-card window if possible.
+        If it falls outside, shift the strip window.
+      */
+      if (!stripContains(target)) stripAnchorDate = target;
+      renderGymUi();
     });
 
     replaceControl("cleanGymNext", () => {
-      const target = adjacentWorkout(selectedDate || getTodayKey(), 1);
-      if (target) {
-        selectedDate = target;
-        renderAllGym();
-      }
+      const target = adjacentWorkout(uiSelectedDate || firstWorkoutOnOrAfter(getTodayKey()), 1);
+      if (!target) return;
+
+      uiSelectedDate = target;
+      if (!stripContains(target)) stripAnchorDate = target;
+      renderGymUi();
     });
 
     replaceControl("cleanGymToday", () => {
-      selectedDate = getTodayKey();
-      renderAllGym();
+      uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
+      stripAnchorDate = firstWorkoutOnOrAfter(getTodayKey());
+      renderGymUi();
     });
 
     replaceControl("cleanGymSave", () => saveWorkout(false));
     replaceControl("cleanGymComplete", () => saveWorkout(true));
   }
 
-  function makeLooksGymReadOnly() {
-    /*
-      User wants Gym scheduling controlled only from the Gym page.
-      Keep the current workout name visible, but remove every shifter/Set action.
-    */
-    const ids = [
+  function keepLooksGymReadOnly() {
+    for (const id of [
       "workoutPrevBtn",
       "workoutNextBtn",
       "setWorkoutBtn",
       "workoutRotationStatus"
-    ];
-
-    for (const id of ids) {
+    ]) {
       const element = document.getElementById(id);
       if (element) element.style.display = "none";
     }
 
     const preview = document.getElementById("workoutPreviewName");
-    if (preview) {
-      preview.textContent = workoutFor(getTodayKey()) || "Rest day";
-      preview.setAttribute("aria-live", "polite");
-    }
-
-    /*
-      If the old controls sit in their own toolbar/container, collapse the
-      container only when it contains no other useful visible controls.
-    */
-    for (const id of ["workoutPrevBtn", "workoutNextBtn", "setWorkoutBtn"]) {
-      const el = document.getElementById(id);
-      const parent = el?.parentElement;
-      if (!parent) continue;
-      const visibleUseful = [...parent.children].some(child => {
-        if (child === el) return false;
-        const childId = child.id || "";
-        if (["workoutPrevBtn","workoutNextBtn","setWorkoutBtn","workoutRotationStatus"].includes(childId)) return false;
-        return child.offsetParent !== null;
-      });
-      if (!visibleUseful) parent.style.display = "none";
-    }
+    if (preview) preview.textContent = workoutFor(getTodayKey()) || "Rest day";
   }
 
   function installStyles() {
-    if (document.getElementById("gymUiFinalStyles")) return;
+    if (document.getElementById("gymLogNavFixStyles")) return;
+
     const style = document.createElement("style");
-    style.id = "gymUiFinalStyles";
+    style.id = "gymLogNavFixStyles";
     style.textContent = `
-      /* Always one horizontal workout row. Never wrap Friday 9/18 underneath. */
-      #cleanGymWeekGrid.clean-gym-week,
       #cleanGymWeekGrid {
         display:flex!important;
         flex-wrap:nowrap!important;
-        gap:9px!important;
         overflow-x:auto!important;
         overflow-y:hidden!important;
-        padding-bottom:3px;
+        gap:9px!important;
+        scroll-behavior:smooth;
         scrollbar-width:thin;
+        padding:2px 2px 7px;
       }
-      #cleanGymWeekGrid .clean-gym-day {
-        flex:1 0 150px!important;
-        min-width:150px!important;
-        max-width:none!important;
+
+      #cleanGymWeekGrid .gym-strip-card {
+        flex:0 0 160px!important;
+        min-width:160px!important;
+        max-width:160px!important;
+        transition:border-color .15s ease, background .15s ease, transform .15s ease;
       }
+
+      #cleanGymWeekGrid .gym-strip-card.gym-strip-selected {
+        background:var(--blue-soft)!important;
+        border-color:rgba(37,132,184,.65)!important;
+        box-shadow:0 0 0 2px rgba(37,132,184,.12);
+        transform:translateY(-1px);
+      }
+
       @media(min-width:1050px){
-        #cleanGymWeekGrid .clean-gym-day {
+        #cleanGymWeekGrid .gym-strip-card {
           flex:1 1 0!important;
           min-width:0!important;
+          max-width:none!important;
         }
       }
 
-      /* Looksmaxxing Gym is display-only. */
+      .gym-log-row {
+        align-items:center!important;
+        text-align:left;
+      }
+
+      .gym-log-row-copy {
+        display:grid;
+        gap:2px;
+      }
+
+      .gym-log-row-copy span,
+      .gym-log-row-copy small {
+        color:var(--muted);
+        font-weight:800;
+      }
+
+      .gym-log-row-copy small {
+        font-size:.72rem;
+      }
+
+      .gym-log-open {
+        color:var(--blue);
+        font-size:.76rem;
+        font-weight:900!important;
+        white-space:nowrap;
+      }
+
+      .gym-log-modal-backdrop {
+        position:fixed;
+        inset:0;
+        z-index:10020;
+        display:grid;
+        place-items:center;
+        padding:18px;
+        background:rgba(20,16,12,.48);
+        backdrop-filter:blur(8px);
+      }
+
+      .gym-log-modal {
+        width:min(680px,100%);
+        max-height:90vh;
+        overflow:auto;
+        padding:20px;
+        border:1px solid var(--line);
+        border-radius:24px;
+        background:var(--card);
+        box-shadow:0 26px 90px rgba(20,14,8,.28);
+      }
+
+      .gym-log-modal-head {
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-start;
+        gap:15px;
+      }
+
+      .gym-log-modal-head h3 {
+        margin:0;
+        font-size:1.75rem;
+      }
+
+      .gym-log-modal-head p:not(.eyebrow) {
+        margin:5px 0 0;
+        color:var(--muted);
+        font-weight:800;
+      }
+
+      .gym-log-close {
+        width:36px;
+        height:36px;
+        border:0;
+        border-radius:999px;
+        background:rgba(42,30,18,.07);
+        color:var(--text);
+        font-size:1.4rem;
+        cursor:pointer;
+      }
+
+      .gym-log-status {
+        display:inline-flex;
+        margin:15px 0 12px;
+        padding:7px 10px;
+        border-radius:999px;
+        background:rgba(42,30,18,.07);
+        font-size:.75rem;
+        font-weight:900;
+      }
+
+      .gym-log-status.complete {
+        background:var(--blue-soft);
+      }
+
+      .gym-log-exercises {
+        display:grid;
+        gap:8px;
+      }
+
+      .gym-log-exercise {
+        display:grid;
+        grid-template-columns:minmax(160px,1fr) minmax(220px,1fr);
+        gap:12px;
+        align-items:center;
+        padding:12px 13px;
+        border:1px solid var(--line);
+        border-radius:15px;
+        background:rgba(255,255,255,.42);
+      }
+
+      .gym-log-exercise-name {
+        font-weight:900;
+      }
+
+      .gym-log-sets {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+      }
+
+      .gym-log-set {
+        display:grid;
+        gap:2px;
+        padding:8px 9px;
+        border-radius:11px;
+        background:rgba(42,30,18,.045);
+      }
+
+      .gym-log-set span {
+        color:var(--muted);
+        font-size:.68rem;
+        font-weight:900;
+      }
+
+      .gym-log-set strong {
+        font-size:.82rem;
+      }
+
+      .gym-log-modal-actions {
+        display:flex;
+        justify-content:flex-end;
+        gap:8px;
+        margin-top:17px;
+      }
+
+      @media(max-width:600px){
+        .gym-log-exercise {
+          grid-template-columns:1fr;
+        }
+
+        .gym-log-modal-actions {
+          display:grid;
+          grid-template-columns:1fr 1fr;
+        }
+      }
+
       #workoutPrevBtn,
       #workoutNextBtn,
       #setWorkoutBtn,
@@ -486,6 +789,7 @@
         display:none!important;
       }
     `;
+
     document.head.appendChild(style);
   }
 
@@ -493,39 +797,36 @@
     if (typeof state === "undefined") return;
 
     ensureGym();
-    selectedDate = getTodayKey();
+
+    uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
+    stripAnchorDate = firstWorkoutOnOrAfter(getTodayKey());
 
     installStyles();
-    installNavigation();
-    makeLooksGymReadOnly();
-    renderAllGym();
+    installControls();
+    keepLooksGymReadOnly();
+    renderGymUi();
 
-    /*
-      Re-apply read-only Looks Gym after full app renders, because renderLooks()
-      can rewrite the workout preview text.
-    */
-    document.querySelectorAll('[data-tab="looksPage"],[data-tab="gymPage"]').forEach(button => {
-      if (button.dataset.gymUiFinalBound === "true") return;
-      button.dataset.gymUiFinalBound = "true";
-      button.addEventListener("click", () => setTimeout(() => {
-        makeLooksGymReadOnly();
-        if (button.dataset.tab === "gymPage") {
-          installNavigation();
-          renderAllGym();
-        }
-      }, 0));
+    document.querySelectorAll('[data-tab="gymPage"],[data-tab="looksPage"]').forEach(button => {
+      if (button.dataset.gymLogNavFixBound === "true") return;
+      button.dataset.gymLogNavFixBound = "true";
+
+      button.addEventListener("click", () => {
+        setTimeout(() => {
+          keepLooksGymReadOnly();
+
+          if (button.dataset.tab === "gymPage") {
+            installControls();
+            renderGymUi();
+          }
+        }, 0);
+      });
     });
 
-    /*
-      A save elsewhere in the app can trigger render(); keep the Looks controls
-      hidden without observing the entire DOM.
-    */
-    window.addEventListener("focus", () => {
-      makeLooksGymReadOnly();
-    });
+    window.addEventListener("focus", keepLooksGymReadOnly);
   }
 
-  const start = () => setTimeout(install, 100);
+  const start = () => setTimeout(install, 120);
+
   if (document.readyState === "loading") {
     window.addEventListener("DOMContentLoaded", start);
   } else {
