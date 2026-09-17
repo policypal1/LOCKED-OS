@@ -1,22 +1,37 @@
 "use strict";
 
 /*
-  LOCKED OS — TRUSTED DEVICE + GYM RANK PATCH
-  Generated from the current main build on 2026-09-15.
+  LOCKED OS — 2026-09-16 USER PATCH
 
-  The exact current ghk-cu.js is loaded first from the pinned commit below.
-  This file then adds only:
-    1) trusted-browser auto unlock with password fallback
-    2) Gym -> Rank subtab and progression system
+  This file loads the exact GitHub main build that existed immediately before
+  this patch, then layers only the requested changes on top.
+
+  Intentionally NOT changed:
+    - Gym weekday schedule. The suggested schedule can be applied separately.
+
+  Requested changes:
+    1) Back + rear delts:
+       - Keep Lat Pulldown
+       - Keep Chest-Supported Row
+       - Keep Seated Cable Row, both arms
+       - Rename Reverse Pec Deck -> Face Pulls, including saved workout history
+       - Add Shrugs as a new 2-working-set exercise
+    2) Custom Looksmaxxing tasks:
+       - Add an "Every other day" schedule option
+       - Existing treadmill task is migrated to every other day starting 2026-09-17
+    3) Glucose tracker:
+       - Merge local + remote glucose history instead of allowing an empty/stale
+         remote array to replace local readings
+       - Attempt recovery from LOCKED OS local recovery snapshots
 */
 
 (() => {
-  const CURRENT_BUILD_COMMIT = "2449c6831eca87e3ab56d10eec47fcbb73b34e90";
-  const CURRENT_BUILD = `https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@${CURRENT_BUILD_COMMIT}/ghk-cu.js`;
+  const PRE_PATCH_COMMIT = "b0025fac4ad7f633a91fee581b3278def49ace72";
+  const PRE_PATCH_BUILD = `https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@${PRE_PATCH_COMMIT}/ghk-cu.js`;
 
   try {
     const request = new XMLHttpRequest();
-    request.open("GET", CURRENT_BUILD, false);
+    request.open("GET", PRE_PATCH_BUILD, false);
     request.send(null);
 
     if (request.status < 200 || request.status >= 300) {
@@ -25,434 +40,227 @@
 
     (0, eval)(
       request.responseText +
-      `\n//# sourceURL=locked-os-current-build-${CURRENT_BUILD_COMMIT.slice(0, 8)}.js`
+      `\n//# sourceURL=locked-os-pre-sep16-${PRE_PATCH_COMMIT.slice(0, 8)}.js`
     );
   } catch (error) {
-    console.error("LOCKED OS: could not load the pinned current build.", error);
+    console.error("LOCKED OS: could not load the pre-patch build.", error);
   }
 })();
 
 (() => {
   "use strict";
 
-  const PATCH_FLAG = "__lockedOsTrustedDeviceGymRank20260915";
+  const PATCH_FLAG = "__lockedOsSep16GymRecurrenceGlucosePatch";
   if (window[PATCH_FLAG]) return;
   window[PATCH_FLAG] = true;
 
-  /* ---------------------------------------------------------------------- */
-  /* TRUSTED BROWSER                                                        */
-  /* ---------------------------------------------------------------------- */
-
-  const DEVICE_RECORD_KEY = "locked_os_trusted_device_v1";
-  const DEVICE_DB_NAME = "locked_os_device_auth_v1";
-  const DEVICE_DB_STORE = "deviceSecrets";
-  const DEVICE_DB_VERSION = 1;
-  const DEVICE_SECRET_BYTES = 32;
-
-  let trustedAutoUnlockInFlight = false;
-
-  function bytesToBase64(bytes) {
-    let binary = "";
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    return btoa(binary);
-  }
-
-  function base64ToBytes(value) {
-    try {
-      const binary = atob(String(value || ""));
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-      }
-      return bytes;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function safeJsonParse(value) {
-    try {
-      return JSON.parse(value);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function getDeviceRecord() {
-    const record = safeJsonParse(localStorage.getItem(DEVICE_RECORD_KEY));
-    if (!record || typeof record !== "object") return null;
-    if (!/^locked-[a-z0-9-]{12,}$/i.test(String(record.id || ""))) return null;
-    if (!/^[A-Za-z0-9+/=]{20,}$/.test(String(record.secretHash || ""))) return null;
-    return record;
-  }
-
-  function getDeviceLabel() {
-    const ua = String(navigator.userAgent || "");
-    const platform = String(navigator.platform || "");
-    const touchPoints = Number(navigator.maxTouchPoints || 0);
-
-    const isIPhone = /iPhone/i.test(ua);
-    const isIPad = /iPad/i.test(ua) || (/Mac/i.test(platform) && touchPoints > 1);
-    const isMac = /Mac/i.test(platform) && !isIPad;
-    const isWindows = /Win/i.test(platform) || /Windows/i.test(ua);
-
-    if (isIPhone) return "iPhone";
-    if (isIPad) return "iPad";
-    if (isMac) return "Mac";
-    if (isWindows) return "Windows PC";
-    return "Trusted browser";
-  }
-
-  function makeDeviceId() {
-    if (typeof crypto?.randomUUID === "function") {
-      return `locked-${crypto.randomUUID()}`;
-    }
-
-    const bytes = new Uint8Array(24);
-    crypto.getRandomValues(bytes);
-    return `locked-${[...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
-  }
-
-  async function hashSecret(secretBytes) {
-    const digest = await crypto.subtle.digest("SHA-256", secretBytes);
-    return bytesToBase64(new Uint8Array(digest));
-  }
-
-  function openDeviceDb() {
-    return new Promise((resolve, reject) => {
-      if (!window.indexedDB) {
-        reject(new Error("IndexedDB unavailable"));
-        return;
-      }
-
-      const request = indexedDB.open(DEVICE_DB_NAME, DEVICE_DB_VERSION);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(DEVICE_DB_STORE)) {
-          db.createObjectStore(DEVICE_DB_STORE, { keyPath: "id" });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Could not open device database"));
-    });
-  }
-
-  async function putDeviceSecret(id, secretBase64) {
-    const db = await openDeviceDb();
-    try {
-      await new Promise((resolve, reject) => {
-        const transaction = db.transaction(DEVICE_DB_STORE, "readwrite");
-        transaction.objectStore(DEVICE_DB_STORE).put({ id, secret: secretBase64 });
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error || new Error("Could not save device secret"));
-        transaction.onabort = () => reject(transaction.error || new Error("Could not save device secret"));
-      });
-    } finally {
-      db.close();
-    }
-  }
-
-  async function getDeviceSecret(id) {
-    const db = await openDeviceDb();
-    try {
-      return await new Promise((resolve, reject) => {
-        const transaction = db.transaction(DEVICE_DB_STORE, "readonly");
-        const request = transaction.objectStore(DEVICE_DB_STORE).get(id);
-        request.onsuccess = () => resolve(request.result?.secret || "");
-        request.onerror = () => reject(request.error || new Error("Could not read device secret"));
-      });
-    } finally {
-      db.close();
-    }
-  }
-
-  async function verifyTrustedDevice() {
-    if (!window.isSecureContext || !crypto?.subtle || !crypto?.getRandomValues) return false;
-
-    const record = getDeviceRecord();
-    if (!record) return false;
-
-    try {
-      const secretBase64 = await getDeviceSecret(record.id);
-      const secretBytes = base64ToBytes(secretBase64);
-      if (!secretBytes || secretBytes.byteLength < DEVICE_SECRET_BYTES) return false;
-
-      const secretHash = await hashSecret(secretBytes);
-      if (secretHash !== record.secretHash) return false;
-
-      record.lastSeenAt = new Date().toISOString();
-      record.label = getDeviceLabel();
-      localStorage.setItem(DEVICE_RECORD_KEY, JSON.stringify(record));
-      return true;
-    } catch (error) {
-      console.warn("LOCKED OS: trusted-device verification unavailable; password required.", error);
-      return false;
-    }
-  }
-
-  async function registerTrustedDeviceAfterPassword() {
-    if (!window.isSecureContext || !crypto?.subtle || !crypto?.getRandomValues) return false;
-
-    const existing = getDeviceRecord();
-    if (existing && await verifyTrustedDevice()) return true;
-
-    try {
-      const id = makeDeviceId();
-      const secretBytes = new Uint8Array(DEVICE_SECRET_BYTES);
-      crypto.getRandomValues(secretBytes);
-      const secretBase64 = bytesToBase64(secretBytes);
-      const secretHash = await hashSecret(secretBytes);
-
-      await putDeviceSecret(id, secretBase64);
-
-      localStorage.setItem(DEVICE_RECORD_KEY, JSON.stringify({
-        id,
-        secretHash,
-        label: getDeviceLabel(),
-        createdAt: new Date().toISOString(),
-        lastSeenAt: new Date().toISOString()
-      }));
-
-      return true;
-    } catch (error) {
-      console.warn("LOCKED OS: this browser could not be registered as trusted.", error);
-      return false;
-    }
-  }
-
-  function installTrustedDeviceStatusChip() {
-    const card = document.querySelector("#loginScreen .login-card");
-    if (!card || document.getElementById("trustedDeviceHint")) return;
-
-    const hint = document.createElement("div");
-    hint.id = "trustedDeviceHint";
-    hint.className = "locked-device-hint";
-    hint.textContent = "New browsers still require the password. After a successful unlock, this browser can verify itself automatically next time.";
-    card.appendChild(hint);
-  }
-
-  async function tryTrustedAutoUnlock() {
-    const login = document.getElementById("loginScreen");
-    const app = document.getElementById("mainApp");
-    if (!login || !app || login.classList.contains("hidden")) return;
-
-    const verified = await verifyTrustedDevice();
-    if (!verified) return;
-
-    trustedAutoUnlockInFlight = true;
-    try {
-      if (typeof showApp === "function") showApp();
-      if (typeof loadSupabaseState === "function") await loadSupabaseState();
-    } catch (error) {
-      console.warn("LOCKED OS: trusted-device auto unlock failed; password remains available.", error);
-      if (typeof showLogin === "function") showLogin();
-    } finally {
-      trustedAutoUnlockInFlight = false;
-    }
-  }
-
-  function watchForSuccessfulPasswordUnlock() {
-    const login = document.getElementById("loginScreen");
-    const app = document.getElementById("mainApp");
-    if (!login || !app) return;
-
-    let wasLocked = !login.classList.contains("hidden");
-
-    const observer = new MutationObserver(() => {
-      const isUnlocked = login.classList.contains("hidden") && !app.classList.contains("hidden");
-
-      if (wasLocked && isUnlocked && !trustedAutoUnlockInFlight) {
-        setTimeout(() => {
-          registerTrustedDeviceAfterPassword();
-        }, 250);
-      }
-
-      wasLocked = !isUnlocked;
-    });
-
-    observer.observe(login, { attributes: true, attributeFilter: ["class"] });
-    observer.observe(app, { attributes: true, attributeFilter: ["class"] });
-  }
-
-  /* ---------------------------------------------------------------------- */
-  /* GYM RANK                                                               */
-  /* ---------------------------------------------------------------------- */
-
+  const ALL_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const RECURRENCE_META_KEY = "customTaskRecurrenceV1";
+  const CUSTOM_SCHEDULE_META_KEY = "customTaskSchedules";
+  const TREADMILL_START = "2026-09-17";
   const GYM_VAULT_KEY = "locked_os_gym_sessions_vault_v2";
-  const TARGET_CATEGORIES = [
-    { key: "chest", label: "Chest + Side Delts" },
-    { key: "back", label: "Back + Rear Delts" },
-    { key: "arms", label: "Arms" }
-  ];
 
-  const CATEGORY_RANKS = [
-    { name: "Unranked", xp: 0 },
-    { name: "Bronze I", xp: 150 },
-    { name: "Bronze II", xp: 350 },
-    { name: "Bronze III", xp: 600 },
-    { name: "Silver I", xp: 900 },
-    { name: "Silver II", xp: 1250 },
-    { name: "Silver III", xp: 1650 },
-    { name: "Gold I", xp: 2100 },
-    { name: "Gold II", xp: 2600 },
-    { name: "Gold III", xp: 3200 },
-    { name: "Platinum", xp: 3900 },
-    { name: "Diamond", xp: 4800 },
-    { name: "Locked In", xp: 6000 }
-  ];
+  let pendingEveryOtherTask = null;
+  let gymObserver = null;
+  let gymPatchQueued = false;
+  let persistenceTimer = null;
 
-  const OVERALL_RANKS = CATEGORY_RANKS.map((rank, index) => ({
-    name: rank.name,
-    xp: index === 0 ? 0 : Math.round(rank.xp * 2.25)
-  }));
-
-  const safeArray = value => Array.isArray(value) ? value : [];
-  const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
-
-  function clone(value) {
+  const clone = value => {
     try {
       return JSON.parse(JSON.stringify(value));
     } catch (_) {
       return value;
     }
+  };
+
+  function validDateKey(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
   }
 
-  function escapeRankHtml(value) {
-    if (typeof escapeHtml === "function") return escapeHtml(value);
-    return String(value ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  function dateKeyToUtcDay(key) {
+    if (!validDateKey(key)) return NaN;
+    const [year, month, day] = key.split("-").map(Number);
+    return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
   }
 
-  function normalizeWorkoutName(value) {
-    const name = String(value || "").trim();
-    if (name === "Push") return "Chest + side delts";
-    if (name === "Pull") return "Back + rear delts";
-    if (name === "Arms + Abs") return "Arms";
-    return name || "Workout";
+  function tomorrowKey() {
+    try {
+      if (typeof getTodayKey === "function" && typeof keyToLocalDate === "function" && typeof formatDateKey === "function") {
+        const date = keyToLocalDate(getTodayKey());
+        date.setDate(date.getDate() + 1);
+        return formatDateKey(date);
+      }
+    } catch (_) {}
+
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
-  function normalizeSets(value) {
-    return safeArray(value)
-      .slice(0, 10)
-      .map(set => ({
-        weight: Number.isFinite(Number(set?.weight)) && Number(set.weight) > 0 ? Number(set.weight) : 0,
-        reps: Number.isFinite(Number(set?.reps)) && Number(set.reps) > 0 ? Math.round(Number(set.reps)) : 0
-      }));
+  function sameArray(left, right) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((value, index) => value === right[index]);
   }
 
-  function normalizeSession(raw, fallbackDate = "") {
-    if (!raw || typeof raw !== "object") return null;
+  function ensurePatchMeta(target = (typeof state !== "undefined" ? state : null)) {
+    if (!target || typeof target !== "object") return null;
+    target.meta = target.meta && typeof target.meta === "object" && !Array.isArray(target.meta) ? target.meta : {};
+    target.meta[RECURRENCE_META_KEY] = target.meta[RECURRENCE_META_KEY] && typeof target.meta[RECURRENCE_META_KEY] === "object" && !Array.isArray(target.meta[RECURRENCE_META_KEY])
+      ? target.meta[RECURRENCE_META_KEY]
+      : {};
+    target.meta[CUSTOM_SCHEDULE_META_KEY] = target.meta[CUSTOM_SCHEDULE_META_KEY] && typeof target.meta[CUSTOM_SCHEDULE_META_KEY] === "object" && !Array.isArray(target.meta[CUSTOM_SCHEDULE_META_KEY])
+      ? target.meta[CUSTOM_SCHEDULE_META_KEY]
+      : {};
+    return target.meta;
+  }
 
-    const date = validDateKey(raw.date)
-      ? raw.date
-      : validDateKey(raw.dayKey)
-        ? raw.dayKey
-        : validDateKey(fallbackDate)
-          ? fallbackDate
+  function persistSoon() {
+    clearTimeout(persistenceTimer);
+    persistenceTimer = setTimeout(() => {
+      persistenceTimer = null;
+      try {
+        if (typeof saveState === "function") {
+          saveState();
+          return;
+        }
+      } catch (error) {
+        console.warn("LOCKED OS: normal save failed; using local fallback.", error);
+      }
+
+      try { if (typeof saveLocalState === "function") saveLocalState(); } catch (_) {}
+      try { if (typeof queueSupabaseSave === "function") queueSupabaseSave(0); } catch (_) {}
+    }, 30);
+  }
+
+  /* -------------------------------------------------------------------- */
+  /* GLUCOSE HISTORY PROTECTION + RECOVERY                                */
+  /* -------------------------------------------------------------------- */
+
+  function normalizeGlucoseEntry(raw, fallbackDayKey = "", fallbackId = "") {
+    if (raw == null) return null;
+    const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { glucose: raw };
+    const dayKey = validDateKey(source.dayKey)
+      ? source.dayKey
+      : validDateKey(source.date)
+        ? source.date
+        : validDateKey(fallbackDayKey)
+          ? fallbackDayKey
           : "";
+    const glucose = Number(source.glucose ?? source.value ?? source.fastingGlucose);
+    if (!dayKey || !Number.isFinite(glucose) || glucose < 40 || glucose > 600) return null;
 
-    if (!date) return null;
+    const time = /^\d{2}:\d{2}$/.test(String(source.time || "")) ? String(source.time) : "";
+    const context = String(source.context || source.type || "").trim().slice(0, 40);
+    const id = String(source.id || fallbackId || `glucose-${dayKey}-${time || "na"}-${Math.round(glucose)}`).slice(0, 120);
 
     return {
-      id: String(raw.id || `rank-gym-${date}`),
-      date,
-      workout: normalizeWorkoutName(raw.workout || raw.workoutName),
-      completed: Boolean(raw.completed || raw.done),
-      updatedAt: String(raw.updatedAt || raw.updated_at || raw.savedAt || ""),
-      exercises: safeArray(raw.exercises)
-        .map(exercise => ({
-          name: String(exercise?.name || "").trim(),
-          sets: normalizeSets(exercise?.sets)
-        }))
-        .filter(exercise => exercise.name)
+      id,
+      dayKey,
+      glucose: Math.round(glucose),
+      time,
+      context
     };
   }
 
-  function sessionScoreForMerge(session) {
-    if (!session) return -1;
-    let score = session.completed ? 10000 : 0;
-    for (const exercise of safeArray(session.exercises)) {
-      if (exercise.name) score += 5;
-      for (const set of safeArray(exercise.sets)) {
-        if (Number(set.weight) > 0) score += 2;
-        if (Number(set.reps) > 0) score += 2;
+  function collectDirectGlucose(source, output) {
+    if (!source || typeof source !== "object") return;
+
+    if (Array.isArray(source.glucoseEntries)) {
+      source.glucoseEntries.forEach((entry, index) => {
+        const normalized = normalizeGlucoseEntry(entry, "", `recovered-entry-${index}`);
+        if (normalized) output.push(normalized);
+      });
+    } else if (source.glucoseEntries && typeof source.glucoseEntries === "object") {
+      for (const [key, entry] of Object.entries(source.glucoseEntries)) {
+        const normalized = normalizeGlucoseEntry(entry, key, validDateKey(key) ? `legacy-${key}` : key);
+        if (normalized) output.push(normalized);
       }
     }
-    return score;
-  }
 
-  function mergeSession(left, right) {
-    if (!left) return clone(right);
-    if (!right) return clone(left);
-
-    const leftScore = sessionScoreForMerge(left);
-    const rightScore = sessionScoreForMerge(right);
-    if (leftScore !== rightScore) return clone(rightScore > leftScore ? right : left);
-
-    return clone(String(right.updatedAt || "") > String(left.updatedAt || "") ? right : left);
-  }
-
-  function addSessions(map, sessions) {
-    for (const raw of safeArray(sessions)) {
-      const session = normalizeSession(raw);
-      if (!session) continue;
-      map.set(session.date, mergeSession(map.get(session.date), session));
-    }
-  }
-
-  function extractSessionsFromSnapshot(snapshot, map) {
-    if (!snapshot || typeof snapshot !== "object") return;
-
-    addSessions(map, snapshot?.meta?.gymClean?.sessions);
-    addSessions(map, snapshot?.meta?.gymTrackerV2?.sessions);
-    addSessions(map, snapshot?.meta?.gymTracker?.sessions);
-
-    for (const source of [snapshot?.meta?.gymSessions, snapshot?.gymSessions]) {
-      if (!source || typeof source !== "object" || Array.isArray(source)) continue;
-      for (const [date, raw] of Object.entries(source)) {
-        const session = normalizeSession(raw, date);
-        if (!session) continue;
-        map.set(session.date, mergeSession(map.get(session.date), session));
+    if (source.logs && typeof source.logs === "object" && !Array.isArray(source.logs)) {
+      for (const [dayKey, log] of Object.entries(source.logs)) {
+        if (!validDateKey(dayKey) || !log || typeof log !== "object") continue;
+        const value = Number(log.fastingGlucose);
+        if (!Number.isFinite(value) || value < 40 || value > 600) continue;
+        output.push({
+          id: `legacy-log-${dayKey}`,
+          dayKey,
+          glucose: Math.round(value),
+          time: "",
+          context: "Fasting"
+        });
       }
     }
   }
 
-  function inspectRecoveryValue(value, map, depth = 0) {
-    if (depth > 3 || value == null) return;
+  function inspectGlucoseRecoveryValue(value, output, depth = 0) {
+    if (depth > 5 || value == null) return;
 
     if (typeof value === "string") {
-      try {
-        inspectRecoveryValue(JSON.parse(value), map, depth + 1);
-      } catch (_) {}
+      if (!value.trim() || (!value.trim().startsWith("{") && !value.trim().startsWith("["))) return;
+      try { inspectGlucoseRecoveryValue(JSON.parse(value), output, depth + 1); } catch (_) {}
       return;
     }
 
     if (Array.isArray(value)) {
-      for (const item of value) inspectRecoveryValue(item, map, depth + 1);
+      for (const item of value.slice(0, 80)) inspectGlucoseRecoveryValue(item, output, depth + 1);
       return;
     }
 
     if (typeof value !== "object") return;
-    extractSessionsFromSnapshot(value, map);
-    if (value.state) inspectRecoveryValue(value.state, map, depth + 1);
-    if (value.snapshot) inspectRecoveryValue(value.snapshot, map, depth + 1);
-    if (value.serialized) inspectRecoveryValue(value.serialized, map, depth + 1);
+
+    if (value.mk677 && typeof value.mk677 === "object") collectDirectGlucose(value.mk677, output);
+    if (value.glucoseEntries || value.logs) collectDirectGlucose(value, output);
+
+    for (const key of ["state", "snapshot", "serialized", "data", "value"]) {
+      if (value[key] != null) inspectGlucoseRecoveryValue(value[key], output, depth + 1);
+    }
   }
 
-  function getAllWorkoutSessions() {
+  function glucoseSignature(entry) {
+    const id = String(entry?.id || "").trim();
+    if (id) return `id:${id}`;
+    return `value:${entry.dayKey}|${entry.time || ""}|${entry.context || ""}|${entry.glucose}`;
+  }
+
+  function mergeGlucoseEntries(...collections) {
     const map = new Map();
 
-    try {
-      if (typeof state !== "undefined") extractSessionsFromSnapshot(state, map);
-    } catch (_) {}
+    for (const collection of collections) {
+      if (!Array.isArray(collection)) continue;
+      collection.forEach((raw, index) => {
+        const entry = normalizeGlucoseEntry(raw, "", `merged-${index}`);
+        if (!entry) return;
 
-    try {
-      addSessions(map, JSON.parse(localStorage.getItem(GYM_VAULT_KEY) || "[]"));
-    } catch (_) {}
+        const signature = glucoseSignature(entry);
+        const existing = map.get(signature);
+        if (!existing) {
+          map.set(signature, entry);
+          return;
+        }
+
+        map.set(signature, {
+          ...existing,
+          ...entry,
+          time: entry.time || existing.time || "",
+          context: entry.context || existing.context || ""
+        });
+      });
+    }
+
+    return [...map.values()].sort((a, b) =>
+      a.dayKey.localeCompare(b.dayKey) ||
+      String(a.time || "").localeCompare(String(b.time || "")) ||
+      String(a.id || "").localeCompare(String(b.id || ""))
+    );
+  }
+
+  function recoverGlucoseHistory() {
+    if (typeof state === "undefined" || !state || typeof state !== "object") return false;
+
+    state.mk677 = state.mk677 && typeof state.mk677 === "object" ? state.mk677 : {};
+    const recovered = [];
+    collectDirectGlucose(state.mk677, recovered);
 
     try {
       for (let index = 0; index < localStorage.length; index += 1) {
@@ -460,636 +268,497 @@
         if (!key || !key.toLowerCase().includes("locked_os")) continue;
         const raw = localStorage.getItem(key);
         if (!raw) continue;
-        inspectRecoveryValue(raw, map);
+        inspectGlucoseRecoveryValue(raw, recovered, 0);
       }
-    } catch (_) {}
-
-    return [...map.values()]
-      .filter(session => validDateKey(session.date))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }
-
-  function getWorkoutCategory(workoutName) {
-    const name = String(workoutName || "").toLowerCase();
-    if (name.includes("chest") || name.includes("side delt") || name === "push") return "chest";
-    if (name.includes("back") || name.includes("rear delt") || name === "pull") return "back";
-    if (name.includes("arm") || name.includes("bicep") || name.includes("tricep")) return "arms";
-    return "";
-  }
-
-  function loggedSetCount(session) {
-    let count = 0;
-    for (const exercise of safeArray(session.exercises)) {
-      for (const set of safeArray(exercise.sets)) {
-        if (Number(set?.weight) > 0 || Number(set?.reps) > 0) count += 1;
-      }
-    }
-    return count;
-  }
-
-  function estimatedOneRepMax(set) {
-    const weight = Number(set?.weight || 0);
-    const reps = Number(set?.reps || 0);
-    if (weight <= 0 || reps <= 0) return 0;
-    return weight * (1 + Math.min(reps, 30) / 30);
-  }
-
-  function calculateCategoryProgress(sessions, categoryKey) {
-    const categorySessions = sessions.filter(session => getWorkoutCategory(session.workout) === categoryKey);
-    const exerciseBest = new Map();
-    let xp = 0;
-    let completed = 0;
-    let sets = 0;
-    let prs = 0;
-
-    for (const session of categorySessions) {
-      if (session.completed) {
-        xp += 100;
-        completed += 1;
-      } else if (loggedSetCount(session) > 0) {
-        xp += 40;
-      }
-
-      const sessionSets = loggedSetCount(session);
-      sets += sessionSets;
-      xp += sessionSets * 5;
-
-      for (const exercise of safeArray(session.exercises)) {
-        const exerciseKey = String(exercise.name || "").trim().toLowerCase();
-        if (!exerciseKey) continue;
-
-        const sessionBest = Math.max(0, ...safeArray(exercise.sets).map(estimatedOneRepMax));
-        if (sessionBest <= 0) continue;
-
-        const previousBest = Number(exerciseBest.get(exerciseKey) || 0);
-        if (previousBest > 0 && sessionBest > previousBest * 1.005) {
-          prs += 1;
-          xp += 40;
-        }
-        if (sessionBest > previousBest) exerciseBest.set(exerciseKey, sessionBest);
-      }
+    } catch (error) {
+      console.warn("LOCKED OS: glucose recovery scan was partially unavailable.", error);
     }
 
-    return { xp, completed, sets, prs, sessions: categorySessions.length };
-  }
+    const before = mergeGlucoseEntries(Array.isArray(state.mk677.glucoseEntries) ? state.mk677.glucoseEntries : []);
+    const merged = mergeGlucoseEntries(before, recovered);
 
-  function resolveRank(xp, ranks) {
-    let current = ranks[0];
-    let next = null;
-
-    for (let index = 0; index < ranks.length; index += 1) {
-      if (xp >= ranks[index].xp) {
-        current = ranks[index];
-        next = ranks[index + 1] || null;
-      } else {
-        break;
-      }
-    }
-
-    const floor = current.xp;
-    const ceiling = next?.xp ?? floor;
-    const percent = next ? Math.max(0, Math.min(100, ((xp - floor) / Math.max(1, ceiling - floor)) * 100)) : 100;
-
-    return {
-      current,
-      next,
-      percent,
-      remaining: next ? Math.max(0, next.xp - xp) : 0
-    };
-  }
-
-  function buildRankData() {
-    const sessions = getAllWorkoutSessions();
-    const categories = TARGET_CATEGORIES.map(category => ({
-      ...category,
-      progress: calculateCategoryProgress(sessions, category.key)
-    }));
-
-    const overallXp = categories.reduce((sum, category) => sum + category.progress.xp, 0);
-    const totals = categories.reduce((result, category) => {
-      result.completed += category.progress.completed;
-      result.sets += category.progress.sets;
-      result.prs += category.progress.prs;
-      return result;
-    }, { completed: 0, sets: 0, prs: 0 });
-
-    return {
-      sessions,
-      categories,
-      overallXp,
-      totals,
-      overallRank: resolveRank(overallXp, OVERALL_RANKS)
-    };
-  }
-
-  function rankIcon(rankName) {
-    if (/Diamond|Locked In/i.test(rankName)) return "◆";
-    if (/Platinum/i.test(rankName)) return "⬟";
-    if (/Gold/i.test(rankName)) return "★";
-    if (/Silver/i.test(rankName)) return "●";
-    if (/Bronze/i.test(rankName)) return "▲";
-    return "○";
-  }
-
-  function categoryCardMarkup(category) {
-    const rank = resolveRank(category.progress.xp, CATEGORY_RANKS);
-    const nextText = rank.next
-      ? `${rank.remaining} XP to ${rank.next.name}`
-      : "Maximum rank reached";
-
-    return `
-      <article class="gym-rank-category-card">
-        <div class="gym-rank-category-head">
-          <div>
-            <span>${escapeRankHtml(category.label)}</span>
-            <strong>${escapeRankHtml(rank.current.name)}</strong>
-          </div>
-          <div class="gym-rank-mini-icon">${rankIcon(rank.current.name)}</div>
-        </div>
-        <div class="gym-rank-progress"><span style="width:${rank.percent.toFixed(1)}%"></span></div>
-        <div class="gym-rank-next">${escapeRankHtml(nextText)}</div>
-        <div class="gym-rank-stats">
-          <div><strong>${category.progress.completed}</strong><span>workouts</span></div>
-          <div><strong>${category.progress.sets}</strong><span>sets</span></div>
-          <div><strong>${category.progress.prs}</strong><span>PRs</span></div>
-          <div><strong>${category.progress.xp}</strong><span>XP</span></div>
-        </div>
-      </article>`;
-  }
-
-  function ladderMarkup(xp, ranks) {
-    const resolved = resolveRank(xp, ranks);
-    return ranks.map(rank => {
-      const unlocked = xp >= rank.xp;
-      const current = rank.name === resolved.current.name;
-      return `
-        <div class="gym-rank-ladder-row ${unlocked ? "unlocked" : ""} ${current ? "current" : ""}">
-          <span class="gym-rank-ladder-icon">${rankIcon(rank.name)}</span>
-          <strong>${escapeRankHtml(rank.name)}</strong>
-          <span>${rank.xp.toLocaleString()} XP</span>
-          <b>${current ? "Current" : unlocked ? "Unlocked" : "Locked"}</b>
-        </div>`;
-    }).join("");
-  }
-
-  function renderGymRank() {
-    const panel = document.getElementById("lockedGymRankPanel");
-    if (!panel) return;
-
-    const data = buildRankData();
-    const rank = data.overallRank;
-    const nextText = rank.next
-      ? `${rank.remaining.toLocaleString()} XP until ${rank.next.name}`
-      : "You reached the top rank.";
-
-    panel.innerHTML = `
-      <section class="card gym-rank-hero-card">
-        <div class="gym-rank-hero-copy">
-          <p class="eyebrow blue">Training rank</p>
-          <h2>${rankIcon(rank.current.name)} ${escapeRankHtml(rank.current.name)}</h2>
-          <p>${escapeRankHtml(nextText)}</p>
-        </div>
-        <div class="gym-rank-xp-block">
-          <strong>${data.overallXp.toLocaleString()}</strong>
-          <span>total XP</span>
-        </div>
-        <div class="gym-rank-progress large"><span style="width:${rank.percent.toFixed(1)}%"></span></div>
-        <div class="gym-rank-summary-stats">
-          <div><strong>${data.totals.completed}</strong><span>target workouts</span></div>
-          <div><strong>${data.totals.sets}</strong><span>logged sets</span></div>
-          <div><strong>${data.totals.prs}</strong><span>strength PRs</span></div>
-        </div>
-      </section>
-
-      <section class="gym-rank-category-grid">
-        ${data.categories.map(categoryCardMarkup).join("")}
-      </section>
-
-      <section class="card gym-rank-rules-card">
-        <div class="panel-title">
-          <div>
-            <p class="eyebrow blue">How to rank up</p>
-            <h3>XP rules</h3>
-          </div>
-        </div>
-        <div class="gym-rank-rule-grid">
-          <div><strong>+100 XP</strong><span>Complete a Chest + Side Delts, Back + Rear Delts, or Arms workout.</span></div>
-          <div><strong>+5 XP</strong><span>For every logged working set with weight or reps.</span></div>
-          <div><strong>+40 XP</strong><span>Whenever an exercise beats its previous estimated-strength best.</span></div>
-        </div>
-        <p class="gym-rank-footnote">Legs and other workout types are not counted in this rank because this ladder is built around the three splits you asked for. Rank recalculates automatically from your saved workout history.</p>
-      </section>
-
-      <section class="card gym-rank-ladder-card">
-        <div class="panel-title">
-          <div>
-            <p class="eyebrow blue">Progression</p>
-            <h3>Overall rank ladder</h3>
-          </div>
-        </div>
-        <div class="gym-rank-ladder">
-          ${ladderMarkup(data.overallXp, OVERALL_RANKS)}
-        </div>
-      </section>`;
-  }
-
-  function setGymSubtab(mode) {
-    const page = document.getElementById("gymPage");
-    if (!page) return;
-
-    const rankMode = mode === "rank";
-    page.classList.toggle("locked-gym-rank-mode", rankMode);
-
-    document.querySelectorAll("#lockedGymSubtabs [data-gym-subtab]").forEach(button => {
-      const active = button.dataset.gymSubtab === (rankMode ? "rank" : "workout");
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-selected", active ? "true" : "false");
-    });
-
-    const rankPanel = document.getElementById("lockedGymRankPanel");
-    if (rankPanel) rankPanel.hidden = !rankMode;
-    if (rankMode) renderGymRank();
-  }
-
-  function markGymOriginalChildren() {
-    const page = document.getElementById("gymPage");
-    if (!page) return;
-
-    for (const child of [...page.children]) {
-      if (child.id === "lockedGymSubtabs" || child.id === "lockedGymRankPanel") continue;
-      child.classList.add("locked-gym-original-content");
-    }
-  }
-
-  function installGymRankSubtab() {
-    const page = document.getElementById("gymPage");
-    if (!page || document.getElementById("lockedGymSubtabs")) return false;
-
-    const subtabs = document.createElement("div");
-    subtabs.id = "lockedGymSubtabs";
-    subtabs.className = "locked-gym-subtabs";
-    subtabs.setAttribute("role", "tablist");
-    subtabs.innerHTML = `
-      <button class="locked-gym-subtab active" data-gym-subtab="workout" type="button" role="tab" aria-selected="true">Workout</button>
-      <button class="locked-gym-subtab" data-gym-subtab="rank" type="button" role="tab" aria-selected="false">Rank</button>`;
-
-    const rankPanel = document.createElement("div");
-    rankPanel.id = "lockedGymRankPanel";
-    rankPanel.className = "locked-gym-rank-panel";
-    rankPanel.hidden = true;
-
-    page.insertBefore(subtabs, page.firstChild);
-    page.appendChild(rankPanel);
-    markGymOriginalChildren();
-
-    subtabs.addEventListener("click", event => {
-      const button = event.target.closest("[data-gym-subtab]");
-      if (!button) return;
-      setGymSubtab(button.dataset.gymSubtab);
-    });
-
-    const observer = new MutationObserver(() => markGymOriginalChildren());
-    observer.observe(page, { childList: true });
-
-    document.addEventListener("click", event => {
-      if (event.target.closest("#cleanGymSave, #cleanGymComplete")) {
-        setTimeout(renderGymRank, 150);
-      }
-    }, true);
-
-    window.addEventListener("storage", event => {
-      if (String(event.key || "").toLowerCase().includes("gym") || String(event.key || "").toLowerCase().includes("locked_os")) {
-        renderGymRank();
-      }
-    });
-
-    window.addEventListener("focus", () => {
-      if (page.classList.contains("locked-gym-rank-mode")) renderGymRank();
-    });
-
+    if (JSON.stringify(before) === JSON.stringify(merged)) return false;
+    state.mk677.glucoseEntries = merged;
     return true;
   }
 
-  function installPatchStyles() {
-    if (document.getElementById("trustedDeviceGymRankStyles")) return;
+  function protectGlucoseDuringRemoteApply() {
+    if (typeof applyRemoteState !== "function" || applyRemoteState.__sep16GlucoseProtected) return;
 
-    const style = document.createElement("style");
-    style.id = "trustedDeviceGymRankStyles";
-    style.textContent = `
-      .locked-device-hint {
-        margin-top: 14px;
-        color: var(--muted, #756c62);
-        font-size: .75rem;
-        line-height: 1.45;
-        font-weight: 700;
+    const beforeApplyRemote = applyRemoteState;
+    const wrappedApplyRemote = function(remoteState, statusMessage, options = {}) {
+      let protectedRemote = remoteState;
+
+      if (remoteState && typeof remoteState === "object" && typeof state !== "undefined" && state && typeof state === "object") {
+        protectedRemote = clone(remoteState);
+        protectedRemote.mk677 = protectedRemote.mk677 && typeof protectedRemote.mk677 === "object"
+          ? protectedRemote.mk677
+          : {};
+
+        const localEntries = Array.isArray(state?.mk677?.glucoseEntries) ? state.mk677.glucoseEntries : [];
+        const remoteEntries = Array.isArray(protectedRemote?.mk677?.glucoseEntries)
+          ? protectedRemote.mk677.glucoseEntries
+          : [];
+
+        protectedRemote.mk677.glucoseEntries = mergeGlucoseEntries(localEntries, remoteEntries);
       }
 
-      #gymPage .locked-gym-subtabs {
-        display: inline-flex;
-        gap: 6px;
-        margin: 0 0 18px;
-        padding: 5px;
-        border: 1px solid var(--line, rgba(42,30,18,.12));
-        border-radius: 999px;
-        background: rgba(255,255,255,.55);
+      const result = beforeApplyRemote(protectedRemote, statusMessage, options);
+
+      let changed = false;
+      changed = recoverGlucoseHistory() || changed;
+      changed = migrateExistingTreadmillTask() || changed;
+      changed = migrateBackExerciseHistory() || changed;
+      if (changed) {
+        persistSoon();
+        try { if (typeof render === "function") render(); } catch (_) {}
       }
+      queueGymDomPatch();
+      return result;
+    };
 
-      #gymPage .locked-gym-subtab {
-        min-height: 38px;
-        padding: 0 16px;
-        border: 0;
-        border-radius: 999px;
-        background: transparent;
-        color: var(--muted, #756c62);
-        font: inherit;
-        font-size: .8rem;
-        font-weight: 950;
-        cursor: pointer;
-      }
+    wrappedApplyRemote.__sep16GlucoseProtected = true;
+    applyRemoteState = wrappedApplyRemote;
+  }
 
-      #gymPage .locked-gym-subtab.active {
-        background: var(--blue-soft, rgba(37,132,184,.12));
-        color: var(--blue-dark, #145d86);
-        box-shadow: inset 0 0 0 1px rgba(37,132,184,.16);
-      }
+  /* -------------------------------------------------------------------- */
+  /* EVERY-OTHER-DAY CUSTOM TASK RECURRENCE                               */
+  /* -------------------------------------------------------------------- */
 
-      #gymPage.locked-gym-rank-mode > .locked-gym-original-content {
-        display: none !important;
-      }
+  function taskRecurrence(taskId, targetState = (typeof state !== "undefined" ? state : null)) {
+    const meta = ensurePatchMeta(targetState);
+    return meta?.[RECURRENCE_META_KEY]?.[String(taskId || "")] || null;
+  }
 
-      #lockedGymRankPanel[hidden] {
-        display: none !important;
-      }
+  function recurringTaskAppears(taskId, dayKey) {
+    const recurrence = taskRecurrence(taskId);
+    if (!recurrence || recurrence.type !== "everyOtherDay") return true;
+    const startDayKey = validDateKey(recurrence.startDayKey) ? recurrence.startDayKey : TREADMILL_START;
+    const currentDay = dateKeyToUtcDay(dayKey);
+    const startDay = dateKeyToUtcDay(startDayKey);
+    if (!Number.isFinite(currentDay) || !Number.isFinite(startDay) || currentDay < startDay) return false;
+    return (currentDay - startDay) % 2 === 0;
+  }
 
-      .locked-gym-rank-panel {
-        display: grid;
-        gap: 16px;
-      }
+  function setEveryOtherRecurrence(task, startDayKey) {
+    if (!task?.id || typeof state === "undefined" || !state) return false;
+    const meta = ensurePatchMeta();
+    const start = validDateKey(startDayKey) ? startDayKey : tomorrowKey();
+    let changed = false;
 
-      .gym-rank-hero-card {
-        display: grid;
-        grid-template-columns: minmax(0,1fr) auto;
-        gap: 18px;
-        align-items: center;
-      }
+    const existing = meta[RECURRENCE_META_KEY][task.id];
+    if (!existing || existing.type !== "everyOtherDay" || existing.startDayKey !== start) {
+      meta[RECURRENCE_META_KEY][task.id] = { type: "everyOtherDay", startDayKey: start };
+      changed = true;
+    }
 
-      .gym-rank-hero-copy h2 {
-        margin: 4px 0 6px;
-        font-size: clamp(1.8rem, 5vw, 3rem);
-        letter-spacing: -.05em;
-      }
+    if (!sameArray(task.days, ALL_DAYS)) {
+      task.days = [...ALL_DAYS];
+      changed = true;
+    }
 
-      .gym-rank-hero-copy > p:last-child {
-        margin: 0;
-        color: var(--muted, #756c62);
-        font-weight: 800;
-      }
+    if (!sameArray(meta[CUSTOM_SCHEDULE_META_KEY][task.id], ALL_DAYS)) {
+      meta[CUSTOM_SCHEDULE_META_KEY][task.id] = [...ALL_DAYS];
+      changed = true;
+    }
 
-      .gym-rank-xp-block {
-        display: grid;
-        justify-items: end;
-      }
+    return changed;
+  }
 
-      .gym-rank-xp-block strong {
-        font-size: 1.9rem;
-        letter-spacing: -.04em;
-      }
+  function migrateExistingTreadmillTask() {
+    if (typeof state === "undefined" || !state || typeof state !== "object") return false;
+    const meta = ensurePatchMeta();
+    const tasks = Array.isArray(meta?.looksCustomTasks) ? meta.looksCustomTasks : [];
+    let changed = false;
 
-      .gym-rank-xp-block span,
-      .gym-rank-next,
-      .gym-rank-footnote {
-        color: var(--muted, #756c62);
-        font-size: .78rem;
-        font-weight: 800;
-      }
+    for (const task of tasks) {
+      const title = String(state.meta?.looksTaskEdits?.[task.id] || task?.title || "").trim().toLowerCase();
+      if (!title.includes("treadmill")) continue;
+      changed = setEveryOtherRecurrence(task, TREADMILL_START) || changed;
+    }
 
-      .gym-rank-progress {
-        grid-column: 1 / -1;
-        height: 8px;
-        overflow: hidden;
-        border-radius: 999px;
-        background: rgba(42,30,18,.09);
-      }
+    return changed;
+  }
 
-      .gym-rank-progress.large {
-        height: 11px;
-      }
+  function installRecurrenceFilter() {
+    if (typeof getLooksRoutine !== "function" || getLooksRoutine.__sep16RecurrenceFilter) return;
 
-      .gym-rank-progress > span {
-        display: block;
-        height: 100%;
-        border-radius: inherit;
-        background: var(--blue, #2584b8);
-        transition: width .25s ease;
-      }
+    const beforeGetLooksRoutine = getLooksRoutine;
+    const wrappedGetLooksRoutine = function(dayKey = typeof getTodayKey === "function" ? getTodayKey() : "") {
+      const routine = beforeGetLooksRoutine(dayKey);
+      const filter = tasks => (Array.isArray(tasks) ? tasks : []).filter(task => {
+        if (!task?.custom) return true;
+        return recurringTaskAppears(task.id, dayKey);
+      });
 
-      .gym-rank-summary-stats,
-      .gym-rank-stats {
-        grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: repeat(4,minmax(0,1fr));
-        gap: 10px;
-      }
+      return {
+        morning: filter(routine?.morning),
+        midday: filter(routine?.midday),
+        night: filter(routine?.night)
+      };
+    };
 
-      .gym-rank-summary-stats {
-        grid-template-columns: repeat(3,minmax(0,1fr));
-      }
+    wrappedGetLooksRoutine.__sep16RecurrenceFilter = true;
+    getLooksRoutine = wrappedGetLooksRoutine;
+  }
 
-      .gym-rank-summary-stats > div,
-      .gym-rank-stats > div {
-        display: grid;
-        gap: 2px;
-        padding: 12px;
-        border-radius: 14px;
-        background: rgba(42,30,18,.045);
-      }
+  function markPendingEveryOther(section, title, startDayKey, existingIds) {
+    pendingEveryOtherTask = {
+      section: String(section || ""),
+      title: String(title || "").trim(),
+      startDayKey: validDateKey(startDayKey) ? startDayKey : tomorrowKey(),
+      existingIds: new Set(existingIds || [])
+    };
 
-      .gym-rank-summary-stats strong,
-      .gym-rank-stats strong {
-        font-size: 1.05rem;
-      }
+    setTimeout(applyPendingEveryOtherTask, 0);
+    setTimeout(applyPendingEveryOtherTask, 80);
+  }
 
-      .gym-rank-summary-stats span,
-      .gym-rank-stats span {
-        color: var(--muted, #756c62);
-        font-size: .7rem;
-        font-weight: 850;
-      }
+  function applyPendingEveryOtherTask() {
+    const pending = pendingEveryOtherTask;
+    if (!pending || typeof state === "undefined" || !state) return;
 
-      .gym-rank-category-grid {
-        display: grid;
-        grid-template-columns: repeat(3,minmax(0,1fr));
-        gap: 14px;
-      }
+    const meta = ensurePatchMeta();
+    const tasks = Array.isArray(meta?.looksCustomTasks) ? meta.looksCustomTasks : [];
+    const candidate = [...tasks].reverse().find(task => {
+      if (!task?.id || pending.existingIds.has(task.id)) return false;
+      if (String(task.section || "") !== pending.section) return false;
+      return String(task.title || "").trim() === pending.title;
+    });
 
-      .gym-rank-category-card {
-        display: grid;
-        gap: 12px;
-        padding: 18px;
-        border: 1px solid var(--line, rgba(42,30,18,.12));
-        border-radius: 20px;
-        background: var(--card, rgba(255,255,255,.8));
-        box-shadow: 0 12px 40px rgba(42,30,18,.06);
-      }
+    if (!candidate) return;
 
-      .gym-rank-category-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }
+    pendingEveryOtherTask = null;
+    if (setEveryOtherRecurrence(candidate, pending.startDayKey)) {
+      persistSoon();
+      try { if (typeof render === "function") render(); } catch (_) {}
+    }
+  }
 
-      .gym-rank-category-head > div:first-child {
-        display: grid;
-        gap: 3px;
-      }
+  function enhanceTaskScheduleModal(baseOpen, args) {
+    const modal = document.getElementById("looksTaskAddModal");
+    if (!modal || modal.dataset.sep16Enhanced === "1") return;
+    modal.dataset.sep16Enhanced = "1";
+    modal.dataset.scheduleMode = "days";
 
-      .gym-rank-category-head span {
-        color: var(--muted, #756c62);
-        font-size: .75rem;
-        font-weight: 850;
-      }
+    const [row, menu, section] = args;
+    void row;
+    void menu;
 
-      .gym-rank-category-head strong {
-        font-size: 1.25rem;
-        letter-spacing: -.03em;
-      }
+    const presets = modal.querySelector(".looks-task-day-presets");
+    const dayBlock = modal.querySelector(".looks-task-days-block");
+    const dayGrid = modal.querySelector(".looks-task-day-grid");
+    const count = modal.querySelector("#looksTaskDayCount");
+    const input = modal.querySelector("#looksTaskAddName");
+    const saveButton = modal.querySelector("#looksTaskAddSave");
 
-      .gym-rank-mini-icon {
-        display: grid;
-        width: 40px;
-        height: 40px;
-        place-items: center;
-        border-radius: 14px;
-        background: var(--blue-soft, rgba(37,132,184,.12));
-        color: var(--blue-dark, #145d86);
-        font-size: 1.1rem;
-        font-weight: 950;
-      }
+    if (!presets || !dayBlock || !dayGrid) return;
 
-      .gym-rank-rule-grid {
-        display: grid;
-        grid-template-columns: repeat(3,minmax(0,1fr));
-        gap: 12px;
-      }
+    const everyOtherButton = document.createElement("button");
+    everyOtherButton.className = "looks-task-day-preset";
+    everyOtherButton.id = "looksTaskEveryOtherDay";
+    everyOtherButton.type = "button";
+    everyOtherButton.textContent = "Every other day";
+    presets.appendChild(everyOtherButton);
 
-      .gym-rank-rule-grid > div {
-        display: grid;
-        gap: 6px;
-        padding: 14px;
-        border-radius: 16px;
-        background: rgba(42,30,18,.045);
-      }
-
-      .gym-rank-rule-grid strong {
-        color: var(--blue-dark, #145d86);
-      }
-
-      .gym-rank-rule-grid span {
-        color: var(--muted, #756c62);
-        font-size: .78rem;
-        font-weight: 750;
-        line-height: 1.45;
-      }
-
-      .gym-rank-footnote {
-        margin: 14px 0 0;
-        line-height: 1.5;
-      }
-
-      .gym-rank-ladder {
-        display: grid;
-        gap: 8px;
-      }
-
-      .gym-rank-ladder-row {
-        display: grid;
-        grid-template-columns: 28px minmax(0,1fr) auto auto;
-        gap: 10px;
-        align-items: center;
-        min-height: 44px;
-        padding: 0 12px;
-        border-radius: 13px;
-        background: rgba(42,30,18,.035);
-        opacity: .55;
-      }
-
-      .gym-rank-ladder-row.unlocked {
-        opacity: 1;
-      }
-
-      .gym-rank-ladder-row.current {
-        background: var(--blue-soft, rgba(37,132,184,.12));
-        box-shadow: inset 0 0 0 1px rgba(37,132,184,.16);
-      }
-
-      .gym-rank-ladder-row > span:nth-of-type(2),
-      .gym-rank-ladder-row b {
-        color: var(--muted, #756c62);
-        font-size: .72rem;
-      }
-
-      .gym-rank-ladder-row b {
-        min-width: 62px;
-        text-align: right;
-      }
-
-      .gym-rank-ladder-icon {
-        color: var(--blue-dark, #145d86);
-        text-align: center;
-      }
-
-      @media (max-width: 900px) {
-        .gym-rank-category-grid,
-        .gym-rank-rule-grid {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      @media (max-width: 620px) {
-        .gym-rank-hero-card {
-          grid-template-columns: 1fr;
-        }
-
-        .gym-rank-xp-block {
-          justify-items: start;
-        }
-
-        .gym-rank-summary-stats,
-        .gym-rank-stats {
-          grid-template-columns: repeat(2,minmax(0,1fr));
-        }
-
-        .gym-rank-ladder-row {
-          grid-template-columns: 24px minmax(0,1fr) auto;
-        }
-
-        .gym-rank-ladder-row b {
-          display: none;
-        }
-      }
+    const startField = document.createElement("label");
+    startField.id = "looksTaskEveryOtherStartField";
+    startField.className = "looks-task-modal-field";
+    startField.hidden = true;
+    startField.style.marginTop = "12px";
+    startField.innerHTML = `
+      <span>Start every-other-day schedule</span>
+      <input class="looks-task-modal-input" id="looksTaskEveryOtherStart" type="date" value="${tomorrowKey()}"/>
     `;
+    dayBlock.insertAdjacentElement("afterend", startField);
 
-    document.head.appendChild(style);
+    const setMode = mode => {
+      modal.dataset.scheduleMode = mode;
+      const everyOther = mode === "everyOtherDay";
+      startField.hidden = !everyOther;
+      dayGrid.style.opacity = everyOther ? ".45" : "";
+      dayGrid.style.pointerEvents = everyOther ? "none" : "";
+
+      if (everyOther) {
+        if (typeof lockedOsSetTaskDays === "function") lockedOsSetTaskDays(ALL_DAYS);
+        if (count) count.textContent = "Every other day";
+      } else if (typeof lockedOsUpdateTaskDayCount === "function") {
+        lockedOsUpdateTaskDayCount();
+      }
+    };
+
+    everyOtherButton.addEventListener("click", () => setMode("everyOtherDay"));
+
+    ["looksTaskEveryDay", "looksTaskWeekdays", "looksTaskClearDays"].forEach(id => {
+      document.getElementById(id)?.addEventListener("click", () => setMode("days"), true);
+    });
+
+    dayGrid.addEventListener("click", () => {
+      if (modal.dataset.scheduleMode !== "everyOtherDay") setMode("days");
+    }, true);
+
+    const preparePending = () => {
+      if (modal.dataset.scheduleMode !== "everyOtherDay") return;
+      const title = String(input?.value || "").trim().slice(0, 160);
+      if (!title) return;
+      const start = document.getElementById("looksTaskEveryOtherStart")?.value || tomorrowKey();
+      const existingIds = (Array.isArray(state?.meta?.looksCustomTasks) ? state.meta.looksCustomTasks : [])
+        .map(task => task?.id)
+        .filter(Boolean);
+      markPendingEveryOther(section, title, start, existingIds);
+    };
+
+    saveButton?.addEventListener("click", preparePending, true);
+    input?.addEventListener("keydown", event => {
+      if (event.key === "Enter") preparePending();
+    }, true);
   }
 
-  function installWhenGymExists(attempt = 0) {
-    if (installGymRankSubtab()) return;
-    if (attempt >= 30) return;
-    setTimeout(() => installWhenGymExists(attempt + 1), 200);
+  function installEveryOtherDayModalOption() {
+    if (typeof lockedOsOpenTaskAddModal !== "function" || lockedOsOpenTaskAddModal.__sep16EveryOtherDay) return;
+
+    const beforeOpen = lockedOsOpenTaskAddModal;
+    const wrappedOpen = function(...args) {
+      const result = beforeOpen(...args);
+      enhanceTaskScheduleModal(beforeOpen, args);
+      return result;
+    };
+
+    wrappedOpen.__sep16EveryOtherDay = true;
+    lockedOsOpenTaskAddModal = wrappedOpen;
   }
 
-  function install() {
-    installPatchStyles();
-    installTrustedDeviceStatusChip();
-    watchForSuccessfulPasswordUnlock();
-    tryTrustedAutoUnlock();
-    installWhenGymExists();
+  /* -------------------------------------------------------------------- */
+  /* BACK WORKOUT: FACE PULLS + SHRUGS                                    */
+  /* -------------------------------------------------------------------- */
+
+  function normalizeBackExerciseName(value) {
+    return String(value || "").trim() === "Reverse Pec Deck" ? "Face Pulls" : String(value || "").trim();
+  }
+
+  function migrateSessionExerciseNames(session) {
+    if (!session || typeof session !== "object" || !Array.isArray(session.exercises)) return false;
+    let changed = false;
+    const merged = [];
+
+    for (const exercise of session.exercises) {
+      if (!exercise || typeof exercise !== "object") continue;
+      const next = { ...exercise, name: normalizeBackExerciseName(exercise.name) };
+      if (next.name !== exercise.name) changed = true;
+
+      const existing = merged.find(item => item.name === next.name);
+      if (!existing) {
+        merged.push(next);
+      } else {
+        const existingSets = Array.isArray(existing.sets) ? existing.sets : [];
+        const nextSets = Array.isArray(next.sets) ? next.sets : [];
+        if (nextSets.some(set => Number(set?.weight) > 0 || Number(set?.reps) > 0)) existing.sets = nextSets;
+        changed = true;
+      }
+    }
+
+    if (changed) session.exercises = merged;
+    return changed;
+  }
+
+  function migrateSessionCollection(collection) {
+    if (!collection) return false;
+    let changed = false;
+
+    if (Array.isArray(collection)) {
+      for (const session of collection) changed = migrateSessionExerciseNames(session) || changed;
+      return changed;
+    }
+
+    if (typeof collection === "object") {
+      for (const session of Object.values(collection)) changed = migrateSessionExerciseNames(session) || changed;
+    }
+
+    return changed;
+  }
+
+  function migrateBackExerciseHistory() {
+    if (typeof state === "undefined" || !state || typeof state !== "object") return false;
+    let changed = false;
+
+    const collections = [
+      state?.meta?.gymClean?.sessions,
+      state?.meta?.gymTrackerV2?.sessions,
+      state?.meta?.gymTracker?.sessions,
+      state?.meta?.gymSessions,
+      state?.gymSessions
+    ];
+
+    for (const collection of collections) changed = migrateSessionCollection(collection) || changed;
+
+    try {
+      const raw = localStorage.getItem(GYM_VAULT_KEY);
+      if (raw) {
+        const sessions = JSON.parse(raw);
+        if (migrateSessionCollection(sessions)) {
+          localStorage.setItem(GYM_VAULT_KEY, JSON.stringify(sessions));
+          changed = true;
+        }
+      }
+    } catch (error) {
+      console.warn("LOCKED OS: could not migrate the local gym history vault.", error);
+    }
+
+    return changed;
+  }
+
+  function visibleGymDayKey() {
+    const label = document.getElementById("cleanGymDateLabel")?.textContent?.trim() || "";
+    const today = typeof getTodayKey === "function" ? getTodayKey() : "";
+
+    if (!label) return today;
+
+    const currentYear = validDateKey(today) ? Number(today.slice(0, 4)) : new Date().getFullYear();
+    const withoutWeekday = label.includes(",") ? label.slice(label.indexOf(",") + 1).trim() : label;
+    const parsed = new Date(`${withoutWeekday}, ${currentYear} 12:00:00`);
+
+    if (!Number.isNaN(parsed.getTime())) {
+      const candidate = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+      return candidate;
+    }
+
+    return today;
+  }
+
+  function primaryGymSessions() {
+    const sessions = state?.meta?.gymClean?.sessions;
+    return Array.isArray(sessions) ? sessions : [];
+  }
+
+  function exerciseForDay(dayKey, name) {
+    const session = primaryGymSessions().find(item => item?.date === dayKey);
+    return session?.exercises?.find(exercise => normalizeBackExerciseName(exercise?.name) === name) || null;
+  }
+
+  function previousExercise(dayKey, name) {
+    return [...primaryGymSessions()]
+      .filter(session => validDateKey(session?.date) && session.date < dayKey)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map(session => session?.exercises?.find(exercise => normalizeBackExerciseName(exercise?.name) === name))
+      .find(Boolean) || null;
+  }
+
+  function formatSet(set) {
+    const weight = Number(set?.weight);
+    const reps = Number(set?.reps);
+    if (weight > 0 && reps > 0) return `${weight} lb × ${Math.round(reps)}`;
+    if (weight > 0) return `${weight} lb`;
+    if (reps > 0) return `${Math.round(reps)} reps`;
+    return "—";
+  }
+
+  function fillExerciseRow(row, exercise, previous) {
+    const sets = Array.isArray(exercise?.sets) ? exercise.sets : [];
+    row.querySelectorAll("input[data-set][data-field]").forEach(input => {
+      const index = Number(input.dataset.set);
+      const field = input.dataset.field;
+      const value = Number(sets?.[index]?.[field]);
+      input.value = Number.isFinite(value) && value > 0 ? String(value) : "";
+    });
+
+    const previousStrong = row.querySelector(".clean-gym-previous strong");
+    if (previousStrong) {
+      previousStrong.innerHTML = `${formatSet(previous?.sets?.[0])}<br>${formatSet(previous?.sets?.[1])}`;
+    }
+  }
+
+  function patchBackWorkoutDom() {
+    gymPatchQueued = false;
+    const gymPage = document.getElementById("gymPage");
+    const title = document.getElementById("cleanGymWorkoutTitle");
+    if (!gymPage || !title || !String(title.textContent || "").toLowerCase().includes("back")) return;
+
+    const rows = [...gymPage.querySelectorAll(".clean-gym-exercise")];
+    if (!rows.length) return;
+
+    let facePullRow = rows.find(row => row.dataset.exercise === "Reverse Pec Deck" || row.dataset.exercise === "Face Pulls");
+    if (facePullRow) {
+      const wasReversePecDeck = facePullRow.dataset.exercise === "Reverse Pec Deck";
+      if (wasReversePecDeck) facePullRow.dataset.exercise = "Face Pulls";
+      const label = facePullRow.querySelector(".clean-gym-exercise-name strong");
+      if (label && label.textContent !== "Face Pulls") label.textContent = "Face Pulls";
+      if (wasReversePecDeck) {
+        const dayKey = visibleGymDayKey();
+        fillExerciseRow(facePullRow, exerciseForDay(dayKey, "Face Pulls"), previousExercise(dayKey, "Face Pulls"));
+      }
+    }
+
+    let shrugRow = [...gymPage.querySelectorAll(".clean-gym-exercise")].find(row => row.dataset.exercise === "Shrugs");
+    if (!shrugRow) {
+      const sourceRow = facePullRow || rows.at(-1);
+      if (!sourceRow) return;
+      shrugRow = sourceRow.cloneNode(true);
+      shrugRow.dataset.exercise = "Shrugs";
+      const label = shrugRow.querySelector(".clean-gym-exercise-name strong");
+      if (label) label.textContent = "Shrugs";
+
+      const dayKey = visibleGymDayKey();
+      fillExerciseRow(shrugRow, exerciseForDay(dayKey, "Shrugs"), previousExercise(dayKey, "Shrugs"));
+      sourceRow.insertAdjacentElement("afterend", shrugRow);
+    }
+  }
+
+  function queueGymDomPatch() {
+    if (gymPatchQueued) return;
+    gymPatchQueued = true;
+    requestAnimationFrame(patchBackWorkoutDom);
+  }
+
+  function installGymDomObserver() {
+    if (gymObserver) return;
+    const gymPage = document.getElementById("gymPage");
+    if (!gymPage) {
+      setTimeout(installGymDomObserver, 200);
+      return;
+    }
+
+    gymObserver = new MutationObserver(() => queueGymDomPatch());
+    gymObserver.observe(gymPage, { childList: true, subtree: true, characterData: true });
+
+    ["cleanGymPrev", "cleanGymToday", "cleanGymNext"].forEach(id => {
+      document.getElementById(id)?.addEventListener("click", () => setTimeout(queueGymDomPatch, 0));
+    });
+
+    queueGymDomPatch();
+  }
+
+  function installFinalPatchLayer() {
+    installRecurrenceFilter();
+    installEveryOtherDayModalOption();
+    protectGlucoseDuringRemoteApply();
+
+    let changed = false;
+    changed = recoverGlucoseHistory() || changed;
+    changed = migrateExistingTreadmillTask() || changed;
+    changed = migrateBackExerciseHistory() || changed;
+
+    if (changed) persistSoon();
+    installGymDomObserver();
+    queueGymDomPatch();
+
+    /* Some existing LOCKED OS patches install their own wrappers on a zero-delay
+       timer. Re-assert this final layer after those have finished. */
+    setTimeout(() => {
+      installRecurrenceFilter();
+      installEveryOtherDayModalOption();
+      protectGlucoseDuringRemoteApply();
+      let laterChanged = false;
+      laterChanged = recoverGlucoseHistory() || laterChanged;
+      laterChanged = migrateExistingTreadmillTask() || laterChanged;
+      laterChanged = migrateBackExerciseHistory() || laterChanged;
+      if (laterChanged) persistSoon();
+      queueGymDomPatch();
+    }, 0);
   }
 
   if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", install, { once: true });
+    window.addEventListener("DOMContentLoaded", installFinalPatchLayer);
   } else {
-    install();
+    installFinalPatchLayer();
   }
 })();
