@@ -6,9 +6,9 @@
   This file loads the exact GitHub main build that existed immediately before
   this patch, then layers only the requested changes on top.
 
-  Intentionally NOT changed:
-    - Gym weekday schedule. The suggested schedule can be applied separately.
+  Intentionally preserved:
     - Trusted-device auto-unlock stays enabled.
+    - Gym ranking / XP system stays removed.
 
   Removed from the previous build:
     - Gym ranking / XP / rank subtab system.
@@ -27,6 +27,14 @@
        - Merge local + remote glucose history instead of allowing an empty/stale
          remote array to replace local readings
        - Attempt recovery from LOCKED OS local recovery snapshots
+    4) Tretinoin routine setting:
+       - Add an "Every other day" mode in Admin -> Routine settings
+       - Turning the normal +/- frequency controls resumes weekly-frequency mode
+    5) Gym schedule:
+       - Monday: Arms
+       - Tuesday: Legs + Abs
+       - Thursday: Chest + side delts
+       - Friday: Back + rear delts
 */
 
 (() => {
@@ -279,6 +287,14 @@
   const CUSTOM_SCHEDULE_META_KEY = "customTaskSchedules";
   const TREADMILL_START = "2026-09-17";
   const GYM_VAULT_KEY = "locked_os_gym_sessions_vault_v2";
+  const TRET_EOD_META_KEY = "tretinoinEveryOtherDayV1";
+  const GYM_SCHEDULE_MIGRATION_KEY = "gymScheduleSep17V1";
+  const DESIRED_GYM_SCHEDULE = {
+    Monday: "Arms",
+    Tuesday: "Legs + Abs",
+    Thursday: "Chest + side delts",
+    Friday: "Back + rear delts"
+  };
 
   let pendingEveryOtherTask = null;
   let gymObserver = null;
@@ -350,6 +366,157 @@
       try { if (typeof saveLocalState === "function") saveLocalState(); } catch (_) {}
       try { if (typeof queueSupabaseSave === "function") queueSupabaseSave(0); } catch (_) {}
     }, 30);
+  }
+
+
+  /* -------------------------------------------------------------------- */
+  /* TRETINOIN: EVERY-OTHER-DAY ADMIN MODE                                */
+  /* -------------------------------------------------------------------- */
+
+  function tretEveryOtherConfig(targetState = (typeof state !== "undefined" ? state : null)) {
+    if (!targetState || typeof targetState !== "object") return null;
+    targetState.meta = targetState.meta && typeof targetState.meta === "object" && !Array.isArray(targetState.meta)
+      ? targetState.meta
+      : {};
+    const raw = targetState.meta[TRET_EOD_META_KEY];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    return {
+      enabled: Boolean(raw.enabled),
+      startDayKey: validDateKey(raw.startDayKey) ? raw.startDayKey : ""
+    };
+  }
+
+  function isTretEveryOtherActive() {
+    return Boolean(tretEveryOtherConfig()?.enabled);
+  }
+
+  function setTretEveryOtherMode(enabled) {
+    if (typeof state === "undefined" || !state || typeof state !== "object") return;
+    state.meta = state.meta && typeof state.meta === "object" && !Array.isArray(state.meta) ? state.meta : {};
+    const existing = tretEveryOtherConfig() || {};
+    state.meta[TRET_EOD_META_KEY] = {
+      enabled: Boolean(enabled),
+      startDayKey: enabled
+        ? (existing.startDayKey || (typeof getTodayKey === "function" ? getTodayKey() : TREADMILL_START))
+        : (existing.startDayKey || "")
+    };
+    try { if (typeof saveState === "function") saveState(); else persistSoon(); } catch (_) { persistSoon(); }
+    try { if (typeof render === "function") render(); } catch (_) {}
+    setTimeout(ensureTretEveryOtherUi, 0);
+  }
+
+  function installTretEveryOtherScheduleLogic() {
+    if (typeof getTretinoinDays !== "function" || getTretinoinDays.__sep17EveryOtherDay) return;
+    const beforeGetTretinoinDays = getTretinoinDays;
+    const wrapped = function(dayKey = (typeof getTodayKey === "function" ? getTodayKey() : "")) {
+      const config = tretEveryOtherConfig();
+      if (!config?.enabled || !validDateKey(dayKey) || !validDateKey(config.startDayKey)) {
+        return beforeGetTretinoinDays(dayKey);
+      }
+
+      const current = dateKeyToUtcDay(dayKey);
+      const start = dateKeyToUtcDay(config.startDayKey);
+      if (!Number.isFinite(current) || !Number.isFinite(start) || current < start) {
+        return beforeGetTretinoinDays(dayKey);
+      }
+
+      if ((current - start) % 2 !== 0) return [];
+      const dayName = typeof getRoutineDayName === "function"
+        ? getRoutineDayName(dayKey)
+        : ALL_DAYS[(typeof keyToLocalDate === "function" ? keyToLocalDate(dayKey) : new Date(`${dayKey}T12:00:00`)).getDay()];
+      return dayName ? [dayName] : [];
+    };
+    wrapped.__sep17EveryOtherDay = true;
+    getTretinoinDays = wrapped;
+  }
+
+  function refreshTretEveryOtherUi() {
+    const button = document.getElementById("tretinoinEveryOtherDayBtn");
+    if (!button) return;
+    const active = isTretEveryOtherActive();
+    button.classList.toggle("blue", active);
+    button.classList.toggle("secondary", !active);
+    const pressed = active ? "true" : "false";
+    if (button.getAttribute("aria-pressed") !== pressed) button.setAttribute("aria-pressed", pressed);
+    const buttonText = active ? "Every other day ✓" : "Every other day";
+    if (button.textContent !== buttonText) button.textContent = buttonText;
+
+    if (!active) return;
+    const value = document.getElementById("tretinoinFrequencyValue");
+    const label = document.getElementById("tretinoinFrequencyLabel");
+    if (value && value.textContent !== "EOD") value.textContent = "EOD";
+    if (label && label.textContent !== "Every other day") label.textContent = "Every other day";
+
+    const config = tretEveryOtherConfig();
+    const note = document.getElementById("tretinoinEveryOtherDayNote");
+    if (note) {
+      const start = config?.startDayKey || "";
+      const text = start ? `Alternating schedule active from ${start}.` : "Alternating schedule active.";
+      if (note.textContent !== text) note.textContent = text;
+    }
+  }
+
+  function ensureTretEveryOtherUi() {
+    const card = document.querySelector(".tretinoin-admin-card");
+    const control = card?.querySelector(".tret-frequency-control");
+    if (!card || !control) return false;
+
+    let wrap = document.getElementById("tretinoinEveryOtherDayWrap");
+    if (!wrap) {
+      wrap = document.createElement("div");
+      wrap.id = "tretinoinEveryOtherDayWrap";
+      wrap.style.display = "grid";
+      wrap.style.gap = "7px";
+      wrap.style.marginTop = "12px";
+      wrap.innerHTML = `
+        <button class="btn secondary compact" id="tretinoinEveryOtherDayBtn" type="button" aria-pressed="false">Every other day</button>
+        <p id="tretinoinEveryOtherDayNote" style="margin:0;color:var(--muted);font-size:.76rem;font-weight:800;line-height:1.4;">Use this instead of a fixed number of nights per week.</p>
+      `;
+      control.insertAdjacentElement("afterend", wrap);
+      document.getElementById("tretinoinEveryOtherDayBtn")?.addEventListener("click", () => {
+        setTretEveryOtherMode(!isTretEveryOtherActive());
+      });
+
+      ["tretinoinFrequencyDown", "tretinoinFrequencyUp"].forEach(id => {
+        document.getElementById(id)?.addEventListener("click", () => {
+          if (isTretEveryOtherActive()) setTretEveryOtherMode(false);
+        }, true);
+      });
+    }
+
+    refreshTretEveryOtherUi();
+    return true;
+  }
+
+  function installTretUiObserver() {
+    ensureTretEveryOtherUi();
+    const card = document.querySelector(".tretinoin-admin-card");
+    if (!card || card.__sep17TretObserver) return;
+    card.__sep17TretObserver = true;
+    const observer = new MutationObserver(() => {
+      requestAnimationFrame(() => {
+        ensureTretEveryOtherUi();
+        refreshTretEveryOtherUi();
+      });
+    });
+    observer.observe(card, { childList: true, subtree: true, characterData: true });
+  }
+
+  /* -------------------------------------------------------------------- */
+  /* GYM WEEKDAY SCHEDULE MIGRATION                                       */
+  /* -------------------------------------------------------------------- */
+
+  function applyRequestedGymSchedule() {
+    if (typeof state === "undefined" || !state || typeof state !== "object") return false;
+    state.meta = state.meta && typeof state.meta === "object" && !Array.isArray(state.meta) ? state.meta : {};
+    state.meta.gymClean = state.meta.gymClean && typeof state.meta.gymClean === "object" && !Array.isArray(state.meta.gymClean)
+      ? state.meta.gymClean
+      : { version: 1, sessions: [] };
+
+    if (state.meta[GYM_SCHEDULE_MIGRATION_KEY]) return false;
+    state.meta.gymClean.schedule = { ...DESIRED_GYM_SCHEDULE };
+    state.meta[GYM_SCHEDULE_MIGRATION_KEY] = true;
+    return true;
   }
 
   /* -------------------------------------------------------------------- */
@@ -529,10 +696,13 @@
       changed = recoverGlucoseHistory() || changed;
       changed = migrateExistingTreadmillTask() || changed;
       changed = migrateBackExerciseHistory() || changed;
+      changed = applyRequestedGymSchedule() || changed;
+      installTretEveryOtherScheduleLogic();
       if (changed) {
         persistSoon();
         try { if (typeof render === "function") render(); } catch (_) {}
       }
+      ensureTretEveryOtherUi();
       queueGymDomPatch();
       return result;
     };
@@ -950,15 +1120,22 @@
   function installFinalPatchLayer() {
     installRecurrenceFilter();
     installEveryOtherDayModalOption();
+    installTretEveryOtherScheduleLogic();
+    installTretUiObserver();
     protectGlucoseDuringRemoteApply();
 
     let changed = false;
     changed = recoverGlucoseHistory() || changed;
     changed = migrateExistingTreadmillTask() || changed;
     changed = migrateBackExerciseHistory() || changed;
+    changed = applyRequestedGymSchedule() || changed;
 
-    if (changed) persistSoon();
+    if (changed) {
+      persistSoon();
+      try { if (typeof render === "function") render(); } catch (_) {}
+    }
     installGymDomObserver();
+    ensureTretEveryOtherUi();
     queueGymDomPatch();
 
     /* Some existing LOCKED OS patches install their own wrappers on a zero-delay
@@ -966,12 +1143,19 @@
     setTimeout(() => {
       installRecurrenceFilter();
       installEveryOtherDayModalOption();
+      installTretEveryOtherScheduleLogic();
+      installTretUiObserver();
       protectGlucoseDuringRemoteApply();
       let laterChanged = false;
       laterChanged = recoverGlucoseHistory() || laterChanged;
       laterChanged = migrateExistingTreadmillTask() || laterChanged;
       laterChanged = migrateBackExerciseHistory() || laterChanged;
-      if (laterChanged) persistSoon();
+      laterChanged = applyRequestedGymSchedule() || laterChanged;
+      if (laterChanged) {
+        persistSoon();
+        try { if (typeof render === "function") render(); } catch (_) {}
+      }
+      ensureTretEveryOtherUi();
       queueGymDomPatch();
     }, 0);
   }
