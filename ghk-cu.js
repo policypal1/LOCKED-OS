@@ -8,6 +8,10 @@
 
   Intentionally NOT changed:
     - Gym weekday schedule. The suggested schedule can be applied separately.
+    - Trusted-device auto-unlock stays enabled.
+
+  Removed from the previous build:
+    - Gym ranking / XP / rank subtab system.
 
   Requested changes:
     1) Back + rear delts:
@@ -26,7 +30,7 @@
 */
 
 (() => {
-  const PRE_PATCH_COMMIT = "b0025fac4ad7f633a91fee581b3278def49ace72";
+  const PRE_PATCH_COMMIT = "2449c6831eca87e3ab56d10eec47fcbb73b34e90";
   const PRE_PATCH_BUILD = `https://cdn.jsdelivr.net/gh/policypal1/LOCKED-OS@${PRE_PATCH_COMMIT}/ghk-cu.js`;
 
   try {
@@ -45,6 +49,222 @@
   } catch (error) {
     console.error("LOCKED OS: could not load the pre-patch build.", error);
   }
+})();
+
+/* Preserve trusted-browser auto-unlock from the previous build, without Gym Rank. */
+(() => {
+  "use strict";
+
+  const TRUSTED_DEVICE_FLAG = "__lockedOsTrustedDeviceOnly20260916";
+  if (window[TRUSTED_DEVICE_FLAG]) return;
+  window[TRUSTED_DEVICE_FLAG] = true;
+
+  const DEVICE_RECORD_KEY = "locked_os_trusted_device_v1";
+  const DEVICE_DB_NAME = "locked_os_device_auth_v1";
+  const DEVICE_DB_STORE = "deviceSecrets";
+  const DEVICE_DB_VERSION = 1;
+  const DEVICE_SECRET_BYTES = 32;
+
+  let trustedAutoUnlockInFlight = false;
+
+  function bytesToBase64(bytes) {
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  function base64ToBytes(value) {
+    try {
+      const binary = atob(String(value || ""));
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      return bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function safeJsonParse(value) {
+    try { return JSON.parse(value); } catch (_) { return null; }
+  }
+
+  function getDeviceRecord() {
+    const record = safeJsonParse(localStorage.getItem(DEVICE_RECORD_KEY));
+    if (!record || typeof record !== "object") return null;
+    if (!/^locked-[a-z0-9-]{12,}$/i.test(String(record.id || ""))) return null;
+    if (!/^[A-Za-z0-9+/=]{20,}$/.test(String(record.secretHash || ""))) return null;
+    return record;
+  }
+
+  function getDeviceLabel() {
+    const ua = String(navigator.userAgent || "");
+    const platform = String(navigator.platform || "");
+    const touchPoints = Number(navigator.maxTouchPoints || 0);
+    const isIPhone = /iPhone/i.test(ua);
+    const isIPad = /iPad/i.test(ua) || (/Mac/i.test(platform) && touchPoints > 1);
+    const isMac = /Mac/i.test(platform) && !isIPad;
+    const isWindows = /Win/i.test(platform) || /Windows/i.test(ua);
+    if (isIPhone) return "iPhone";
+    if (isIPad) return "iPad";
+    if (isMac) return "Mac";
+    if (isWindows) return "Windows PC";
+    return "Trusted browser";
+  }
+
+  function makeDeviceId() {
+    if (typeof crypto?.randomUUID === "function") return `locked-${crypto.randomUUID()}`;
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return `locked-${[...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  async function hashSecret(secretBytes) {
+    const digest = await crypto.subtle.digest("SHA-256", secretBytes);
+    return bytesToBase64(new Uint8Array(digest));
+  }
+
+  function openDeviceDb() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) return reject(new Error("IndexedDB unavailable"));
+      const request = indexedDB.open(DEVICE_DB_NAME, DEVICE_DB_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(DEVICE_DB_STORE)) db.createObjectStore(DEVICE_DB_STORE, { keyPath: "id" });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("Could not open device database"));
+    });
+  }
+
+  async function putDeviceSecret(id, secretBase64) {
+    const db = await openDeviceDb();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction(DEVICE_DB_STORE, "readwrite");
+        transaction.objectStore(DEVICE_DB_STORE).put({ id, secret: secretBase64 });
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error || new Error("Could not save device secret"));
+        transaction.onabort = () => reject(transaction.error || new Error("Could not save device secret"));
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async function getDeviceSecret(id) {
+    const db = await openDeviceDb();
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = db.transaction(DEVICE_DB_STORE, "readonly");
+        const request = transaction.objectStore(DEVICE_DB_STORE).get(id);
+        request.onsuccess = () => resolve(request.result?.secret || "");
+        request.onerror = () => reject(request.error || new Error("Could not read device secret"));
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async function verifyTrustedDevice() {
+    if (!window.isSecureContext || !crypto?.subtle || !crypto?.getRandomValues) return false;
+    const record = getDeviceRecord();
+    if (!record) return false;
+    try {
+      const secretBase64 = await getDeviceSecret(record.id);
+      const secretBytes = base64ToBytes(secretBase64);
+      if (!secretBytes || secretBytes.byteLength < DEVICE_SECRET_BYTES) return false;
+      if (await hashSecret(secretBytes) !== record.secretHash) return false;
+      record.lastSeenAt = new Date().toISOString();
+      record.label = getDeviceLabel();
+      localStorage.setItem(DEVICE_RECORD_KEY, JSON.stringify(record));
+      return true;
+    } catch (error) {
+      console.warn("LOCKED OS: trusted-device verification unavailable; password required.", error);
+      return false;
+    }
+  }
+
+  async function registerTrustedDeviceAfterPassword() {
+    if (!window.isSecureContext || !crypto?.subtle || !crypto?.getRandomValues) return false;
+    const existing = getDeviceRecord();
+    if (existing && await verifyTrustedDevice()) return true;
+    try {
+      const id = makeDeviceId();
+      const secretBytes = new Uint8Array(DEVICE_SECRET_BYTES);
+      crypto.getRandomValues(secretBytes);
+      const secretBase64 = bytesToBase64(secretBytes);
+      const secretHash = await hashSecret(secretBytes);
+      await putDeviceSecret(id, secretBase64);
+      localStorage.setItem(DEVICE_RECORD_KEY, JSON.stringify({
+        id,
+        secretHash,
+        label: getDeviceLabel(),
+        createdAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString()
+      }));
+      return true;
+    } catch (error) {
+      console.warn("LOCKED OS: this browser could not be registered as trusted.", error);
+      return false;
+    }
+  }
+
+  function installTrustedDeviceStatusChip() {
+    const card = document.querySelector("#loginScreen .login-card");
+    if (!card || document.getElementById("trustedDeviceHint")) return;
+    const hint = document.createElement("div");
+    hint.id = "trustedDeviceHint";
+    hint.className = "locked-device-hint";
+    hint.textContent = "New browsers still require the password. After a successful unlock, this browser can verify itself automatically next time.";
+    card.appendChild(hint);
+
+    if (!document.getElementById("trustedDeviceOnlyStyles")) {
+      const style = document.createElement("style");
+      style.id = "trustedDeviceOnlyStyles";
+      style.textContent = `.locked-device-hint{margin-top:14px;color:var(--muted,#756c62);font-size:.75rem;line-height:1.45;font-weight:700}`;
+      document.head.appendChild(style);
+    }
+  }
+
+  async function tryTrustedAutoUnlock() {
+    const login = document.getElementById("loginScreen");
+    const app = document.getElementById("mainApp");
+    if (!login || !app || login.classList.contains("hidden")) return;
+    if (!await verifyTrustedDevice()) return;
+    trustedAutoUnlockInFlight = true;
+    try {
+      if (typeof showApp === "function") showApp();
+      if (typeof loadSupabaseState === "function") await loadSupabaseState();
+    } catch (error) {
+      console.warn("LOCKED OS: trusted-device auto unlock failed; password remains available.", error);
+      if (typeof showLogin === "function") showLogin();
+    } finally {
+      trustedAutoUnlockInFlight = false;
+    }
+  }
+
+  function watchForSuccessfulPasswordUnlock() {
+    const login = document.getElementById("loginScreen");
+    const app = document.getElementById("mainApp");
+    if (!login || !app) return;
+    let wasLocked = !login.classList.contains("hidden");
+    const observer = new MutationObserver(() => {
+      const isUnlocked = login.classList.contains("hidden") && !app.classList.contains("hidden");
+      if (wasLocked && isUnlocked && !trustedAutoUnlockInFlight) setTimeout(registerTrustedDeviceAfterPassword, 250);
+      wasLocked = !isUnlocked;
+    });
+    observer.observe(login, { attributes: true, attributeFilter: ["class"] });
+    observer.observe(app, { attributes: true, attributeFilter: ["class"] });
+  }
+
+  function install() {
+    installTrustedDeviceStatusChip();
+    watchForSuccessfulPasswordUnlock();
+    tryTrustedAutoUnlock();
+  }
+
+  if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", install, { once: true });
+  else install();
 })();
 
 (() => {
