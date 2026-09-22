@@ -39,7 +39,8 @@ const WORKOUT_ROTATION = [
   "Abs"
 ];
 
-const DEFAULT_TRETINOIN_FREQUENCY = 3;
+const DEFAULT_TRETINOIN_FREQUENCY = 3; // Keep the original default for days before the new ramp.
+const TRETINOIN_RAMP_START_DAY_KEY = "2026-09-21"; // First 0.05% night: Monday, September 21.
 const TRETINOIN_SCHEDULES = {
   1: ["Monday"],
   2: ["Monday", "Thursday"],
@@ -176,11 +177,34 @@ function getWorkoutName(dayKey = getTodayKey()) {
   return formatWorkoutName(getWorkoutIndex(dayKey));
 }
 
+function getTretinoinRampPhase(dayKey = getTodayKey()) {
+  const elapsed = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(TRETINOIN_RAMP_START_DAY_KEY);
+  if (elapsed < 0) return null;
+  if (elapsed < 14) return { index: 0, label: "Weeks 1–2", frequency: 2 };
+  if (elapsed < 28) return { index: 1, label: "Weeks 3–4", frequency: 3 };
+  if (elapsed < 42) return { index: 2, label: "Weeks 5–6", frequency: 4, alternateNights: true };
+  if (elapsed < 56) return { index: 3, label: "Weeks 7–8", frequency: 5 };
+  // Nightly use is not automatic: the existing Admin + button can enable it if tolerated.
+  return { index: 4, label: "After ~8 weeks", frequency: 5 };
+}
+
+function getTretinoinRampOverride(dayKey = getTodayKey()) {
+  const override = state?.meta?.tretinoinRampOverride;
+  return override && isDateKey(override.effectiveDayKey) &&
+    override.effectiveDayKey >= TRETINOIN_RAMP_START_DAY_KEY &&
+    override.effectiveDayKey <= dayKey &&
+    Number.isInteger(override.frequency) && override.frequency >= 1 && override.frequency <= 7
+    ? override : null;
+}
+
 function getTretinoinFrequency(dayKey = getTodayKey()) {
+  const phase = getTretinoinRampPhase(dayKey);
+  if (phase) return getTretinoinRampOverride(dayKey)?.frequency ?? phase.frequency;
+
+  // Earlier days retain their original schedule and existing saved changes.
   const changes = Array.isArray(state?.meta?.tretinoinScheduleChanges)
     ? state.meta.tretinoinScheduleChanges
     : [];
-
   let frequency = DEFAULT_TRETINOIN_FREQUENCY;
   for (const change of changes) {
     if (change.effectiveDayKey <= dayKey) frequency = change.frequency;
@@ -190,6 +214,12 @@ function getTretinoinFrequency(dayKey = getTodayKey()) {
 }
 
 function getTretinoinDays(dayKey = getTodayKey()) {
+  const phase = getTretinoinRampPhase(dayKey);
+  if (phase?.alternateNights && !getTretinoinRampOverride(dayKey)) {
+    const elapsed = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(TRETINOIN_RAMP_START_DAY_KEY);
+    // October 19 is an application night, followed by every other calendar night.
+    return (elapsed - 28) % 2 === 0 ? [getRoutineDayName(dayKey)] : [];
+  }
   return TRETINOIN_SCHEDULES[getTretinoinFrequency(dayKey)] || TRETINOIN_SCHEDULES[DEFAULT_TRETINOIN_FREQUENCY];
 }
 
@@ -834,6 +864,7 @@ function hasMeaningfulState(snapshot) {
     Object.values(snapshot.mk677.thresholds || {}).some(value => value !== null && value !== "")
   )) return true;
   if (Array.isArray(snapshot.meta?.tretinoinScheduleChanges) && snapshot.meta.tretinoinScheduleChanges.length > 0) return true;
+  if (snapshot.meta?.tretinoinRampOverride) return true;
   if (snapshot.meta?.looksTaskEdits && Object.keys(snapshot.meta.looksTaskEdits).length > 0) return true;
   if (Array.isArray(snapshot.meta?.looksCustomTasks) && snapshot.meta.looksCustomTasks.length > 0) return true;
   if (Array.isArray(snapshot.meta?.looksDeletedTaskIds) && snapshot.meta.looksDeletedTaskIds.length > 0) return true;
@@ -2545,8 +2576,11 @@ function renderRotationCalendar() {
 }
 
 function renderAdmin() {
-  const frequency = getTretinoinFrequency();
-  const days = getTretinoinDays();
+  const todayKey = getTodayKey();
+  const frequency = getTretinoinFrequency(todayKey);
+  const phase = getTretinoinRampPhase(todayKey);
+  const manuallyAdjusted = Boolean(getTretinoinRampOverride(todayKey));
+  const alternateNights = Boolean(phase?.alternateNights && !manuallyAdjusted);
   const value = $("tretinoinFrequencyValue");
   const label = $("tretinoinFrequencyLabel");
   const dayList = $("tretinoinDaysList");
@@ -2554,33 +2588,99 @@ function renderAdmin() {
   const increase = $("tretinoinFrequencyUp");
 
   if (value && label && dayList && decrease && increase) {
-    value.textContent = `${frequency}×`;
-    label.textContent = frequency === 7 ? "Every day" : `${frequency} days per week`;
-    dayList.innerHTML = days.map(day => `<span class="tret-day-pill">${escapeHtml(day.slice(0, 3))}</span>`).join("");
+    value.textContent = alternateNights ? "EON" : `${frequency}×`;
+    label.textContent = alternateNights ? "Every other night" : frequency === 7 ? "Every night" : `${frequency} nights per week`;
+    // Show actual upcoming dates, including the alternating nights in weeks 5–6.
+    const nextNights = [];
+    for (let offset = 0; offset < 14 && nextNights.length < 7; offset += 1) {
+      const key = formatDateKey(addDays(keyToLocalDate(todayKey), offset));
+      if (getTretinoinDays(key).includes(getRoutineDayName(key))) nextNights.push(key);
+    }
+    dayList.innerHTML = nextNights.map(key => {
+      const date = keyToLocalDate(key);
+      return `<span class="tret-day-pill">${getRoutineDayName(key).slice(0, 3)} ${date.getMonth() + 1}/${date.getDate()}</span>`;
+    }).join("");
     decrease.disabled = frequency <= 1;
     increase.disabled = frequency >= 7;
+  }
+
+  // Add the requested 0.05% ramp inside the existing Admin card without editing HTML/CSS.
+  const card = value?.closest(".tretinoin-admin-card");
+  if (card) {
+    const heading = card.querySelector("h2");
+    if (heading) heading.textContent = "Tretinoin 0.05% schedule";
+    const description = card.querySelector(".eyebrow + h2 + p");
+    if (description) description.textContent = "Started September 21. Adjust the nights below with − or +; earlier days stay unchanged.";
+    const previewTitle = card.querySelector(".tret-schedule-title");
+    if (previewTitle) previewTitle.textContent = "Next tretinoin nights";
+    let ramp = $("tretinoinRampTable");
+    if (!ramp) {
+      ramp = document.createElement("div");
+      ramp.id = "tretinoinRampTable";
+      ramp.className = "tret-schedule-preview";
+      ramp.innerHTML = `
+        <span class="tret-schedule-title">0.05% gradual schedule</span>
+        <table style="width:100%;border-collapse:collapse;margin-top:10px;text-align:left;font-size:.88rem;line-height:1.4">
+          <thead><tr><th style="padding:8px 5px;border-bottom:1px solid var(--line)">Time</th><th style="padding:8px 5px;border-bottom:1px solid var(--line)">Tretinoin 0.05%</th></tr></thead>
+          <tbody>
+            <tr data-tret-phase="0"><td style="padding:10px 5px;border-bottom:1px solid var(--line)">Weeks 1–2</td><td style="padding:10px 5px;border-bottom:1px solid var(--line)"><strong>2 nights/week</strong></td></tr>
+            <tr data-tret-phase="1"><td style="padding:10px 5px;border-bottom:1px solid var(--line)">Weeks 3–4</td><td style="padding:10px 5px;border-bottom:1px solid var(--line)"><strong>3 nights/week</strong></td></tr>
+            <tr data-tret-phase="2"><td style="padding:10px 5px;border-bottom:1px solid var(--line)">Weeks 5–6</td><td style="padding:10px 5px;border-bottom:1px solid var(--line)"><strong>Every other night</strong></td></tr>
+            <tr data-tret-phase="3"><td style="padding:10px 5px;border-bottom:1px solid var(--line)">Weeks 7–8</td><td style="padding:10px 5px;border-bottom:1px solid var(--line)"><strong>5 nights/week</strong>, if comfortable</td></tr>
+            <tr data-tret-phase="4"><td style="padding:10px 5px">After ~8 weeks</td><td style="padding:10px 5px"><strong>Nightly only if your skin tolerates it</strong></td></tr>
+          </tbody>
+        </table>
+        <p id="tretinoinRampStatus" style="margin:10px 0 0;color:var(--muted);font-size:.84rem;font-weight:750"></p>
+        <button id="tretinoinResumeRamp" type="button" class="tret-frequency-btn" style="display:none;width:auto;height:auto;padding:9px 12px;margin-top:10px;font-size:.85rem">Resume gradual schedule</button>`;
+      const note = card.querySelector(".tret-admin-note");
+      if (note) note.before(ramp);
+      else card.appendChild(ramp);
+      $("tretinoinResumeRamp")?.addEventListener("click", () => {
+        delete state.meta.tretinoinRampOverride;
+        saveState();
+        render();
+        toast("Gradual tretinoin schedule resumed.");
+      });
+    }
+    const status = $("tretinoinRampStatus");
+    if (status) {
+      status.textContent = manuallyAdjusted
+        ? `Manual schedule: ${frequency} nights/week from ${getTretinoinRampOverride(todayKey).effectiveDayKey}. Use Resume to follow the gradual schedule again.`
+        : phase?.index === 4 ? "After week 8, the schedule stays at 5 nights unless you choose nightly with + and tolerate it."
+        : `${phase?.label || "Before ramp"}: ${alternateNights ? "every other night" : `${frequency} nights/week`}. Increase only if your skin tolerates it.`;
+    }
+    const resume = $("tretinoinResumeRamp");
+    if (resume) resume.style.display = manuallyAdjusted ? "inline-flex" : "none";
+    ramp.querySelectorAll("[data-tret-phase]").forEach(row => {
+      row.style.background = !manuallyAdjusted && Number(row.dataset.tretPhase) === phase?.index ? "var(--blue-soft)" : "";
+    });
+    const note = card.querySelector(".tret-admin-note");
+    if (note) note.textContent = "First night: Monday, September 21, 2026. Admin adjustments override the automatic ramp until you resume it.";
   }
 
   renderRotationCalendar();
 }
 
 function setTretinoinFrequency(nextFrequency) {
-  const frequency = Math.max(1, Math.min(7, Math.round(Number(nextFrequency) || DEFAULT_TRETINOIN_FREQUENCY)));
+  const frequency = Math.max(1, Math.min(7, Math.round(Number(nextFrequency) || 2)));
   const todayKey = getTodayKey();
-  const previousKey = formatDateKey(addDays(keyToLocalDate(todayKey), -1));
-  const previousFrequency = getTretinoinFrequency(previousKey);
-
-  if (!Array.isArray(state.meta.tretinoinScheduleChanges)) state.meta.tretinoinScheduleChanges = [];
-  state.meta.tretinoinScheduleChanges = state.meta.tretinoinScheduleChanges.filter(change => change.effectiveDayKey !== todayKey);
-
-  if (frequency !== previousFrequency) {
-    state.meta.tretinoinScheduleChanges.push({ effectiveDayKey: todayKey, frequency });
-    state.meta.tretinoinScheduleChanges.sort((a, b) => a.effectiveDayKey.localeCompare(b.effectiveDayKey));
+  if (todayKey >= TRETINOIN_RAMP_START_DAY_KEY) {
+    // A manual change overrides later automatic increases but leaves all earlier days intact.
+    state.meta.tretinoinRampOverride = { effectiveDayKey: todayKey, frequency };
+  } else {
+    // Preserve the old Admin behavior when viewing the historical schedule.
+    const previousKey = formatDateKey(addDays(keyToLocalDate(todayKey), -1));
+    const previousFrequency = getTretinoinFrequency(previousKey);
+    if (!Array.isArray(state.meta.tretinoinScheduleChanges)) state.meta.tretinoinScheduleChanges = [];
+    state.meta.tretinoinScheduleChanges = state.meta.tretinoinScheduleChanges.filter(change => change.effectiveDayKey !== todayKey);
+    if (frequency !== previousFrequency) {
+      state.meta.tretinoinScheduleChanges.push({ effectiveDayKey: todayKey, frequency });
+      state.meta.tretinoinScheduleChanges.sort((a, b) => a.effectiveDayKey.localeCompare(b.effectiveDayKey));
+    }
   }
-
   saveState();
   render();
-  toast(`Tretinoin set to ${frequency === 7 ? "every day" : `${frequency} days per week`}.`);
+  toast(`Tretinoin set to ${frequency === 7 ? "every night" : `${frequency} nights per week`}.`);
 }
 
 function changeTretinoinFrequency(amount) {
