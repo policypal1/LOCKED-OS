@@ -2842,3 +2842,115 @@ setInterval(() => {
 setupTabs();
 if (normalizeState()) saveLocalState();
 showLogin();
+
+/* ===== 2026-09-22: PERMISSIVE SAVE WORKOUT ===== */
+(() => {
+  "use strict";
+
+  const FLAG = "__lockedOsPermissiveWorkoutSave20260922";
+  if (window[FLAG]) return;
+  window[FLAG] = true;
+
+  function selectedGymDayKeyForSave() {
+    const selected =
+      document.querySelector('#cleanGymWeekGrid .gym-strip-selected[data-gym-strip-date]') ||
+      document.querySelector('#cleanGymWeekGrid .selected[data-gym-strip-date]') ||
+      document.querySelector('#cleanGymWeekGrid [data-gym-strip-date][aria-current="true"]');
+
+    if (selected?.dataset?.gymStripDate) return selected.dataset.gymStripDate;
+
+    const label = document.getElementById("cleanGymDateLabel")?.textContent?.trim() || "";
+    const parsed = new Date(label);
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+    }
+
+    return typeof getTodayKey === "function" ? getTodayKey() : "";
+  }
+
+  function permissiveGymNumber(input, round = false) {
+    const raw = String(input?.value ?? "").trim();
+    if (!raw) return 0;
+
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return 0;
+
+    const nonNegative = Math.max(0, value);
+    return round ? Math.round(nonNegative) : nonNegative;
+  }
+
+  function saveWorkoutNoMatterWhat() {
+    const dayKey = selectedGymDayKeyForSave();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return;
+
+    const workout =
+      document.getElementById("cleanGymWorkoutTitle")?.textContent?.trim() ||
+      "Workout";
+
+    const exercises = [...document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise")]
+      .map(row => ({
+        name: String(
+          row.dataset.exercise ||
+          row.querySelector(".clean-gym-exercise-name strong")?.textContent ||
+          ""
+        ).trim(),
+        sets: [0, 1].map(index => ({
+          weight: permissiveGymNumber(
+            row.querySelector(`[data-set="${index}"][data-field="weight"]`)
+          ),
+          reps: permissiveGymNumber(
+            row.querySelector(`[data-set="${index}"][data-field="reps"]`),
+            true
+          )
+        }))
+      }))
+      .filter(exercise => exercise.name);
+
+    state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
+    state.meta.gymClean =
+      state.meta.gymClean && typeof state.meta.gymClean === "object"
+        ? state.meta.gymClean
+        : {};
+    state.meta.gymClean.sessions = Array.isArray(state.meta.gymClean.sessions)
+      ? state.meta.gymClean.sessions
+      : [];
+
+    let session = state.meta.gymClean.sessions.find(item => item?.date === dayKey);
+
+    if (!session) {
+      session = {
+        id: `gym-log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        date: dayKey,
+        workout,
+        completed: false,
+        exercises: [],
+        updatedAt: new Date().toISOString()
+      };
+      state.meta.gymClean.sessions.push(session);
+    }
+
+    session.workout = workout;
+    session.exercises = exercises;
+    session.updatedAt = new Date().toISOString();
+
+    saveState();
+
+    const status = document.getElementById("cleanGymSaveStatus");
+    if (status) status.textContent = "Workout saved.";
+
+    if (typeof toast === "function") toast("Workout saved.");
+  }
+
+  document.addEventListener(
+    "click",
+    event => {
+      const saveButton = event.target.closest?.("#cleanGymSave");
+      if (!saveButton) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      saveWorkoutNoMatterWhat();
+    },
+    true
+  );
+})();
