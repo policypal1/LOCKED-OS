@@ -43,7 +43,7 @@ const DEFAULT_TRETINOIN_FREQUENCY = 3; // Keep the original default for days bef
 const TRETINOIN_RAMP_START_DAY_KEY = "2026-09-21"; // First 0.05% night: Monday, September 21.
 const TRETINOIN_SCHEDULES = {
   1: ["Monday"],
-  2: ["Monday", "Thursday"],
+  2: ["Monday", "Friday"],
   3: ["Monday", "Wednesday", "Saturday"],
   4: ["Monday", "Wednesday", "Thursday", "Saturday"],
   5: ["Monday", "Wednesday", "Thursday", "Saturday", "Sunday"],
@@ -762,6 +762,23 @@ function normalizeState() {
     changed = true;
   }
 
+  // Tretinoin schedule migration: Monday 2026-09-21 was the most recent application.
+  // Keep the older every-other-day patch from overriding the current 2x/week ramp.
+  if (state.meta.tretinoinEveryOtherDayV1?.enabled) {
+    state.meta.tretinoinEveryOtherDayV1 = {
+      ...state.meta.tretinoinEveryOtherDayV1,
+      enabled: false
+    };
+    changed = true;
+  }
+
+  const tretStartDay = ensureDay("2026-09-21");
+  if (!tretStartDay.looksDone.includes("tretinoin")) {
+    tretStartDay.looksDone.push("tretinoin");
+    tretStartDay.looksSkipped = tretStartDay.looksSkipped.filter(id => id !== "tretinoin");
+    changed = true;
+  }
+
   const normalizedEdits = normalizeLooksTaskEdits(state.meta.looksTaskEdits);
   if (JSON.stringify(state.meta.looksTaskEdits || {}) !== JSON.stringify(normalizedEdits)) {
     state.meta.looksTaskEdits = normalizedEdits;
@@ -894,13 +911,14 @@ function applyRemoteState(remoteState, statusMessage = "Updated from Supabase.",
     return false;
   }
   state = remoteState;
-  normalizeState();
+  const normalizedRemote = normalizeState();
   saveLocalState();
-  localRevision = 0;
+  localRevision = normalizedRemote ? 1 : 0;
   syncedRevision = 0;
   if (updatedAt) latestSupabaseWriteAt = updatedAt;
+  if (normalizedRemote) queueSupabaseSave(0);
   if (!mainApp.classList.contains("hidden")) render();
-  if (syncStatus) syncStatus.textContent = statusMessage;
+  if (syncStatus) syncStatus.textContent = normalizedRemote ? "Updating Supabase with normalized data…" : statusMessage;
   return true;
 }
 
@@ -2590,15 +2608,21 @@ function renderAdmin() {
   if (value && label && dayList && decrease && increase) {
     value.textContent = alternateNights ? "EON" : `${frequency}×`;
     label.textContent = alternateNights ? "Every other night" : frequency === 7 ? "Every night" : `${frequency} nights per week`;
-    // Show actual upcoming dates, including the alternating nights in weeks 5–6.
-    const nextNights = [];
-    for (let offset = 0; offset < 14 && nextNights.length < 7; offset += 1) {
-      const key = formatDateKey(addDays(keyToLocalDate(todayKey), offset));
-      if (getTretinoinDays(key).includes(getRoutineDayName(key))) nextNights.push(key);
+    // Show only the current Monday-Sunday week so the spacing is obvious.
+    const todayDate = keyToLocalDate(todayKey);
+    const mondayOffset = (todayDate.getDay() + 6) % 7;
+    const weekStart = addDays(todayDate, -mondayOffset);
+    const thisWeekNights = [];
+
+    for (let offset = 0; offset < 7; offset += 1) {
+      const key = formatDateKey(addDays(weekStart, offset));
+      if (getTretinoinDays(key).includes(getRoutineDayName(key))) thisWeekNights.push(key);
     }
-    dayList.innerHTML = nextNights.map(key => {
+
+    dayList.innerHTML = thisWeekNights.map(key => {
       const date = keyToLocalDate(key);
-      return `<span class="tret-day-pill">${getRoutineDayName(key).slice(0, 3)} ${date.getMonth() + 1}/${date.getDate()}</span>`;
+      const completed = ensureDay(key).looksDone.includes("tretinoin");
+      return `<span class="tret-day-pill">${getRoutineDayName(key).slice(0, 3)} ${date.getMonth() + 1}/${date.getDate()}${completed ? " ✓" : ""}</span>`;
     }).join("");
     decrease.disabled = frequency <= 1;
     increase.disabled = frequency >= 7;
@@ -2610,9 +2634,9 @@ function renderAdmin() {
     const heading = card.querySelector("h2");
     if (heading) heading.textContent = "Tretinoin 0.05% schedule";
     const description = card.querySelector(".eyebrow + h2 + p");
-    if (description) description.textContent = "Started September 21. Adjust the nights below with − or +; earlier days stay unchanged.";
+    if (description) description.textContent = "Started Monday, September 21. Current 2× schedule is Monday + Friday for near-even spacing.";
     const previewTitle = card.querySelector(".tret-schedule-title");
-    if (previewTitle) previewTitle.textContent = "Next tretinoin nights";
+    if (previewTitle) previewTitle.textContent = "This week's tretinoin nights";
     let ramp = $("tretinoinRampTable");
     if (!ramp) {
       ramp = document.createElement("div");
