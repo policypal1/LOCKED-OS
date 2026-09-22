@@ -26,7 +26,7 @@ const DAY_ROLLOVER_HOUR = 4;
 const WATER_MINIMUM_OZ = 80;
 const WATER_TARGET_OZ = 100;
 const WATER_MAX_OZ = 240;
-const LOOKS_MORNING_WATER_OZ = 16;
+const LOOKS_MORNING_WATER_OZ = 8;
 const MS_PER_DAY = 86_400_000;
 const ROTATION_PREVIEW_DAYS = 14;
 
@@ -58,7 +58,7 @@ const SHEET_WASH_DAYS = new Set(["Wednesday", "Sunday"]);
 
 const TASKS = [
   { id: "wake-up", section: "morning", title: "Wake up at planned time" },
-  { id: "water", section: "morning", title: "Chug 2 glasses of water immediately after waking up" },
+  { id: "water", section: "morning", title: "Chug one 8 oz glass of water after waking up" },
   { id: "clean-room", section: "morning", title: "Clean room" },
   { id: "dressed", section: "morning", title: "Get fully dressed and ready for the day" },
   { id: "real-world-good-morning", section: "morning", title: "Real World daily good morning" },
@@ -225,7 +225,7 @@ function getTretinoinDays(dayKey = getTodayKey()) {
 
 function makeMorning(dayName) {
   const tasks = [
-    { id: "wake-water", title: "Wake up and chug 2 glasses of water immediately", meta: "morningWater" },
+    { id: "wake-water", title: "Wake up and chug one 8 oz glass of water", meta: "morningWater" },
     { id: "lukewarm-shower", title: "Take a lukewarm shower" },
     { id: "conditional-shampoo", title: "Shampoo only if hair is dirty" },
     { id: "conditioner-soap", title: "Use conditioner and soap" }
@@ -2928,7 +2928,7 @@ showLogin();
           )
         }))
       }))
-      .filter(exercise => exercise.name);
+      .filter(exercise => exercise.name && exercise.name !== "Romanian Deadlift");
 
     state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
     state.meta.gymClean =
@@ -3129,7 +3129,7 @@ showLogin();
           )
         }))
       }))
-      .filter(exercise => exercise.name);
+      .filter(exercise => exercise.name && exercise.name !== "Romanian Deadlift");
   }
 
   function saveGymPermissively(markComplete) {
@@ -3211,4 +3211,33 @@ showLogin();
     },
     true
   );
+})();
+
+/* ===== 2026-09-22: HIDE ROMANIAN DEADLIFTS FROM GYM FORM ===== */
+(() => {
+  "use strict";
+  const FLAG = "__lockedOsNoRomanianDeadlifts20260922";
+  if (window[FLAG]) return;
+  window[FLAG] = true;
+
+  function removeRomanianDeadliftRows() {
+    document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise").forEach(row => {
+      const name = String(row.dataset.exercise || row.querySelector(".clean-gym-exercise-name strong")?.textContent || "").trim();
+      if (name === "Romanian Deadlift") row.remove();
+    });
+  }
+
+  function watchGymForm() {
+    const gymPage = document.getElementById("gymPage");
+    if (!gymPage) return;
+    removeRomanianDeadliftRows();
+    const observer = new MutationObserver(() => removeRomanianDeadliftRows());
+    observer.observe(gymPage, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", watchGymForm, { once: true });
+  } else {
+    watchGymForm();
+  }
 })();
