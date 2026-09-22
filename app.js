@@ -2978,3 +2978,237 @@ showLogin();
     true
   );
 })();
+
+/* ===== 2026-09-22: HARD LOCK TRETINOIN 2X SCHEDULE ===== */
+(() => {
+  "use strict";
+
+  const FLAG = "__lockedOsTret2xMonFriFix20260922";
+
+  function installTret2xFix() {
+    if (window[FLAG]) return;
+    window[FLAG] = true;
+
+    let changed = false;
+
+    // Disable the older "every other day" override so it cannot create a
+    // Tuesday dose immediately after Monday.
+    if (typeof state !== "undefined" && state && typeof state === "object") {
+      state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
+
+      if (state.meta.tretinoinEveryOtherDayV1?.enabled) {
+        state.meta.tretinoinEveryOtherDayV1 = {
+          ...state.meta.tretinoinEveryOtherDayV1,
+          enabled: false
+        };
+        changed = true;
+      }
+
+      // Monday 9/21 was the actual most recent tretinoin night.
+      if (typeof ensureDay === "function") {
+        const monday = ensureDay("2026-09-21");
+        if (!monday.looksDone.includes("tretinoin")) {
+          monday.looksDone.push("tretinoin");
+          changed = true;
+        }
+        monday.looksSkipped = monday.looksSkipped.filter(id => id !== "tretinoin");
+
+        // Tuesday 9/22 is NOT a tretinoin night.
+        const tuesday = ensureDay("2026-09-22");
+        const beforeDone = tuesday.looksDone.length;
+        const beforeSkipped = tuesday.looksSkipped.length;
+        tuesday.looksDone = tuesday.looksDone.filter(id => id !== "tretinoin");
+        tuesday.looksSkipped = tuesday.looksSkipped.filter(id => id !== "tretinoin");
+        if (tuesday.looksDone.length !== beforeDone || tuesday.looksSkipped.length !== beforeSkipped) {
+          changed = true;
+        }
+      }
+    }
+
+    // ghk-cu.js previously wrapped getTretinoinDays() for an every-other-day mode.
+    // This wrapper runs after all scripts load and guarantees that whenever the
+    // active schedule is 2 nights/week, the only nights are Monday + Friday.
+    if (
+      typeof getTretinoinDays === "function" &&
+      !getTretinoinDays.__lockedOsTwoNightMonFri
+    ) {
+      const previousGetTretinoinDays = getTretinoinDays;
+
+      const wrapped = function(dayKey = (typeof getTodayKey === "function" ? getTodayKey() : "")) {
+        try {
+          if (
+            typeof getTretinoinFrequency === "function" &&
+            getTretinoinFrequency(dayKey) === 2
+          ) {
+            const dayName = typeof getRoutineDayName === "function"
+              ? getRoutineDayName(dayKey)
+              : "";
+            return dayName === "Monday" || dayName === "Friday" ? [dayName] : [];
+          }
+        } catch (_) {}
+
+        return previousGetTretinoinDays(dayKey);
+      };
+
+      wrapped.__lockedOsTwoNightMonFri = true;
+      getTretinoinDays = wrapped;
+    }
+
+    if (changed) {
+      try {
+        if (typeof saveState === "function") saveState();
+      } catch (_) {}
+    }
+
+    try {
+      if (typeof render === "function") render();
+    } catch (_) {}
+  }
+
+  // app.js loads before ghk-cu.js, so wait until the full page has loaded,
+  // then apply this fix after ghk-cu.js has installed its older wrapper.
+  if (document.readyState === "complete") {
+    setTimeout(installTret2xFix, 0);
+  } else {
+    window.addEventListener("load", () => setTimeout(installTret2xFix, 0), { once: true });
+  }
+})();
+
+/* ===== 2026-09-22: PERMISSIVE SAVE + COMPLETE WORKOUT ===== */
+(() => {
+  "use strict";
+
+  const FLAG = "__lockedOsPermissiveWorkoutComplete20260922";
+  if (window[FLAG]) return;
+  window[FLAG] = true;
+
+  function selectedGymDayKeyPermissive() {
+    const selected =
+      document.querySelector('#cleanGymWeekGrid .gym-strip-selected[data-gym-strip-date]') ||
+      document.querySelector('#cleanGymWeekGrid .selected[data-gym-strip-date]') ||
+      document.querySelector('#cleanGymWeekGrid [data-gym-strip-date][aria-current="true"]');
+
+    if (selected?.dataset?.gymStripDate) return selected.dataset.gymStripDate;
+
+    const label = document.getElementById("cleanGymDateLabel")?.textContent?.trim() || "";
+    const parsed = new Date(label);
+
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+    }
+
+    return typeof getTodayKey === "function" ? getTodayKey() : "";
+  }
+
+  function readGymNumber(input, round = false) {
+    const raw = String(input?.value ?? "").trim();
+    if (!raw) return 0;
+
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return 0;
+
+    const nonNegative = Math.max(0, value);
+    return round ? Math.round(nonNegative) : nonNegative;
+  }
+
+  function collectGymFormPermissively() {
+    return [...document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise")]
+      .map(row => ({
+        name: String(
+          row.dataset.exercise ||
+          row.querySelector(".clean-gym-exercise-name strong")?.textContent ||
+          ""
+        ).trim(),
+        sets: [0, 1].map(index => ({
+          weight: readGymNumber(
+            row.querySelector(`[data-set="${index}"][data-field="weight"]`)
+          ),
+          reps: readGymNumber(
+            row.querySelector(`[data-set="${index}"][data-field="reps"]`),
+            true
+          )
+        }))
+      }))
+      .filter(exercise => exercise.name);
+  }
+
+  function saveGymPermissively(markComplete) {
+    if (typeof state === "undefined" || !state || typeof state !== "object") return;
+
+    const dayKey = selectedGymDayKeyPermissive();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return;
+
+    const workout =
+      document.getElementById("cleanGymWorkoutTitle")?.textContent?.trim() ||
+      "Workout";
+
+    const exercises = collectGymFormPermissively();
+
+    state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
+    state.meta.gymClean =
+      state.meta.gymClean && typeof state.meta.gymClean === "object"
+        ? state.meta.gymClean
+        : {};
+    state.meta.gymClean.sessions = Array.isArray(state.meta.gymClean.sessions)
+      ? state.meta.gymClean.sessions
+      : [];
+
+    let session = state.meta.gymClean.sessions.find(item => item?.date === dayKey);
+
+    if (!session) {
+      session = {
+        id: `gym-log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        date: dayKey,
+        workout,
+        completed: false,
+        exercises: [],
+        updatedAt: new Date().toISOString()
+      };
+      state.meta.gymClean.sessions.push(session);
+    }
+
+    session.workout = workout;
+    session.exercises = exercises;
+    if (markComplete) session.completed = true;
+    session.updatedAt = new Date().toISOString();
+
+    try {
+      if (typeof saveState === "function") saveState();
+    } catch (error) {
+      console.error("LOCKED OS: permissive workout save failed.", error);
+      return;
+    }
+
+    const status = document.getElementById("cleanGymSaveStatus");
+    if (status) {
+      status.textContent = markComplete
+        ? "Workout saved and completed."
+        : "Workout saved.";
+    }
+
+    if (typeof toast === "function") {
+      toast(markComplete ? "Workout completed." : "Workout saved.");
+    }
+
+    // Refresh whatever gym/history UI is available without requiring every
+    // exercise/set to have both values.
+    try {
+      if (typeof renderWeeklyReview === "function") renderWeeklyReview();
+    } catch (_) {}
+  }
+
+  document.addEventListener(
+    "click",
+    event => {
+      const saveButton = event.target.closest?.("#cleanGymSave");
+      const completeButton = event.target.closest?.("#cleanGymComplete");
+      if (!saveButton && !completeButton) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      saveGymPermissively(Boolean(completeButton));
+    },
+    true
+  );
+})();
