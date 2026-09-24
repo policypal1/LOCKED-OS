@@ -1,0 +1,23 @@
+LOCKED OS — New update using the SAME current file names
+
+This ZIP uses the existing project file names:
+- app.js
+- styles.css
+
+IMPORTANT: these are update blocks, not full replacement files.
+
+FAST INSTALL:
+1. Open your existing app.js.
+2. Paste everything from this ZIP's app.js at the very bottom of your existing app.js.
+3. Open your existing styles.css.
+4. Paste everything from this ZIP's styles.css at the very bottom of your existing styles.css.
+5. Save/upload both files. Do not add daily-checklist.js or daily-checklist.css.
+
+What it adds:
+- A separate Daily Checklist tab before Looksmaxxing
+- Separate progress and streak
+- Complete/undo, skip/unskip, edit, add, delete, reorder
+- Previous-day navigation
+- It does not merge with Looksmaxxing
+
+No BAT files included.
