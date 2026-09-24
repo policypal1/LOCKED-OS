@@ -1,11 +1,19 @@
-LOCKED OS REPAIR - SEPTEMBER 24, 2026
+LOCKED OS — CHECKLIST SAVE FIX
 
-The previous update mistakenly replaced the complete app.js and styles.css with tiny add-on snippets.
-These two files restore the COMPLETE earlier app.js and styles.css and APPEND the new independent Daily Checklist.
+The ZIP contains complete replacement files with the SAME names as your repository:
+  app.js
+  styles.css
 
-Copy app.js and styles.css to the ROOT of your LOCKED-OS repository, replacing the broken files.
-Do NOT delete index.html, ghk-cu.js or ghk-cu.css: the existing index.html references all four styles/scripts, and those three files were not changed by the broken update.
+1. Unzip the archive.
+2. In the ROOT of your LOCKED-OS GitHub repository, upload app.js and styles.css.
+3. When GitHub asks, REPLACE/OVERWRITE the existing files with the same names.
+4. Keep index.html, ghk-cu.js and ghk-cu.css unchanged. They are NOT included in this ZIP.
 
-IMPORTANT: This ZIP does not include index.html because the original index.html in your GitHub repo is unchanged and intact. Keeping it prevents another accidental replacement.
+Changes:
+- Daily Checklist: removed its streak display; the remaining checklist uses the full page width.
+- Task checkmarks and progress save locally immediately. Daily Checklist clicks redraw only their own section.
+- Looksmaxxing: removed the delayed full-page redraw after checking a task, which could interrupt subsequent clicks.
+- Supabase cloud saves: retry automatically after a temporary failure, instead of requiring another click.
+- An older initial cloud-load response will no longer overwrite a task clicked while the site was loading.
 
-Use git commit 215062c261c80727976ad4f39b99c16236132c13 if you ever need to restore the earlier complete app.js and styles.css without the added checklist.
+No BAT files. No extra files need to be uploaded from this ZIP.

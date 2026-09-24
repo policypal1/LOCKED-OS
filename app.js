@@ -102,6 +102,8 @@ const supabaseClient = hasSupabaseConfig && window.supabase
 
 let state = loadLocalState();
 let saveTimer = null;
+let supabaseRetryTimer = null;
+let supabaseRetryAttempts = 0;
 let realtimeChannel = null;
 let toastTimer = null;
 let renderedDayKey = getTodayKey();
@@ -967,17 +969,35 @@ function subscribeToSupabaseState() {
 }
 
 function saveState() {
+  // Record the change locally immediately. Cloud syncing is asynchronous and
+  // must never make the checkbox appear to have failed.
   localRevision += 1;
   saveLocalState();
+  supabaseRetryAttempts = 0;
   queueSupabaseSave();
 }
 
 function queueSupabaseSave(delay = 180) {
   clearTimeout(saveTimer);
+  clearTimeout(supabaseRetryTimer);
+  supabaseRetryTimer = null;
   saveTimer = setTimeout(() => {
     saveTimer = null;
     saveSupabaseState();
   }, delay);
+}
+
+function retrySupabaseSave() {
+  // Keep the local copy authoritative until a cloud write actually succeeds.
+  // Short initial retries recover temporary connection failures without
+  // requiring the user to toggle the same task over and over.
+  if (supabaseRetryAttempts >= 8 || supabaseRetryTimer || !supabaseClient) return;
+  const waitMs = Math.min(30000, 1500 * (2 ** supabaseRetryAttempts));
+  supabaseRetryAttempts += 1;
+  supabaseRetryTimer = setTimeout(() => {
+    supabaseRetryTimer = null;
+    if (localRevision > syncedRevision) saveSupabaseState();
+  }, waitMs);
 }
 
 async function loadSupabaseState() {
@@ -987,7 +1007,17 @@ async function loadSupabaseState() {
   }
 
   const localBeforeLoad = state;
+  const revisionAtLoadStart = localRevision;
   const remoteRow = await fetchSupabaseState();
+
+  // A click made while the initial cloud fetch is pending must not be undone
+  // by its older response. The new local state will be sent to the cloud.
+  if (localRevision !== revisionAtLoadStart) {
+    if (syncStatus) syncStatus.textContent = "Latest edits saved locally; syncing…";
+    queueSupabaseSave(0);
+    subscribeToSupabaseState();
+    return;
+  }
 
   if (remoteRow?.state && typeof remoteRow.state === "object") {
     const remoteHasData = hasMeaningfulState(remoteRow.state);
@@ -1046,22 +1076,24 @@ async function saveSupabaseState() {
       updated_at: writeTimestamp
     });
 
-    if (error) {
-      console.error(error);
-      syncStatus.textContent = "Supabase save failed. Saved locally only.";
-      return false;
-    }
+    if (error) throw error;
 
     syncedRevision = Math.max(syncedRevision, revisionToSave);
     latestSupabaseWriteAt = writeTimestamp;
     saveSucceeded = true;
+    supabaseRetryAttempts = 0;
+    clearTimeout(supabaseRetryTimer);
+    supabaseRetryTimer = null;
     syncStatus.textContent = localRevision > syncedRevision ? "Saving newer changes…" : "Saved to Supabase.";
     return true;
+  } catch (error) {
+    console.error("Supabase save failed; local copy retained:", error);
+    if (syncStatus) syncStatus.textContent = "Saved locally. Retrying cloud sync…";
+    return false;
   } finally {
     supabaseSaveInFlight = false;
-    // Only chain another write after a successful save. If Supabase is offline,
-    // keep the newer local state dirty and let the next edit/online event retry it.
     if (saveSucceeded && (supabaseSaveQueued || localRevision > syncedRevision)) queueSupabaseSave(0);
+    else if (!saveSucceeded && localRevision > syncedRevision) retrySupabaseSave();
   }
 }
 
@@ -1188,7 +1220,9 @@ function setLooksStatus(task, status) {
   refreshLooksProgressUI();
   renderDayStreak();
   renderWater();
-  scheduleInteractionRender();
+  // Do not rebuild every Looksmaxxing row 420 ms after a click: that detached
+  // the next task's button while the user was tapping through a checklist.
+  // Status, progress, water and streak have all already updated above.
 }
 
 function saveLooksTaskEdit(task, nextTitle) {
@@ -3289,11 +3323,6 @@ showLogin();
               </div><div class="checklist" id="lockedOs${label}List"></div></section>`;
           }).join("")}
         </div>
-        <aside class="mini-side"><section class="card panel-card day-streak-card">
-          <div class="panel-title"><h3>Daily checklist streak</h3></div>
-          <div class="day-streak-value"><strong id="lockedOsStreak">0</strong><span id="lockedOsStreakLabel">days</span></div>
-          <p class="rank-copy">Finish or skip each task for the day to maintain this checklist's own streak.</p>
-        </section></aside>
       </div>`;
     looksPage.insertAdjacentElement("beforebegin", page);
     looksTab.classList.remove("active");
@@ -3372,10 +3401,10 @@ showLogin();
     }
   }
 
-  function persistAndRender() {
+  function persistAndRender(onlySection = null) {
     recalculateDays();
     saveState();
-    renderDailyChecklist();
+    renderDailyChecklist(onlySection);
   }
 
   function changeStatus(task, kind) {
@@ -3391,7 +3420,7 @@ showLogin();
     }
     day[DAY_KEY] = [...done];
     day[SKIP_KEY] = [...skipped];
-    persistAndRender();
+    persistAndRender(task.section);
   }
 
   function editTask(task, nextTitle) {
@@ -3561,18 +3590,7 @@ showLogin();
     };
   }
 
-  function countStreak() {
-    let date = keyToLocalDate(getTodayKey());
-    if (!state.days[getTodayKey()]?.[COMPLETE_KEY]) date = addDays(date, -1);
-    let value = 0;
-    while (value < 100000 && state.days[formatDateKey(date)]?.[COMPLETE_KEY]) {
-      value += 1;
-      date = addDays(date, -1);
-    }
-    return value;
-  }
-
-  function renderDailyChecklist() {
+  function renderDailyChecklist(onlySection = null) {
     if (!el("lockedOsChecklistPage")) return;
     const todayKey = getTodayKey();
     if (todayKey !== lastTodayKey) {
@@ -3596,12 +3614,11 @@ showLogin();
     el("lockedOsTasksLeft").textContent = !total ? "Add tasks to build your daily checklist."
       : resolved === total ? "Daily checklist resolved." : `${total - resolved} task${total - resolved === 1 ? "" : "s"} left for this day.`;
     el("lockedOsProgressCircle").style.background = `conic-gradient(var(--green) ${percent * 3.6}deg, rgba(42,30,18,.09) 0deg)`;
-    const streak = countStreak();
-    el("lockedOsStreak").textContent = streak;
-    el("lockedOsStreakLabel").textContent = streak === 1 ? "day" : "days";
     el("lockedOsNextDay").disabled = selectedDayKey >= getTodayKey();
     el("lockedOsToday").disabled = selectedDayKey === getTodayKey();
-    SECTION_NAMES.forEach(section => renderSection(section, day));
+    SECTION_NAMES.forEach(section => {
+      if (onlySection === null || onlySection === section) renderSection(section, day);
+    });
   }
 
   // The existing app's renderer and Supabase sync continue to own persistence.

@@ -793,3 +793,6 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 #lockedOsChecklistPage .task-row.dragging .task-main { border-style:dashed; }
 @media(max-width:860px) { .locked-os-day-controls { width:100%; } }
 
+
+/* Daily Checklist has no streak sidebar; use the full available width. */
+#lockedOsChecklistPage .layout { display: block; }
