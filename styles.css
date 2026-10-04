@@ -827,3 +827,20 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 .sync-strip-v3 button { flex-shrink:0; border:1px solid var(--line); border-radius:20px; padding:7px 12px; background:var(--card); color:var(--text); font:inherit; font-size:.75rem; cursor:pointer; }
 #lockedOsChooseDate { font:inherit; max-width:155px; padding:8px; border:1px solid var(--line); border-radius:14px; background:transparent; color:inherit; }
 .gym-progress-v3 { border:1px solid var(--line); border-radius:22px; background:rgba(255,255,255,.45); }
+/* Single place to inspect and edit all recurring tasks. */
+.tretinoin-admin-card[hidden] { display:none !important; }
+.recurring-admin-v4 { padding:24px; margin-bottom:20px; }
+.recurring-admin-v4 h2, .recurring-admin-v4 h3 { margin:6px 0 12px; }
+.recurring-admin-v4 p { line-height:1.5; }
+.tret-plan-v4 { padding:18px; margin:18px 0 24px; border:1px solid var(--line); border-radius:16px; background:var(--blue-soft); }
+.tret-phase-row { display:flex; align-items:center; gap:10px; padding:12px 0; flex-wrap:wrap; }
+.tret-phase-row span { flex:1; min-width:220px; font-weight:700; }
+.recurring-admin-tools { display:flex; gap:14px; flex-wrap:wrap; }
+.recurring-admin-tools label { display:grid; gap:8px; flex:1; min-width:180px; font-weight:700; }
+.recurring-admin-tools input, .recurring-admin-tools select, #looksDatePickerV4 { font:inherit; font-size:16px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; color:var(--text); background:var(--card); min-width:0; }
+.recurring-task-v4 { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 0; border-top:1px solid var(--line); }
+.recurring-task-v4 p { margin:5px 0; font-size:.85rem; }
+.recurring-task-v4 small, .schedule-help { color:var(--muted); line-height:1.5; font-size:.82rem; }
+.recurring-task-actions { display:flex; gap:8px; flex-shrink:0; }
+#looksDatePickerV4 { max-width:165px; }
+@media(max-width:600px){.recurring-admin-v4{padding:16px}.recurring-task-v4{align-items:flex-start;flex-direction:column;gap:10px}.recurring-admin-tools{flex-direction:column}.tret-phase-row span{min-width:100%}.looks-day-nav{flex-wrap:wrap}}

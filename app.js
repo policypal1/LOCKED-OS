@@ -765,23 +765,6 @@ function normalizeState() {
     changed = true;
   }
 
-  // Tretinoin schedule migration: Monday 2026-09-21 was the most recent application.
-  // Keep the older every-other-day patch from overriding the current 2x/week ramp.
-  if (state.meta.tretinoinEveryOtherDayV1?.enabled) {
-    state.meta.tretinoinEveryOtherDayV1 = {
-      ...state.meta.tretinoinEveryOtherDayV1,
-      enabled: false
-    };
-    changed = true;
-  }
-
-  const tretStartDay = ensureDay("2026-09-21");
-  if (!tretStartDay.looksDone.includes("tretinoin")) {
-    tretStartDay.looksDone.push("tretinoin");
-    tretStartDay.looksSkipped = tretStartDay.looksSkipped.filter(id => id !== "tretinoin");
-    changed = true;
-  }
-
   const normalizedEdits = normalizeLooksTaskEdits(state.meta.looksTaskEdits);
   if (JSON.stringify(state.meta.looksTaskEdits || {}) !== JSON.stringify(normalizedEdits)) {
     state.meta.looksTaskEdits = normalizedEdits;
@@ -2902,101 +2885,6 @@ setInterval(() => {
 setupTabs();
 if (normalizeState()) saveLocalState();
 showLogin();
-
-/* ===== 2026-09-22: HARD LOCK TRETINOIN 2X SCHEDULE ===== */
-(() => {
-  "use strict";
-
-  const FLAG = "__lockedOsTret2xMonFriFix20260922";
-
-  function installTret2xFix() {
-    if (window[FLAG]) return;
-    window[FLAG] = true;
-
-    let changed = false;
-
-    // Disable the older "every other day" override so it cannot create a
-    // Tuesday dose immediately after Monday.
-    if (typeof state !== "undefined" && state && typeof state === "object") {
-      state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
-
-      if (state.meta.tretinoinEveryOtherDayV1?.enabled) {
-        state.meta.tretinoinEveryOtherDayV1 = {
-          ...state.meta.tretinoinEveryOtherDayV1,
-          enabled: false
-        };
-        changed = true;
-      }
-
-      // Monday 9/21 was the actual most recent tretinoin night.
-      if (typeof ensureDay === "function") {
-        const monday = ensureDay("2026-09-21");
-        if (!monday.looksDone.includes("tretinoin")) {
-          monday.looksDone.push("tretinoin");
-          changed = true;
-        }
-        monday.looksSkipped = monday.looksSkipped.filter(id => id !== "tretinoin");
-
-        // Tuesday 9/22 is NOT a tretinoin night.
-        const tuesday = ensureDay("2026-09-22");
-        const beforeDone = tuesday.looksDone.length;
-        const beforeSkipped = tuesday.looksSkipped.length;
-        tuesday.looksDone = tuesday.looksDone.filter(id => id !== "tretinoin");
-        tuesday.looksSkipped = tuesday.looksSkipped.filter(id => id !== "tretinoin");
-        if (tuesday.looksDone.length !== beforeDone || tuesday.looksSkipped.length !== beforeSkipped) {
-          changed = true;
-        }
-      }
-    }
-
-    // ghk-cu.js previously wrapped getTretinoinDays() for an every-other-day mode.
-    // This wrapper runs after all scripts load and guarantees that whenever the
-    // active schedule is 2 nights/week, the only nights are Monday + Friday.
-    if (
-      typeof getTretinoinDays === "function" &&
-      !getTretinoinDays.__lockedOsTwoNightMonFri
-    ) {
-      const previousGetTretinoinDays = getTretinoinDays;
-
-      const wrapped = function(dayKey = (typeof getTodayKey === "function" ? getTodayKey() : "")) {
-        try {
-          if (
-            typeof getTretinoinFrequency === "function" &&
-            getTretinoinFrequency(dayKey) === 2
-          ) {
-            const dayName = typeof getRoutineDayName === "function"
-              ? getRoutineDayName(dayKey)
-              : "";
-            return dayName === "Monday" || dayName === "Friday" ? [dayName] : [];
-          }
-        } catch (_) {}
-
-        return previousGetTretinoinDays(dayKey);
-      };
-
-      wrapped.__lockedOsTwoNightMonFri = true;
-      getTretinoinDays = wrapped;
-    }
-
-    if (changed) {
-      try {
-        if (typeof saveState === "function") saveState();
-      } catch (_) {}
-    }
-
-    try {
-      if (typeof render === "function") render();
-    } catch (_) {}
-  }
-
-  // app.js loads before ghk-cu.js, so wait until the full page has loaded,
-  // then apply this fix after ghk-cu.js has installed its older wrapper.
-  if (document.readyState === "complete") {
-    setTimeout(installTret2xFix, 0);
-  } else {
-    window.addEventListener("load", () => setTimeout(installTret2xFix, 0), { once: true });
-  }
-})();
 
 /* ===== 2026-09-22: PERMISSIVE SAVE + COMPLETE WORKOUT ===== */
 (() => {

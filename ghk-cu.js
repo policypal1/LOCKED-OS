@@ -7765,13 +7765,14 @@
   const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && formatDateKey(keyToLocalDate(value))===value;
   function appears(task,dayKey) {
+    if (task.paused) return false;
     const schedule = task.schedule;
     if(!schedule) return true;
     if(schedule.start && dayKey<schedule.start) return false;
     if(schedule.end && dayKey>schedule.end) return false;
     if(schedule.type==='once') return dayKey===schedule.start;
     if(schedule.type==='everyOtherDay') return (keyToUtcDayNumber(dayKey)-keyToUtcDayNumber(schedule.start))%2===0;
-    if(schedule.type==='weekly') return schedule.days.includes(getRoutineDayName(dayKey));
+    if(schedule.type==='weekly') return (schedule.days || []).includes(getRoutineDayName(dayKey));
     return true;
   }
   window.lockedOsTaskAppears=appears;
@@ -7791,7 +7792,8 @@
     const restoreFocus=document.activeElement;
     const details=looks ? state.meta.taskDetailsV3?.[task.id] || {} : task;
     const legacy=state.meta.customTaskRecurrenceV1?.[task.id];
-    const schedule=details.schedule || (legacy ? {type:'everyOtherDay',start:legacy.startDayKey,days} : {type:task.days?.length<7?'weekly':'daily',start:'',end:'',days:task.days||state.meta.customTaskSchedules?.[task.id]||days});
+    const selectedDays = task.days || state.meta.customTaskSchedules?.[task.id] || days;
+    const schedule=details.schedule || (legacy ? {type:'everyOtherDay',start:legacy.startDayKey,days} : {type:selectedDays.length<7?'weekly':'daily',start:'',end:'',days:selectedDays});
     const sections=looks?['morning','midday','night']:['morning','afternoon','night'];
     const dialog=document.createElement('dialog'); dialog.id='taskEditorV3'; dialog.className='task-editor-v3';
     dialog.innerHTML=`<form method="dialog" id="taskEditorForm"><div class="task-editor-head"><h2>${task.id?'Edit task':'Add task'}</h2><button type="button" id="taskEditorClose" aria-label="Close">×</button></div>
@@ -7864,17 +7866,7 @@
         const edit=row.querySelector('.edit-action');
         if(edit){const button=edit.cloneNode(true);edit.replaceWith(button);button.onclick=()=>{
           row.querySelector('details').open=false;
-          editor({...task,section:controls.section},true,details=>{
-            state.meta.taskDetailsV3 ||= {};
-            state.meta.taskDetailsV3[task.id]={...details,task:{...task,section:controls.section}};
-            state.meta.looksTaskEdits[task.id]=details.title;
-            state.meta.looksTaskInfo ||= {};state.meta.looksTaskInfo[task.id]=details.notes;
-            const custom=state.meta.looksCustomTasks.find(t=>t.id===task.id);
-            if(custom){custom.days=[...days];custom.section=details.section;}
-            state.meta.customTaskSchedules ||= {};state.meta.customTaskSchedules[task.id]=[...days];
-            if(state.meta.customTaskRecurrenceV1)delete state.meta.customTaskRecurrenceV1[task.id];
-            saveState();render();
-          });
+          editCatalogTask({...task,section:controls.section});
         };}
       }
       return row;
@@ -7900,6 +7892,244 @@
       document.querySelectorAll('.looks-task').forEach(row=>{if(row.dataset.taskId===task.id)window.lockedOsUpdateTaskRow(row,done.has(task.id),skipped.has(task.id));});
       refreshLooksProgressUI();renderDayStreak();renderWater();
     };
+  }
+
+  // All recurring-task previews and editors resolve through the same routine.
+  const TRET_PLAN_START = '2026-10-03';
+  let legacyTretDays = null;
+  function ensureTretPlan() {
+    state.meta ||= {};
+    if (!state.meta.tretinoinPlanV4) {
+      state.meta.tretinoinPlanV4 = {
+        phases: [{id:'tret-2026-10-03',start:TRET_PLAN_START,type:'weekly',days:['Monday','Wednesday','Saturday']}],
+        reviewDate:'2026-10-17'
+      };
+      // The user explicitly requested that the task be restored and scheduled.
+      state.meta.looksDeletedTaskIds=(state.meta.looksDeletedTaskIds||[]).filter(id=>id!=='tretinoin');
+      state.meta.looksDeletedTaskTitles=(state.meta.looksDeletedTaskTitles||[]).filter(title=>!['apply tretinoin','tretinoin'].includes(String(title).trim().toLowerCase()));
+      if(state.meta.taskTombstones)delete state.meta.taskTombstones.tretinoin;
+      if(state.meta.taskDetailsV3)delete state.meta.taskDetailsV3.tretinoin;
+    }
+    return state.meta.tretinoinPlanV4;
+  }
+  function activeTretPhase(dayKey) {
+    return [...(ensureTretPlan().phases||[])].filter(p=>validDate(p.start)&&p.start<=dayKey).sort((a,b)=>a.start.localeCompare(b.start)).at(-1)||null;
+  }
+  function scheduleLabel(schedule) {
+    if(!schedule)return 'Every day';
+    if(schedule.type==='daily')return 'Every day';
+    if(schedule.type==='once')return `Once · ${schedule.start}`;
+    if(schedule.type==='everyOtherDay')return `Every other day · from ${schedule.start}`;
+    return `${(schedule.days||[]).map(d=>d.slice(0,3)).join(', ')} (${schedule.days?.length||0}× / week)`;
+  }
+  function saveTaskDetails(task,details) {
+    state.meta.taskDetailsV3 ||= {};
+    state.meta.taskDetailsV3[task.id]={...state.meta.taskDetailsV3[task.id],...details,task:{...task}};
+    state.meta.looksTaskEdits ||= {};state.meta.looksTaskEdits[task.id]=details.title;
+    state.meta.looksTaskInfo ||= {};state.meta.looksTaskInfo[task.id]=details.notes;
+    const custom=state.meta.looksCustomTasks.find(t=>t.id===task.id);
+    if(custom){custom.days=[...days];custom.section=details.section;custom.title=details.title;}
+    state.meta.customTaskSchedules ||= {};state.meta.customTaskSchedules[task.id]=[...days];
+    if(state.meta.customTaskRecurrenceV1)delete state.meta.customTaskRecurrenceV1[task.id];
+    saveState();render();
+  }
+  function openTretPhase(phase=null) {
+    const existing=phase?.id;
+    const start=phase?.start||ensureTretPlan().reviewDate||getTodayKey();
+    editor({id:'tret-phase-editor',title:'Apply tretinoin',section:'night',schedule:{...(phase||{type:'weekly',days:['Monday','Wednesday','Saturday']}),start,end:''}},false,details=>{
+      const plan=ensureTretPlan();
+      const next={id:existing||`tret-${details.schedule.start}`,start:details.schedule.start,type:details.schedule.type,days:details.schedule.days};
+      plan.phases=plan.phases.filter(p=>p.id!==existing&&p.start!==next.start);
+      plan.phases.push(next);plan.phases.sort((a,b)=>a.start.localeCompare(b.start));
+      saveState();render();
+    });
+    const dialog=document.getElementById('taskEditorV3');
+    dialog.querySelector('h2').textContent=existing?'Edit tretinoin schedule':'Schedule a future change';
+    ['taskEditorName','taskEditorNotes','taskEditorSection'].forEach(id=>dialog.querySelector('#'+id).closest('label').hidden=true);
+    dialog.querySelector('#taskEditorEndLabel').hidden=true;
+    dialog.querySelector('#taskEditorRepeat option[value=once]')?.remove();
+    dialog.querySelector('#taskEditorRepeat option[value=daily]').textContent='Every night';
+    dialog.querySelector('#taskEditorRepeat option[value=everyOtherDay]').textContent='Every other night';
+    const update=()=>{
+      dialog.querySelector('#taskEditorStart').required=true;
+      dialog.querySelector('#taskEditorDateLabel').textContent='Effective from';
+      dialog.querySelector('#taskEditorEndLabel').hidden=true;
+    };
+    dialog.querySelector('#taskEditorRepeat').addEventListener('change',update);update();
+    const note=document.createElement('p');note.className='schedule-help';note.textContent='This changes your tracker schedule only. A future phase starts on the date you choose.';
+    dialog.querySelector('.task-editor-head').after(note);
+    dialog.querySelector('#taskEditorStart').focus();
+  }
+  function taskCatalog() {
+    const items=new Map();
+    const put=(task,section)=>{
+      if(!task?.id||state.meta.looksDeletedTaskIds?.includes(task.id))return;
+      items.set(task.id,{...items.get(task.id),...task,section:section||task.section||'night',title:getLooksTaskTitle(task)});
+    };
+    // Include scheduled built-ins and custom tasks that are currently off-cycle.
+    for(let i=0;i<14;i++){
+      const key=formatDateKey(addDays(keyToLocalDate(getTodayKey()),i));
+      const routine=getLooksRoutine(key);
+      for(const section of ['morning','midday','night'])for(const task of routine[section]||[])put(task,section);
+    }
+    for(const task of state.meta.looksCustomTasks||[])put(task,task.section);
+    for(const [id,details] of Object.entries(state.meta.taskDetailsV3||{}))if(details.task)put({...details.task,id},details.section);
+    put({id:'tretinoin',title:'Apply tretinoin'},'night');
+    return [...items.values()].sort((a,b)=>a.title.localeCompare(b.title));
+  }
+  function resolvedSchedule(task) {
+    if(task.id==='tretinoin')return activeTretPhase(getTodayKey());
+    const details=state.meta.taskDetailsV3?.[task.id];
+    if(details?.schedule)return details.schedule;
+    const legacy=state.meta.customTaskRecurrenceV1?.[task.id];
+    if(legacy)return {type:'everyOtherDay',start:legacy.startDayKey,days};
+    const explicit=task.days||state.meta.customTaskSchedules?.[task.id];
+    if(explicit)return {type:explicit.length===7?'daily':'weekly',days:explicit,start:'',end:''};
+    const on=[];
+    for(let i=0;i<7;i++){
+      const key=formatDateKey(addDays(keyToLocalDate(getTodayKey()),i));
+      if(Object.values(getLooksRoutine(key)).flat().some(t=>t.id===task.id))on.push(getRoutineDayName(key));
+    }
+    return {type:on.length===7?'daily':'weekly',days:days.filter(d=>on.includes(d)),start:'',end:''};
+  }
+  function editCatalogTask(task) {
+    if(task.id==='tretinoin'){openTretPhase(activeTretPhase(getTodayKey()));return;}
+    if(task.id==='gym'){document.getElementById('cleanGymSettings')?.click();return;}
+    // Pass the existing schedule explicitly rather than guessing "daily" for a
+    // built-in or an off-cycle task.
+    const detail=state.meta.taskDetailsV3?.[task.id];
+    const draft={...task,notes:state.meta.looksTaskInfo?.[task.id]||'',section:detail?.section||task.section,schedule:resolvedSchedule(task)};
+    editor(draft,false,value=>saveTaskDetails(task,{...value,paused:detail?.paused||false}));
+    const section=document.getElementById('taskEditorSection');
+    const midday=section.querySelector('[value=afternoon]');if(midday){midday.value='midday';midday.textContent='Midday';}section.value=draft.section;
+  }
+  function nextTaskDate(task) {
+    if(state.meta.taskDetailsV3?.[task.id]?.paused)return 'Paused';
+    const schedule=resolvedSchedule(task);
+    let start=getTodayKey();
+    if(schedule?.start&&schedule.start>start)start=schedule.start;
+    for(let i=0;i<15;i++){
+      const key=formatDateKey(addDays(keyToLocalDate(start),i));
+      if(Object.values(getLooksRoutine(key)).flat().some(t=>t.id===task.id))return key===getTodayKey()?'Today':key;
+    }
+    return schedule?.end&&schedule.end<getTodayKey()?'Ended':'No upcoming date';
+  }
+  function renderRecurringAdmin() {
+    const parent=document.getElementById('adminRoutinePanel');if(!parent)return;
+    document.querySelectorAll('.tretinoin-admin-card').forEach(card=>card.hidden=true);
+    let panel=document.getElementById('recurringAdminV4');
+    if(!panel){
+      panel=document.createElement('section');panel.id='recurringAdminV4';panel.className='card recurring-admin-v4';
+      panel.innerHTML=`<p class="eyebrow blue">Routine settings</p><h2>Repeating tasks</h2><p>Edit any task here, including tasks that aren't scheduled today.</p><section class="tret-plan-v4"><h3>Tretinoin schedule</h3><p id="tretCurrentV4"></p><div id="tretPhasesV4"></div><button class="btn blue compact" id="addTretPhaseV4" type="button">Schedule a future change</button><p id="tretReviewV4" class="schedule-help"></p></section><div class="recurring-admin-tools"><label>Find a task<input id="recurringSearchV4" type="search" placeholder="Search zinc, sheets, tretinoin…"></label><label>Show<select id="recurringFilterV4"><option value="all">All tasks</option><option value="cycling">Cycling tasks</option><option value="today">Due today</option><option value="paused">Paused</option></select></label></div><p id="recurringCountV4" aria-live="polite"></p><div id="recurringListV4"></div>`;
+      parent.prepend(panel);
+      panel.querySelector('#addTretPhaseV4').onclick=()=>openTretPhase();
+      panel.querySelector('#recurringSearchV4').oninput=renderRecurringList;
+      panel.querySelector('#recurringFilterV4').onchange=renderRecurringList;
+    }
+    const plan=ensureTretPlan(),active=activeTretPhase(getTodayKey());
+    document.getElementById('tretCurrentV4').textContent=active?`Current: ${scheduleLabel(active).replace('Every day','Every night')}`:'No phase has started yet.';
+    const list=document.getElementById('tretPhasesV4');list.replaceChildren();
+    for(const phase of [...plan.phases].sort((a,b)=>a.start.localeCompare(b.start))){
+      const row=document.createElement('div');row.className='tret-phase-row';
+      const text=document.createElement('span');text.textContent=`${phase.start} · ${scheduleLabel(phase).replace('Every day','Every night')}${phase.id===active?.id?' · Current':''}`;
+      const edit=document.createElement('button');edit.type='button';edit.className='btn secondary compact';edit.textContent='Edit';edit.onclick=()=>openTretPhase(phase);row.append(text,edit);
+      if(plan.phases.length>1){const remove=document.createElement('button');remove.type='button';remove.className='btn secondary compact';remove.textContent='Remove';remove.onclick=()=>{plan.phases=plan.phases.filter(p=>p.id!==phase.id);saveState();render();};row.append(remove);}
+      list.append(row);
+    }
+    const hasNext=plan.phases.some(p=>p.start>getTodayKey());
+    document.getElementById('tretReviewV4').textContent=hasNext?'The next change starts on its saved date.':`Review date: ${plan.reviewDate}. The current schedule continues until you save a change; there is no automatic increase.`;
+    renderRecurringList();
+  }
+  function renderRecurringList() {
+    const list=document.getElementById('recurringListV4');if(!list)return;
+    const query=document.getElementById('recurringSearchV4').value.toLowerCase().trim();
+    const filter=document.getElementById('recurringFilterV4').value;
+    const due=new Set(Object.values(getLooksRoutine(getTodayKey())).flat().map(t=>t.id));
+    const tasks=taskCatalog().filter(t=>t.title.toLowerCase().includes(query)).filter(t=>{
+      if(filter==='paused')return state.meta.taskDetailsV3?.[t.id]?.paused;
+      if(filter==='today')return due.has(t.id);
+      if(filter==='cycling')return resolvedSchedule(t)?.type!=='daily';
+      return true;
+    });
+    document.getElementById('recurringCountV4').textContent=`${tasks.length} task${tasks.length===1?'':'s'}`;
+    list.replaceChildren();
+    for(const task of tasks){
+      const row=document.createElement('div');row.className='recurring-task-v4';row.dataset.recurringTask=task.id;
+      const detail=state.meta.taskDetailsV3?.[task.id];
+      const schedule=resolvedSchedule(task);
+      row.innerHTML=`<div><strong>${escapeHtml(task.title)}</strong><p>${escapeHtml(detail?.section||task.section)} · ${escapeHtml(scheduleLabel(schedule))}</p><small>Next: ${escapeHtml(nextTaskDate(task))}${schedule?.end?` · Ends: ${escapeHtml(schedule.end)}`:''}</small></div>`;
+      const controls=document.createElement('div');controls.className='recurring-task-actions';
+      const edit=document.createElement('button');edit.type='button';edit.className='btn secondary compact';edit.textContent='Edit';edit.onclick=()=>editCatalogTask(task);controls.append(edit);
+      if(!['tretinoin','gym'].includes(task.id)){
+        const pause=document.createElement('button');pause.type='button';pause.className='btn secondary compact';pause.textContent=detail?.paused?'Resume':'Pause';
+        pause.onclick=()=>saveTaskDetails(task,{title:task.title,notes:state.meta.looksTaskInfo?.[task.id]||'',section:detail?.section||task.section,schedule,paused:!detail?.paused});controls.append(pause);
+      }
+      row.append(controls);list.append(row);
+    }
+    if(!tasks.length)list.textContent='No matching tasks. Try another search or filter.';
+  }
+  function installSchedules() {
+    legacyTretDays=getTretinoinDays;
+    const legacyTretFrequency=getTretinoinFrequency;
+    getTretinoinDays=function(key=getTodayKey()){
+      if(key<TRET_PLAN_START)return legacyTretDays(key);
+      const phase=activeTretPhase(key);
+      return phase && appears({schedule:phase},key)?[getRoutineDayName(key)]:[];
+    };
+    getTretinoinFrequency=function(key=getTodayKey()){
+      if(key<TRET_PLAN_START)return legacyTretFrequency(key);
+      const phase=activeTretPhase(key);
+      return phase?.type==='daily'?7:phase?.type==='everyOtherDay'?3.5:phase?.days?.length||3;
+    };
+    const prior=getLooksRoutine;
+    getLooksRoutine=function(key=getTodayKey()){
+      const routine=prior(key);
+      if(key>=TRET_PLAN_START){
+        for(const section of ['morning','midday','night'])routine[section]=routine[section].filter(t=>t.id!=='tretinoin');
+        if(!state.meta.looksDeletedTaskIds?.includes('tretinoin') && getTretinoinDays(key).includes(getRoutineDayName(key)))routine.night.push({id:'tretinoin',title:state.meta.looksTaskEdits?.tretinoin||'Apply tretinoin'});
+      }
+      return routine;
+    };
+    // No frozen weekday table: the calendar reflects the actual routine,
+    // including EOD custom tasks and their start/end dates.
+    getRotationTasksForDay=key=>Object.values(getLooksRoutine(key)).flat().map(task=>({id:task.id,label:getLooksTaskTitle(task),type:task.id==='tretinoin'?'tretinoin':task.id==='gym'?'gym':'custom'}));
+    renderRotationCalendar=function(){
+      const calendar=document.getElementById('rotationCalendar');if(!calendar)return;
+      const description=calendar.parentElement.querySelector('h2 + p');
+      if(description)description.textContent='Your actual routine for the next 14 days. Open any day to see its full checklist.';
+      calendar.replaceChildren();
+      // A task visible on all seven days is part of the everyday list, unless
+      // explicitly controlled by a cycling schedule.
+      const counts=new Map();
+      for(let n=0;n<7;n++)for(const task of getRotationTasksForDay(formatDateKey(addDays(keyToLocalDate(getTodayKey()),n))))counts.set(task.id,(counts.get(task.id)||0)+1);
+      for(let offset=0;offset<14;offset++){
+        const key=formatDateKey(addDays(keyToLocalDate(getTodayKey()),offset)),tasks=getRotationTasksForDay(key);
+        const extras=tasks.filter(t=>counts.get(t.id)!==7||['gym','tretinoin'].includes(t.id)||state.meta.taskDetailsV3?.[t.id]?.schedule?.type==='everyOtherDay');
+        const daily=tasks.length-extras.length;
+        const card=document.createElement('div');card.className=`rotation-day ${offset===0?'today':''}`;card.dataset.rotationDate=key;
+        card.innerHTML=`<div class="rotation-day-heading"><div><strong>${getRoutineDayName(key)}</strong><span>${escapeHtml(keyToLocalDate(key).toLocaleDateString(undefined,{month:'short',day:'numeric'}))}</span></div>${offset===0?'<span class="rotation-today-badge">Today</span>':''}</div><div class="rotation-task-chips">${extras.map(t=>`<span class="rotation-chip ${t.type}">${escapeHtml(t.label)}</span>`).join('')}</div><p class="schedule-help">${daily?`${daily} everyday tasks`:'No everyday tasks'} · ${tasks.length} total</p>`;
+        const button=document.createElement('button');button.type='button';button.className='btn secondary compact';button.textContent='View this day';button.onclick=()=>{
+          lockedOsSelectedLooksDayKey=key;document.querySelector('[data-tab="looksPage"]')?.click();renderLooks();
+        };card.append(button);calendar.append(card);
+      }
+    };
+    renderAdmin=function(){renderRecurringAdmin();renderRotationCalendar();};
+    // Legacy navigation silently clamped future days to today.
+    lockedOsLooksKey=function(){if(!validDate(lockedOsSelectedLooksDayKey))lockedOsSelectedLooksDayKey=getTodayKey();return lockedOsSelectedLooksDayKey;};
+    lockedOsShiftLooksDay=function(amount){lockedOsSelectedLooksDayKey=formatDateKey(addDays(keyToLocalDate(lockedOsLooksKey()),Number(amount)||0));renderLooks();};
+    const priorLooks=renderLooks;
+    renderLooks=function(){
+      priorLooks();
+      const next=document.getElementById('looksNextDayBtn');if(next)next.disabled=false;
+      const label=document.getElementById('looksHistoryLabel');if(label&&lockedOsLooksKey()>getTodayKey())label.textContent='Previewing future day';
+      let picker=document.getElementById('looksDatePickerV4');
+      if(!picker){picker=document.createElement('input');picker.id='looksDatePickerV4';picker.type='date';picker.setAttribute('aria-label','Routine date');picker.onchange=()=>{if(validDate(picker.value)){lockedOsSelectedLooksDayKey=picker.value;renderLooks();}};document.getElementById('looksDayNav')?.append(picker);}
+      picker.value=lockedOsLooksKey();
+    };
+    window.lockedOsScheduleCatalog=taskCatalog;
+    window.lockedOsResolvedSchedule=resolvedSchedule;
+    window.lockedOsSaveTaskDetails=saveTaskDetails;
+    ensureTretPlan();
   }
 
   function progressData(exercise,metric,range){
@@ -7936,7 +8166,7 @@
   document.addEventListener('click',e=>{if(e.target.closest('#cleanGymPrev,#cleanGymNext,#cleanGymToday,[data-gym-strip-date]'))window.lockedOsGymDraftDirty=false;});
   // Legacy layers finish their one-time installation at 225 ms.
   setTimeout(()=>{
-    installSync(); installTasks();
+    installSync(); installTasks(); installSchedules();
     if (!storedBase && !window.lockedOsInitiallyDirty && !earlyUserEdit) base = copy(state);
     ready=true;
     const header = mainApp.querySelector("header") || mainApp.firstElementChild;
