@@ -796,3 +796,34 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 
 /* Daily Checklist has no streak sidebar; use the full available width. */
 #lockedOsChecklistPage .layout { display: block; }
+
+
+/* Full task editor and gym progress, October 2026. */
+.task-editor-v3 { border: 1px solid #d8d4ca; border-radius: 22px; padding: 24px; width: min(560px, calc(100vw - 24px)); max-height: 90dvh; overflow: auto; background: #fcfaf6; color: #25251f; box-shadow: 0 24px 100px #0004; }
+.task-editor-v3::backdrop { background: #17191688; backdrop-filter: blur(4px); }
+.task-editor-head, .task-editor-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.task-editor-head h2 { margin:0 0 18px; }
+.task-editor-head button { border:0; background:transparent; font-size:30px; cursor:pointer; }
+.task-editor-v3 label { display:grid; gap:8px; margin-bottom:16px; font-size:14px; font-weight:600; }
+.task-editor-v3 input:not([type=checkbox]), .task-editor-v3 select, .task-editor-v3 textarea, .gym-progress-controls select { box-sizing:border-box; width:100%; border:1px solid #c9c7bd; background:white; padding:12px; border-radius:10px; font:inherit; font-size:16px; color:inherit; }
+.task-editor-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.task-editor-v3 fieldset { border:0; padding:0; margin:0 0 16px; display:flex; flex-wrap:wrap; gap:8px; }
+.task-editor-v3 fieldset[hidden], .task-editor-v3 [hidden] { display:none; }
+.task-editor-v3 fieldset label { display:flex; align-items:center; margin:0; padding:8px; border:1px solid #d8d4ca; border-radius:8px; }
+.task-editor-v3 legend { margin-bottom:10px; }
+#taskEditorError { color:#a22; }
+.gym-progress-v3 { padding:22px; margin-top:24px; }
+.gym-progress-controls { display:flex; flex-wrap:wrap; gap:12px; margin:20px 0; }
+.gym-progress-controls label { display:grid; gap:8px; flex:1; min-width:150px; }
+#gymProgressChart { position:relative; min-height:200px; }
+#gymProgressChart svg { width:100%; display:block; }
+#gymProgressTable { overflow-x:auto; }
+#gymProgressTable table { width:100%; text-align:left; border-collapse:collapse; }
+#gymProgressTable th, #gymProgressTable td { padding:12px 8px; border-bottom:1px solid #ddd; }
+.task-main { touch-action:manipulation; }
+@media(max-width:480px){ .task-editor-grid { grid-template-columns:1fr; gap:0; } .task-editor-v3{padding:18px;} .gym-progress-v3{padding:16px;} }
+.sync-strip-v3 { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:0 0 18px; padding:0 6px; }
+.sync-strip-v3 .sync-status { margin:0; font-size:.8rem; }
+.sync-strip-v3 button { flex-shrink:0; border:1px solid var(--line); border-radius:20px; padding:7px 12px; background:var(--card); color:var(--text); font:inherit; font-size:.75rem; cursor:pointer; }
+#lockedOsChooseDate { font:inherit; max-width:155px; padding:8px; border:1px solid var(--line); border-radius:14px; background:transparent; color:inherit; }
+.gym-progress-v3 { border:1px solid var(--line); border-radius:22px; background:rgba(255,255,255,.45); }

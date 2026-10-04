@@ -101,6 +101,7 @@ const supabaseClient = hasSupabaseConfig && window.supabase
   : null;
 
 let state = loadLocalState();
+window.lockedOsInitiallyDirty = localStorage.getItem("locked_os_supabase_dirty_clean") === "1";
 let saveTimer = null;
 let supabaseRetryTimer = null;
 let supabaseRetryAttempts = 0;
@@ -1163,7 +1164,7 @@ function refreshLooksTaskRow(taskId) {
 }
 
 function refreshLooksProgressUI() {
-  const key = getTodayKey();
+  const key = typeof lockedOsLooksKey === "function" ? lockedOsLooksKey() : getTodayKey();
   const day = ensureDay(key);
   const total = getLooksTaskIds(key).length;
   const done = day.looksDone.length;
@@ -1423,7 +1424,7 @@ function startInlineTaskAdd(row, menu, section, afterTaskId, onAdd) {
 
   const close = () => {
     row.classList.remove("adding");
-    row.draggable = true;
+    row.draggable = window.matchMedia("(pointer: fine)").matches;
     editor.remove();
   };
   const save = () => {
@@ -1495,7 +1496,8 @@ function createTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit, con
       editButton.addEventListener("click", event => {
         event.stopPropagation();
         menu.open = false;
-        startInlineTaskEdit(row, main, menu, task, onEdit);
+        if (controls.onEditDetails) controls.onEditDetails();
+        else startInlineTaskEdit(row, main, menu, task, onEdit);
       });
       popover.appendChild(editButton);
     }
@@ -1610,7 +1612,7 @@ function renderLooksTaskList(element, tasks, day, section) {
     );
 
     row.dataset.taskId = task.id;
-    row.draggable = true;
+    row.draggable = window.matchMedia("(pointer: fine)").matches;
     row.setAttribute("aria-grabbed", "false");
     row.addEventListener("dragstart", event => {
       if (row.classList.contains("editing") || row.classList.contains("adding")) {
@@ -2901,118 +2903,6 @@ setupTabs();
 if (normalizeState()) saveLocalState();
 showLogin();
 
-/* ===== 2026-09-22: PERMISSIVE SAVE WORKOUT ===== */
-(() => {
-  "use strict";
-
-  const FLAG = "__lockedOsPermissiveWorkoutSave20260922";
-  if (window[FLAG]) return;
-  window[FLAG] = true;
-
-  function selectedGymDayKeyForSave() {
-    const selected =
-      document.querySelector('#cleanGymWeekGrid .gym-strip-selected[data-gym-strip-date]') ||
-      document.querySelector('#cleanGymWeekGrid .selected[data-gym-strip-date]') ||
-      document.querySelector('#cleanGymWeekGrid [data-gym-strip-date][aria-current="true"]');
-
-    if (selected?.dataset?.gymStripDate) return selected.dataset.gymStripDate;
-
-    const label = document.getElementById("cleanGymDateLabel")?.textContent?.trim() || "";
-    const parsed = new Date(label);
-    if (!Number.isNaN(parsed.getTime())) {
-      return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
-    }
-
-    return typeof getTodayKey === "function" ? getTodayKey() : "";
-  }
-
-  function permissiveGymNumber(input, round = false) {
-    const raw = String(input?.value ?? "").trim();
-    if (!raw) return 0;
-
-    const value = Number(raw);
-    if (!Number.isFinite(value)) return 0;
-
-    const nonNegative = Math.max(0, value);
-    return round ? Math.round(nonNegative) : nonNegative;
-  }
-
-  function saveWorkoutNoMatterWhat() {
-    const dayKey = selectedGymDayKeyForSave();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return;
-
-    const workout =
-      document.getElementById("cleanGymWorkoutTitle")?.textContent?.trim() ||
-      "Workout";
-
-    const exercises = [...document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise")]
-      .map(row => ({
-        name: String(
-          row.dataset.exercise ||
-          row.querySelector(".clean-gym-exercise-name strong")?.textContent ||
-          ""
-        ).trim(),
-        sets: [0, 1].map(index => ({
-          weight: permissiveGymNumber(
-            row.querySelector(`[data-set="${index}"][data-field="weight"]`)
-          ),
-          reps: permissiveGymNumber(
-            row.querySelector(`[data-set="${index}"][data-field="reps"]`),
-            true
-          )
-        }))
-      }))
-      .filter(exercise => exercise.name && exercise.name !== "Romanian Deadlift");
-
-    state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
-    state.meta.gymClean =
-      state.meta.gymClean && typeof state.meta.gymClean === "object"
-        ? state.meta.gymClean
-        : {};
-    state.meta.gymClean.sessions = Array.isArray(state.meta.gymClean.sessions)
-      ? state.meta.gymClean.sessions
-      : [];
-
-    let session = state.meta.gymClean.sessions.find(item => item?.date === dayKey);
-
-    if (!session) {
-      session = {
-        id: `gym-log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        date: dayKey,
-        workout,
-        completed: false,
-        exercises: [],
-        updatedAt: new Date().toISOString()
-      };
-      state.meta.gymClean.sessions.push(session);
-    }
-
-    session.workout = workout;
-    session.exercises = exercises;
-    session.updatedAt = new Date().toISOString();
-
-    saveState();
-
-    const status = document.getElementById("cleanGymSaveStatus");
-    if (status) status.textContent = "Workout saved.";
-
-    if (typeof toast === "function") toast("Workout saved.");
-  }
-
-  document.addEventListener(
-    "click",
-    event => {
-      const saveButton = event.target.closest?.("#cleanGymSave");
-      if (!saveButton) return;
-
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      saveWorkoutNoMatterWhat();
-    },
-    true
-  );
-})();
-
 /* ===== 2026-09-22: HARD LOCK TRETINOIN 2X SCHEDULE ===== */
 (() => {
   "use strict";
@@ -3205,6 +3095,12 @@ showLogin();
     session.exercises = exercises;
     if (markComplete) session.completed = true;
     session.updatedAt = new Date().toISOString();
+    if (markComplete) {
+      const day = ensureDay(dayKey);
+      day.looksDone = [...new Set([...(day.looksDone || []), "gym"])];
+      day.looksSkipped = (day.looksSkipped || []).filter(id => id !== "gym");
+    }
+    document.dispatchEvent(new CustomEvent("locked-os-workout-saved"));
 
     try {
       if (typeof saveState === "function") saveState();
@@ -3379,7 +3275,7 @@ showLogin();
   }
 
   function tasksFor(section) {
-    return catalog().tasks.filter(task => task.section === section);
+    return catalog().tasks.filter(task => task.section === section && (!window.lockedOsTaskAppears || window.lockedOsTaskAppears(task, selectedDayKey)));
   }
 
   function getDay(key = selectedDayKey) {
@@ -3391,13 +3287,14 @@ showLogin();
 
   function recalculateDays(tasks = catalog().tasks) {
     const validIds = new Set(tasks.map(task => task.id));
-    for (const day of Object.values(state.days || {})) {
+    for (const [dayKey, day] of Object.entries(state.days || {})) {
       if (!day || typeof day !== "object") continue;
       day[DAY_KEY] = [...new Set(Array.isArray(day[DAY_KEY]) ? day[DAY_KEY] : [])].filter(id => validIds.has(id));
       const doneSet = new Set(day[DAY_KEY]);
       day[SKIP_KEY] = [...new Set(Array.isArray(day[SKIP_KEY]) ? day[SKIP_KEY] : [])]
         .filter(id => validIds.has(id) && !doneSet.has(id));
-      day[COMPLETE_KEY] = tasks.length > 0 && day[DAY_KEY].length + day[SKIP_KEY].length === tasks.length;
+      const scheduled = tasks.filter(task => !window.lockedOsTaskAppears || window.lockedOsTaskAppears(task, dayKey));
+      day[COMPLETE_KEY] = scheduled.length > 0 && scheduled.every(task => day[DAY_KEY].includes(task.id) || day[SKIP_KEY].includes(task.id));
     }
   }
 
@@ -3420,7 +3317,11 @@ showLogin();
     }
     day[DAY_KEY] = [...done];
     day[SKIP_KEY] = [...skipped];
-    persistAndRender(task.section);
+    recalculateDays();
+    saveState();
+    const row = [...document.querySelectorAll("#lockedOsChecklistPage .task-row")].find(row => row.dataset.taskId === task.id);
+    if (row) window.lockedOsUpdateTaskRow?.(row, done.has(task.id), skipped.has(task.id));
+    renderDailyChecklist("none");
   }
 
   function editTask(task, nextTitle) {
@@ -3488,39 +3389,13 @@ showLogin();
   }
 
   function showAddForm(section, afterTaskId = null) {
-    const list = el(`lockedOs${section[0].toUpperCase() + section.slice(1)}List`);
-    if (!list) return;
-    el("lockedOsAddForm")?.remove();
-    const form = document.createElement("form");
-    form.id = "lockedOsAddForm";
-    form.className = "locked-os-add-form";
-    const input = document.createElement("input");
-    input.className = "task-inline-input";
-    input.type = "text";
-    input.maxLength = 160;
-    input.placeholder = "New daily task";
-    input.setAttribute("aria-label", `New ${section} task`);
-    const add = document.createElement("button");
-    add.type = "submit";
-    add.className = "btn green compact";
-    add.textContent = "Add";
-    const cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.className = "btn secondary compact";
-    cancel.textContent = "Cancel";
-    cancel.addEventListener("click", () => form.remove());
-    form.addEventListener("submit", event => {
-      event.preventDefault();
-      if (!input.value.trim()) { input.focus(); return; }
-      addTask(section, input.value, afterTaskId);
+    window.lockedOsTaskEditor({ title: "", section }, false, details => {
+      const before = new Set(catalog().tasks.map(task => task.id));
+      addTask(details.section, details.title, afterTaskId);
+      const added = catalog().tasks.find(item => !before.has(item.id));
+      if (added) Object.assign(added, details);
+      persistAndRender();
     });
-    form.append(input, add, cancel);
-    if (afterTaskId) {
-      const row = [...list.querySelectorAll(".task-row")].find(item => item.dataset.taskId === afterTaskId);
-      if (row) row.insertAdjacentElement("afterend", form);
-      else list.prepend(form);
-    } else list.appendChild(form);
-    input.focus();
   }
 
   function renderSection(section, day) {
@@ -3543,10 +3418,10 @@ showLogin();
         () => changeStatus(task, "done"),
         () => changeStatus(task, "skipped"),
         title => editTask(task, title),
-        { section, onDelete: () => deleteTask(task) }
+        { section, onDelete: () => deleteTask(task), onEditDetails: () => window.lockedOsTaskEditor(task, false, details => { Object.assign(catalog().tasks.find(item => item.id === task.id), details); persistAndRender(); }) }
       );
       row.dataset.taskId = task.id;
-      row.draggable = true;
+      row.draggable = window.matchMedia("(pointer: fine)").matches;
       row.addEventListener("dragstart", event => {
         if (row.classList.contains("editing")) { event.preventDefault(); return; }
         row.classList.add("dragging");
@@ -3597,10 +3472,10 @@ showLogin();
       if (selectedDayKey === lastTodayKey) selectedDayKey = todayKey;
       lastTodayKey = todayKey;
     }
-    if (!validDay(selectedDayKey) || selectedDayKey > todayKey) selectedDayKey = todayKey;
+    if (!validDay(selectedDayKey)) selectedDayKey = todayKey;
     const data = catalog();
     const day = getDay(selectedDayKey);
-    const tasks = data.tasks;
+    const tasks = data.tasks.filter(task => !window.lockedOsTaskAppears || window.lockedOsTaskAppears(task, selectedDayKey));
     const done = day[DAY_KEY].filter(id => tasks.some(task => task.id === id)).length;
     const skipped = day[SKIP_KEY].filter(id => tasks.some(task => task.id === id)).length;
     const total = tasks.length;
@@ -3614,7 +3489,8 @@ showLogin();
     el("lockedOsTasksLeft").textContent = !total ? "Add tasks to build your daily checklist."
       : resolved === total ? "Daily checklist resolved." : `${total - resolved} task${total - resolved === 1 ? "" : "s"} left for this day.`;
     el("lockedOsProgressCircle").style.background = `conic-gradient(var(--green) ${percent * 3.6}deg, rgba(42,30,18,.09) 0deg)`;
-    el("lockedOsNextDay").disabled = selectedDayKey >= getTodayKey();
+    el("lockedOsNextDay").disabled = false;
+    if (el("lockedOsChooseDate")) el("lockedOsChooseDate").value = selectedDayKey;
     el("lockedOsToday").disabled = selectedDayKey === getTodayKey();
     SECTION_NAMES.forEach(section => {
       if (onlySection === null || onlySection === section) renderSection(section, day);
@@ -3638,13 +3514,20 @@ showLogin();
     renderDailyChecklist();
   });
   el("lockedOsNextDay")?.addEventListener("click", () => {
-    if (selectedDayKey >= getTodayKey()) return;
     selectedDayKey = formatDateKey(addDays(keyToLocalDate(selectedDayKey), 1));
     renderDailyChecklist();
+  });
+  const chooseDate = document.createElement("input");
+  chooseDate.type = "date"; chooseDate.id = "lockedOsChooseDate";
+  chooseDate.setAttribute("aria-label", "Checklist date");
+  el("lockedOsToday")?.parentElement.append(chooseDate);
+  chooseDate.addEventListener("change", () => {
+    if (validDay(chooseDate.value)) { selectedDayKey = chooseDate.value; renderDailyChecklist(); }
   });
   el("lockedOsToday")?.addEventListener("click", () => {
     selectedDayKey = getTodayKey();
     renderDailyChecklist();
   });
 })();
+
 
