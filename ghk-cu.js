@@ -401,8 +401,8 @@
     button.dataset.tab = "forumsPage";
     button.type = "button";
     button.textContent = "Forums";
-    const mkTab = [...nav.querySelectorAll(".tab")].find(item => item.dataset.tab === "mk677Page");
-    if (mkTab) nav.insertBefore(button, mkTab); else nav.appendChild(button);
+    const anchorTab = [...nav.querySelectorAll(".tab")].find(item => item.dataset.tab === "ghkCuPage");
+    if (anchorTab) nav.insertBefore(button, anchorTab); else nav.appendChild(button);
 
     const page = document.createElement("section");
     page.className = "page";
@@ -509,16 +509,16 @@
   function installGymTab() {
     if (document.getElementById("gymPage")) return;
     const nav = document.querySelector(".tabs");
-    const mkTab = [...(nav?.querySelectorAll(".tab") || [])].find(item => item.dataset.tab === "mk677Page");
-    const mkPage = document.getElementById("mk677Page");
-    if (!nav || !mkPage) return;
+    const anchorTab = [...(nav?.querySelectorAll(".tab") || [])].find(item => item.dataset.tab === "ghkCuPage");
+    const anchorPage = document.getElementById("ghkCuPage") || document.getElementById("contentPage") || document.getElementById("adminPage");
+    if (!nav || !anchorPage) return;
 
     const button = document.createElement("button");
     button.className = "tab gym-tab";
     button.dataset.tab = "gymPage";
     button.type = "button";
     button.textContent = "Gym";
-    if (mkTab) nav.insertBefore(button, mkTab); else nav.appendChild(button);
+    if (anchorTab) nav.insertBefore(button, anchorTab); else nav.appendChild(button);
 
     const page = document.createElement("section");
     page.className = "page";
@@ -569,7 +569,7 @@
           <div id="gymHistoryBody"></div>
         </section>
       </div>`;
-    mkPage.parentNode.insertBefore(page, mkPage);
+    anchorPage.parentNode.insertBefore(page, anchorPage);
 
     button.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach(item => item.classList.remove("active"));
@@ -8182,7 +8182,7 @@
 })();
 
 
-/* ===== CONTENT ROUTINE TAB — 2026-10-06 ===== */
+/* ===== CONTENT ROUTINE TAB — PRODUCTION ONLY ===== */
 "use strict";
 
 (() => {
@@ -8219,31 +8219,26 @@
     ]
   };
 
+  function getWeekKey(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + diff);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   function defaultState() {
-    return {
-      weekKey: getWeekKey(new Date()),
-      weeklyDone: {},
-      seriesTitle: "How much money can I make in 14 days with client marketing?",
-      seriesStart: "",
-      videoTitle: "",
-      videoHook: "",
-      videoScript: "",
-      pipeline: { script: false, film: false, edit: false, post: false },
-      platforms: { tiktok: false, youtube: false }
-    };
+    return { weekKey: getWeekKey(new Date()), weeklyDone: {} };
   }
 
   function loadState() {
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-      const base = defaultState();
-      if (!parsed || typeof parsed !== "object") return base;
       const next = {
-        ...base,
-        ...parsed,
-        weeklyDone: parsed.weeklyDone && typeof parsed.weeklyDone === "object" ? parsed.weeklyDone : {},
-        pipeline: { ...base.pipeline, ...(parsed.pipeline || {}) },
-        platforms: { ...base.platforms, ...(parsed.platforms || {}) }
+        ...defaultState(),
+        ...(parsed && typeof parsed === "object" ? parsed : {}),
+        weeklyDone: parsed?.weeklyDone && typeof parsed.weeklyDone === "object" ? parsed.weeklyDone : {}
       };
       const currentWeek = getWeekKey(new Date());
       if (next.weekKey !== currentWeek) {
@@ -8260,47 +8255,13 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
-  function getWeekKey(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    d.setHours(0,0,0,0);
-    d.setDate(d.getDate() + diff);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  }
-
-  function formatShortDate(value) {
-    if (!value) return "Not started";
-    const [y,m,d] = value.split("-").map(Number);
-    return new Date(y,m-1,d).toLocaleDateString(undefined,{month:"short",day:"numeric"});
-  }
-
-  function challengeDay() {
-    if (!state.seriesStart) return 0;
-    const [y,m,d] = state.seriesStart.split("-").map(Number);
-    const start = new Date(y,m-1,d);
-    start.setHours(0,0,0,0);
-    const now = new Date();
-    now.setHours(0,0,0,0);
-    return Math.min(14, Math.max(1, Math.floor((now - start) / 86400000) + 1));
-  }
-
-  function bindText(id, stateKey) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.value = state[stateKey] || "";
-    el.addEventListener("input", () => {
-      state[stateKey] = el.value;
-      saveState();
-      renderSeries();
-    });
-  }
-
   function renderWeek() {
     const list = document.getElementById("contentWeekList");
     if (!list) return;
+
     const today = DAY_NAMES[new Date().getDay()];
-    const order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    const order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
     list.innerHTML = order.map(day => {
       const tasks = WEEKLY_ROUTINE[day] || [];
       const taskHtml = tasks.map(task => {
@@ -8310,6 +8271,7 @@
           <span class="content-task-copy">${task.label}</span>
         </button>`;
       }).join("");
+
       return `<div class="content-day-row ${day === today ? "is-today" : ""}">
         <div class="content-day-name">${day}</div>
         <div class="content-day-tasks">${taskHtml}</div>
@@ -8322,119 +8284,15 @@
         state.weeklyDone[id] = !state.weeklyDone[id];
         saveState();
         renderWeek();
-        renderProgress();
       });
     });
-  }
-
-  function renderSeries() {
-    const day = challengeDay();
-    const status = document.getElementById("contentSeriesStatus");
-    const meta = document.getElementById("contentSeriesMeta");
-    if (status) status.textContent = day ? `Day ${day} of 14` : "Ready to start";
-    if (meta) meta.textContent = state.seriesStart
-      ? `Started ${formatShortDate(state.seriesStart)}`
-      : "Pick a start date when you begin the challenge.";
-  }
-
-  function renderPipeline() {
-    document.querySelectorAll("[data-content-pipeline]").forEach(button => {
-      const key = button.dataset.contentPipeline;
-      button.classList.toggle("done", Boolean(state.pipeline[key]));
-      button.setAttribute("aria-pressed", state.pipeline[key] ? "true" : "false");
-    });
-    const tiktok = document.getElementById("contentTikTokPosted");
-    const youtube = document.getElementById("contentYouTubePosted");
-    tiktok?.classList.toggle("done", Boolean(state.platforms.tiktok));
-    youtube?.classList.toggle("done", Boolean(state.platforms.youtube));
-    if (tiktok) tiktok.textContent = state.platforms.tiktok ? "✓ TikTok posted" : "TikTok not posted";
-    if (youtube) youtube.textContent = state.platforms.youtube ? "✓ YouTube Short posted" : "YouTube Short not posted";
-  }
-
-  function renderProgress() {
-    const allIds = Object.values(WEEKLY_ROUTINE).flat().map(x => x.id);
-    const done = allIds.filter(id => state.weeklyDone[id]).length;
-    const pct = allIds.length ? Math.round(done / allIds.length * 100) : 0;
-    const fill = document.getElementById("contentWeekProgressFill");
-    const copy = document.getElementById("contentWeekProgressCopy");
-    if (fill) fill.style.width = `${pct}%`;
-    if (copy) copy.textContent = `${done} / ${allIds.length} weekly actions complete`;
-  }
-
-  function resetCurrentVideo() {
-    state.videoTitle = "";
-    state.videoHook = "";
-    state.videoScript = "";
-    state.pipeline = { script: false, film: false, edit: false, post: false };
-    state.platforms = { tiktok: false, youtube: false };
-    saveState();
-    ["contentVideoTitle","contentVideoHook","contentVideoScript"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = "";
-    });
-    renderPipeline();
   }
 
   function init() {
-    bindText("contentSeriesTitle", "seriesTitle");
-    bindText("contentVideoTitle", "videoTitle");
-    bindText("contentVideoHook", "videoHook");
-    bindText("contentVideoScript", "videoScript");
-
-    const start = document.getElementById("contentSeriesStart");
-    if (start) {
-      start.value = state.seriesStart || "";
-      start.addEventListener("change", () => {
-        state.seriesStart = start.value;
-        saveState();
-        renderSeries();
-      });
-    }
-
-    document.getElementById("contentStartToday")?.addEventListener("click", () => {
-      const now = new Date();
-      state.seriesStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-      if (start) start.value = state.seriesStart;
-      saveState();
-      renderSeries();
-    });
-
-    document.getElementById("contentResetWeek")?.addEventListener("click", () => {
-      state.weeklyDone = {};
-      state.weekKey = getWeekKey(new Date());
-      saveState();
-      renderWeek();
-      renderProgress();
-    });
-
-    document.getElementById("contentNewVideo")?.addEventListener("click", resetCurrentVideo);
-
-    document.querySelectorAll("[data-content-pipeline]").forEach(button => {
-      button.addEventListener("click", () => {
-        const key = button.dataset.contentPipeline;
-        state.pipeline[key] = !state.pipeline[key];
-        saveState();
-        renderPipeline();
-      });
-    });
-
-    document.getElementById("contentTikTokPosted")?.addEventListener("click", () => {
-      state.platforms.tiktok = !state.platforms.tiktok;
-      saveState();
-      renderPipeline();
-    });
-    document.getElementById("contentYouTubePosted")?.addEventListener("click", () => {
-      state.platforms.youtube = !state.platforms.youtube;
-      saveState();
-      renderPipeline();
-    });
-
     renderWeek();
-    renderSeries();
-    renderPipeline();
-    renderProgress();
   }
 
   let state = loadState();
   window.addEventListener("DOMContentLoaded", init);
 })();
+

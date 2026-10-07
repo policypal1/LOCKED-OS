@@ -906,6 +906,8 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 }
 
 
+.content-tab { border: 1px solid rgba(37,132,184,.22); }
+
 /* ===== Content Routine Tab ===== */
 /* LOCKED OS — Personal Brand / Content Routine */
 .content-page {
@@ -1136,4 +1138,23 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
   .content-post-checks { grid-template-columns: 1fr; }
   .content-pipeline { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .content-day-row { grid-template-columns: 1fr; gap: 8px; }
+}
+
+
+/* ===== Content production-only simplification ===== */
+.content-production-only {
+  width: min(900px, 100%);
+  margin: 0 auto;
+}
+.content-production-card {
+  padding: 22px;
+}
+.content-production-card .content-card-head {
+  margin-bottom: 16px;
+}
+.content-production-card .content-week-list {
+  gap: 10px;
+}
+@media (max-width: 760px) {
+  .content-production-card { padding: 16px; }
 }
