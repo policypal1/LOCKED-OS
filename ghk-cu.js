@@ -8180,3 +8180,261 @@
     repaint();refresh();
   },350);
 })();
+
+
+/* ===== CONTENT ROUTINE TAB — 2026-10-06 ===== */
+"use strict";
+
+(() => {
+  const STORAGE_KEY = "locked_os_content_routine_v1";
+  const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  const WEEKLY_ROUTINE = {
+    Monday: [
+      { id: "mon-post", label: "Post to TikTok + YouTube Shorts", post: true },
+      { id: "mon-script", label: "Write Wednesday's script" }
+    ],
+    Tuesday: [
+      { id: "tue-film", label: "Film Wednesday's video" },
+      { id: "tue-edit", label: "Edit Wednesday's video" },
+      { id: "tue-thu-script", label: "Write Thursday's script" }
+    ],
+    Wednesday: [
+      { id: "wed-post", label: "Post to TikTok + YouTube Shorts", post: true },
+      { id: "wed-film", label: "Film Thursday's video" },
+      { id: "wed-edit", label: "Edit Thursday's video" }
+    ],
+    Thursday: [
+      { id: "thu-post", label: "Post to TikTok + YouTube Shorts", post: true },
+      { id: "thu-script", label: "Write next Monday's script" }
+    ],
+    Friday: [
+      { id: "fri-film", label: "Film next Monday's video" }
+    ],
+    Saturday: [
+      { id: "sat-edit", label: "Edit and finalize Monday's video" }
+    ],
+    Sunday: [
+      { id: "sun-review", label: "Review this week's posts and save 3 ideas for next week" }
+    ]
+  };
+
+  function defaultState() {
+    return {
+      weekKey: getWeekKey(new Date()),
+      weeklyDone: {},
+      seriesTitle: "How much money can I make in 14 days with client marketing?",
+      seriesStart: "",
+      videoTitle: "",
+      videoHook: "",
+      videoScript: "",
+      pipeline: { script: false, film: false, edit: false, post: false },
+      platforms: { tiktok: false, youtube: false }
+    };
+  }
+
+  function loadState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      const base = defaultState();
+      if (!parsed || typeof parsed !== "object") return base;
+      const next = {
+        ...base,
+        ...parsed,
+        weeklyDone: parsed.weeklyDone && typeof parsed.weeklyDone === "object" ? parsed.weeklyDone : {},
+        pipeline: { ...base.pipeline, ...(parsed.pipeline || {}) },
+        platforms: { ...base.platforms, ...(parsed.platforms || {}) }
+      };
+      const currentWeek = getWeekKey(new Date());
+      if (next.weekKey !== currentWeek) {
+        next.weekKey = currentWeek;
+        next.weeklyDone = {};
+      }
+      return next;
+    } catch (_) {
+      return defaultState();
+    }
+  }
+
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function getWeekKey(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setHours(0,0,0,0);
+    d.setDate(d.getDate() + diff);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+
+  function formatShortDate(value) {
+    if (!value) return "Not started";
+    const [y,m,d] = value.split("-").map(Number);
+    return new Date(y,m-1,d).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+  }
+
+  function challengeDay() {
+    if (!state.seriesStart) return 0;
+    const [y,m,d] = state.seriesStart.split("-").map(Number);
+    const start = new Date(y,m-1,d);
+    start.setHours(0,0,0,0);
+    const now = new Date();
+    now.setHours(0,0,0,0);
+    return Math.min(14, Math.max(1, Math.floor((now - start) / 86400000) + 1));
+  }
+
+  function bindText(id, stateKey) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = state[stateKey] || "";
+    el.addEventListener("input", () => {
+      state[stateKey] = el.value;
+      saveState();
+      renderSeries();
+    });
+  }
+
+  function renderWeek() {
+    const list = document.getElementById("contentWeekList");
+    if (!list) return;
+    const today = DAY_NAMES[new Date().getDay()];
+    const order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    list.innerHTML = order.map(day => {
+      const tasks = WEEKLY_ROUTINE[day] || [];
+      const taskHtml = tasks.map(task => {
+        const done = Boolean(state.weeklyDone[task.id]);
+        return `<button type="button" class="content-task ${done ? "done" : ""} ${task.post ? "content-task-post" : ""}" data-content-week-task="${task.id}">
+          <span class="content-task-box">${done ? "✓" : ""}</span>
+          <span class="content-task-copy">${task.label}</span>
+        </button>`;
+      }).join("");
+      return `<div class="content-day-row ${day === today ? "is-today" : ""}">
+        <div class="content-day-name">${day}</div>
+        <div class="content-day-tasks">${taskHtml}</div>
+      </div>`;
+    }).join("");
+
+    list.querySelectorAll("[data-content-week-task]").forEach(button => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.contentWeekTask;
+        state.weeklyDone[id] = !state.weeklyDone[id];
+        saveState();
+        renderWeek();
+        renderProgress();
+      });
+    });
+  }
+
+  function renderSeries() {
+    const day = challengeDay();
+    const status = document.getElementById("contentSeriesStatus");
+    const meta = document.getElementById("contentSeriesMeta");
+    if (status) status.textContent = day ? `Day ${day} of 14` : "Ready to start";
+    if (meta) meta.textContent = state.seriesStart
+      ? `Started ${formatShortDate(state.seriesStart)}`
+      : "Pick a start date when you begin the challenge.";
+  }
+
+  function renderPipeline() {
+    document.querySelectorAll("[data-content-pipeline]").forEach(button => {
+      const key = button.dataset.contentPipeline;
+      button.classList.toggle("done", Boolean(state.pipeline[key]));
+      button.setAttribute("aria-pressed", state.pipeline[key] ? "true" : "false");
+    });
+    const tiktok = document.getElementById("contentTikTokPosted");
+    const youtube = document.getElementById("contentYouTubePosted");
+    tiktok?.classList.toggle("done", Boolean(state.platforms.tiktok));
+    youtube?.classList.toggle("done", Boolean(state.platforms.youtube));
+    if (tiktok) tiktok.textContent = state.platforms.tiktok ? "✓ TikTok posted" : "TikTok not posted";
+    if (youtube) youtube.textContent = state.platforms.youtube ? "✓ YouTube Short posted" : "YouTube Short not posted";
+  }
+
+  function renderProgress() {
+    const allIds = Object.values(WEEKLY_ROUTINE).flat().map(x => x.id);
+    const done = allIds.filter(id => state.weeklyDone[id]).length;
+    const pct = allIds.length ? Math.round(done / allIds.length * 100) : 0;
+    const fill = document.getElementById("contentWeekProgressFill");
+    const copy = document.getElementById("contentWeekProgressCopy");
+    if (fill) fill.style.width = `${pct}%`;
+    if (copy) copy.textContent = `${done} / ${allIds.length} weekly actions complete`;
+  }
+
+  function resetCurrentVideo() {
+    state.videoTitle = "";
+    state.videoHook = "";
+    state.videoScript = "";
+    state.pipeline = { script: false, film: false, edit: false, post: false };
+    state.platforms = { tiktok: false, youtube: false };
+    saveState();
+    ["contentVideoTitle","contentVideoHook","contentVideoScript"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+    renderPipeline();
+  }
+
+  function init() {
+    bindText("contentSeriesTitle", "seriesTitle");
+    bindText("contentVideoTitle", "videoTitle");
+    bindText("contentVideoHook", "videoHook");
+    bindText("contentVideoScript", "videoScript");
+
+    const start = document.getElementById("contentSeriesStart");
+    if (start) {
+      start.value = state.seriesStart || "";
+      start.addEventListener("change", () => {
+        state.seriesStart = start.value;
+        saveState();
+        renderSeries();
+      });
+    }
+
+    document.getElementById("contentStartToday")?.addEventListener("click", () => {
+      const now = new Date();
+      state.seriesStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+      if (start) start.value = state.seriesStart;
+      saveState();
+      renderSeries();
+    });
+
+    document.getElementById("contentResetWeek")?.addEventListener("click", () => {
+      state.weeklyDone = {};
+      state.weekKey = getWeekKey(new Date());
+      saveState();
+      renderWeek();
+      renderProgress();
+    });
+
+    document.getElementById("contentNewVideo")?.addEventListener("click", resetCurrentVideo);
+
+    document.querySelectorAll("[data-content-pipeline]").forEach(button => {
+      button.addEventListener("click", () => {
+        const key = button.dataset.contentPipeline;
+        state.pipeline[key] = !state.pipeline[key];
+        saveState();
+        renderPipeline();
+      });
+    });
+
+    document.getElementById("contentTikTokPosted")?.addEventListener("click", () => {
+      state.platforms.tiktok = !state.platforms.tiktok;
+      saveState();
+      renderPipeline();
+    });
+    document.getElementById("contentYouTubePosted")?.addEventListener("click", () => {
+      state.platforms.youtube = !state.platforms.youtube;
+      saveState();
+      renderPipeline();
+    });
+
+    renderWeek();
+    renderSeries();
+    renderPipeline();
+    renderProgress();
+  }
+
+  let state = loadState();
+  window.addEventListener("DOMContentLoaded", init);
+})();

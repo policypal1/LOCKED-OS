@@ -336,6 +336,7 @@
 <button class="tab active" data-tab="looksPage" type="button">Looksmaxxing</button>
 <button class="tab mk-tab" data-tab="mk677Page" type="button">MK-677</button>
 <button class="tab ghk-tab" data-tab="ghkCuPage" type="button">GHK-Cu</button>
+<button class="tab content-tab" data-tab="contentPage" type="button">Content</button>
 <button class="tab admin-tab" data-tab="adminPage" type="button">Admin</button>
 </nav>
 </header>
@@ -456,6 +457,123 @@
 </div>
 <section class="card ghk-check-card"><div class="panel-title"><div><p class="eyebrow blue">Visual check</p><h3>Before using a reconstituted vial</h3></div><span class="badge blue">Appearance only</span></div><div class="ghk-check-grid"><div class="good"><strong>Expected</strong><span>Appearance consistent with the product instructions, typically clear and free of visible particles.</span></div><div><strong>Cloudiness or haze</strong><span>Do not use until a pharmacist or clinician confirms it is expected.</span></div><div><strong>Particles or chunks</strong><span>Do not use.</span></div><div><strong>Discoloration</strong><span>Do not use unless the labeled product specifically says that color is expected.</span></div><div><strong>Persistent unusual foam or gel</strong><span>Do not use until the product is evaluated.</span></div></div><p class="ghk-fine-print">A normal-looking vial does not prove purity or sterility. Preparation and administration should follow product-specific instructions from a licensed clinician or pharmacist.</p></section>
 <section class="card ghk-note-card ghk-note-wide"><p class="eyebrow blue">Appearance changes</p><h3>Track specific changes, not internet labels</h3><p>If something changes, note the actual symptom or appearance change, such as puffiness, rash, bruising, discoloration, or another reaction, and discuss concerning symptoms with a clinician.</p></section>
+</div>
+</section>
+
+
+<section class="page" id="contentPage">
+<div class="content-page">
+  <section class="card content-hero">
+    <div class="content-hero-grid">
+      <div>
+        <p class="eyebrow blue">Personal brand system</p>
+        <h2>Content Routine</h2>
+        <p class="content-hero-copy">Build the brand around your real entrepreneurship journey. Make the video once, then publish the same finished Short to both platforms.</p>
+        <div class="content-platforms">
+          <span class="content-platform-pill">TikTok</span>
+          <span class="content-platform-pill">YouTube Shorts</span>
+        </div>
+      </div>
+      <div class="content-cadence-card">
+        <span>Posting cadence</span>
+        <strong>Monday · Wednesday · Thursday</strong>
+        <p>The weekly routine below works backward from those three posting days so scripting, filming, and editing happen before the post is due.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="content-grid">
+    <section class="card content-card">
+      <div class="content-card-head">
+        <div>
+          <p class="eyebrow blue">14-day launch series</p>
+          <h2>Build in public</h2>
+          <p>Track the first series without turning LockedOS into another complicated project.</p>
+        </div>
+      </div>
+      <div class="content-series-meta">
+        <label class="content-field">
+          <span>Series title</span>
+          <input id="contentSeriesTitle" class="content-input" type="text" />
+        </label>
+        <label class="content-field">
+          <span>Start date</span>
+          <input id="contentSeriesStart" class="content-input" type="date" />
+        </label>
+      </div>
+      <div class="content-series-status">
+        <strong id="contentSeriesStatus">Ready to start</strong>
+        <span id="contentSeriesMeta">Pick a start date when you begin the challenge.</span>
+      </div>
+      <div class="content-inline-actions">
+        <button id="contentStartToday" class="btn blue compact" type="button">Start today</button>
+      </div>
+    </section>
+
+    <section class="card content-card">
+      <div class="content-card-head">
+        <div>
+          <p class="eyebrow blue">Weekly consistency</p>
+          <h2>Routine progress</h2>
+          <p>Resets automatically when a new Monday starts.</p>
+        </div>
+        <button id="contentResetWeek" class="btn secondary compact" type="button">Reset week</button>
+      </div>
+      <div class="content-progress-track"><div id="contentWeekProgressFill" class="content-progress-fill"></div></div>
+      <div class="content-progress-copy"><span id="contentWeekProgressCopy">0 weekly actions complete</span><span>3 posts/week</span></div>
+    </section>
+  </div>
+
+  <div class="content-grid">
+    <section class="card content-card">
+      <div class="content-card-head">
+        <div>
+          <p class="eyebrow blue">Every week</p>
+          <h2>Production routine</h2>
+          <p>Tap each action when it is finished. Today is highlighted automatically.</p>
+        </div>
+      </div>
+      <div id="contentWeekList" class="content-week-list"></div>
+    </section>
+
+    <section class="card content-card">
+      <div class="content-card-head">
+        <div>
+          <p class="eyebrow blue">Current video</p>
+          <h2>Script → Film → Edit → Post</h2>
+          <p>Use this for the specific video you are producing right now.</p>
+        </div>
+        <button id="contentNewVideo" class="btn secondary compact" type="button">New video</button>
+      </div>
+
+      <label class="content-field">
+        <span>Working title / topic</span>
+        <input id="contentVideoTitle" class="content-input" type="text" placeholder="Day 1: I have 14 days to make money with my marketing business" />
+      </label>
+
+      <label class="content-field" style="margin-top:10px;">
+        <span>Hook</span>
+        <input id="contentVideoHook" class="content-input" type="text" placeholder="I have 14 days to see how much money I can make..." />
+      </label>
+
+      <div class="content-pipeline" aria-label="Video production pipeline">
+        <button type="button" class="content-pipeline-step" data-content-pipeline="script"><small>Step 1</small>Script</button>
+        <button type="button" class="content-pipeline-step" data-content-pipeline="film"><small>Step 2</small>Film</button>
+        <button type="button" class="content-pipeline-step" data-content-pipeline="edit"><small>Step 3</small>Edit</button>
+        <button type="button" class="content-pipeline-step" data-content-pipeline="post"><small>Step 4</small>Post</button>
+      </div>
+
+      <label class="content-field">
+        <span>Script</span>
+        <textarea id="contentVideoScript" class="content-textarea" placeholder="Write the video here. Hook first, then context, story/value, and payoff."></textarea>
+      </label>
+
+      <div class="content-post-checks">
+        <button id="contentTikTokPosted" class="content-platform-check" type="button">TikTok not posted</button>
+        <button id="contentYouTubePosted" class="content-platform-check" type="button">YouTube Short not posted</button>
+      </div>
+    </section>
+  </div>
 </div>
 </section>
 
