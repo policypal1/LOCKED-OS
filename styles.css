@@ -844,3 +844,63 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 .recurring-task-actions { display:flex; gap:8px; flex-shrink:0; }
 #looksDatePickerV4 { max-width:165px; }
 @media(max-width:600px){.recurring-admin-v4{padding:16px}.recurring-task-v4{align-items:flex-start;flex-direction:column;gap:10px}.recurring-admin-tools{flex-direction:column}.tret-phase-row span{min-width:100%}.looks-day-nav{flex-wrap:wrap}}
+
+/* ===== 2026-10-06: editable Daily Checklist parity with Looksmaxxing ===== */
+#checklistPage .summary {
+  background: radial-gradient(circle at top right, rgba(37,132,184,.12), transparent 18rem), rgba(255,250,241,.84);
+}
+#checklistPage .section {
+  background: rgba(255,250,241,.84);
+}
+.task-row.daily-task.done .task-main {
+  border-color: rgba(37,132,184,.3);
+  background: var(--blue-soft);
+}
+.task-row.daily-task.done .task-box {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+.task-row.daily-task.dragging {
+  opacity: .55;
+  cursor: grabbing;
+}
+.task-row.daily-task.dragging .task-main {
+  pointer-events: none;
+  border-style: dashed;
+}
+.daily-editable-header {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 5px 12px;
+  align-items: center;
+}
+.daily-editable-header h3 { grid-column: 1; grid-row: 1; }
+.daily-editable-header p { grid-column: 1; grid-row: 2; }
+.daily-section-add {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  white-space: nowrap;
+}
+.daily-task-info-panel {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+}
+.daily-empty-state {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  color: var(--muted);
+  font-weight: 800;
+  text-align: center;
+  background: rgba(255,255,255,.3);
+}
+@media (max-width: 560px) {
+  .daily-editable-header { grid-template-columns: 1fr; }
+  .daily-editable-header h3,
+  .daily-editable-header p,
+  .daily-section-add { grid-column: 1; grid-row: auto; }
+  .daily-section-add { width: 100%; margin-top: 6px; }
+}

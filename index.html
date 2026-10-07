@@ -1698,6 +1698,539 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
+<script id="lockedOsEditableDailyChecklist">
+/* ===== 2026-10-06: FULLY EDITABLE DAILY CHECKLIST ===== */
+(() => {
+  "use strict";
+
+  const META_DETAILS = "dailyTaskDetailsV1";
+  const META_CUSTOM = "dailyCustomTasksV1";
+  const META_DELETED = "dailyDeletedTaskIdsV1";
+  const META_ORDER = "dailyTaskOrderV1";
+  const ALL_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const SECTIONS = ["morning", "afternoon", "night"];
+
+  function installDailyChecklistEditing() {
+    if (window.__lockedOsEditableDailyChecklist20261006) return;
+    window.__lockedOsEditableDailyChecklist20261006 = true;
+
+    function ensureDailyMeta(target = state) {
+      target.meta = target.meta && typeof target.meta === "object" && !Array.isArray(target.meta) ? target.meta : {};
+      target.meta[META_DETAILS] = target.meta[META_DETAILS] && typeof target.meta[META_DETAILS] === "object" && !Array.isArray(target.meta[META_DETAILS])
+        ? target.meta[META_DETAILS]
+        : {};
+      target.meta[META_CUSTOM] = Array.isArray(target.meta[META_CUSTOM]) ? target.meta[META_CUSTOM] : [];
+      target.meta[META_DELETED] = Array.isArray(target.meta[META_DELETED]) ? [...new Set(target.meta[META_DELETED].map(String).filter(Boolean))] : [];
+      target.meta[META_ORDER] = target.meta[META_ORDER] && typeof target.meta[META_ORDER] === "object" && !Array.isArray(target.meta[META_ORDER])
+        ? target.meta[META_ORDER]
+        : {};
+      for (const section of SECTIONS) {
+        target.meta[META_ORDER][section] = Array.isArray(target.meta[META_ORDER][section])
+          ? [...new Set(target.meta[META_ORDER][section].map(String).filter(Boolean))]
+          : [];
+      }
+    }
+
+    function safeSchedule(schedule) {
+      if (!schedule || typeof schedule !== "object") return { type: "daily", start: "", end: "", days: [...ALL_DAYS] };
+      const type = ["daily", "once", "weekly", "everyOtherDay"].includes(schedule.type) ? schedule.type : "daily";
+      const days = Array.isArray(schedule.days) ? ALL_DAYS.filter(day => schedule.days.includes(day)) : [...ALL_DAYS];
+      return {
+        type,
+        start: /^\d{4}-\d{2}-\d{2}$/.test(String(schedule.start || "")) ? String(schedule.start) : "",
+        end: /^\d{4}-\d{2}-\d{2}$/.test(String(schedule.end || "")) ? String(schedule.end) : "",
+        days: days.length ? days : [...ALL_DAYS]
+      };
+    }
+
+    function dailyAppears(task, dayKey) {
+      const schedule = safeSchedule(task.schedule);
+      if (schedule.start && dayKey < schedule.start) return false;
+      if (schedule.end && dayKey > schedule.end) return false;
+      if (schedule.type === "once") return Boolean(schedule.start) && dayKey === schedule.start;
+      if (schedule.type === "everyOtherDay") {
+        if (!schedule.start) return true;
+        return (keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(schedule.start)) % 2 === 0;
+      }
+      if (schedule.type === "weekly") return schedule.days.includes(getRoutineDayName(dayKey));
+      return true;
+    }
+
+    function dailyCatalog() {
+      ensureDailyMeta();
+      const deleted = new Set(state.meta[META_DELETED]);
+      const details = state.meta[META_DETAILS];
+      const catalog = [];
+
+      for (const base of TASKS) {
+        if (deleted.has(String(base.id))) continue;
+        const override = details[base.id] && typeof details[base.id] === "object" ? details[base.id] : {};
+        catalog.push({
+          ...base,
+          id: base.id,
+          title: String(override.title || base.title).trim() || base.title,
+          defaultTitle: base.title,
+          section: SECTIONS.includes(override.section) ? override.section : base.section,
+          notes: String(override.notes || "").trim(),
+          schedule: safeSchedule(override.schedule),
+          custom: false
+        });
+      }
+
+      const seen = new Set(catalog.map(task => String(task.id)));
+      for (const raw of state.meta[META_CUSTOM]) {
+        if (!raw || typeof raw !== "object") continue;
+        const id = String(raw.id || "").trim();
+        const title = String(raw.title || "").trim();
+        const section = SECTIONS.includes(raw.section) ? raw.section : "afternoon";
+        if (!id || !title || seen.has(id) || deleted.has(id)) continue;
+        seen.add(id);
+        catalog.push({
+          id,
+          title: title.slice(0, 160),
+          defaultTitle: title.slice(0, 160),
+          section,
+          notes: String(raw.notes || "").trim().slice(0, 4000),
+          schedule: safeSchedule(raw.schedule),
+          custom: true
+        });
+      }
+      return catalog;
+    }
+
+    function orderedSectionTasks(section, dayKey = getTodayKey(), includeHidden = false) {
+      ensureDailyMeta();
+      const tasks = dailyCatalog().filter(task => task.section === section && (includeHidden || dailyAppears(task, dayKey)));
+      const order = state.meta[META_ORDER][section] || [];
+      const rank = new Map(order.map((id, index) => [id, index]));
+      return tasks
+        .map((task, index) => ({ task, index }))
+        .sort((a, b) => {
+          const ar = rank.has(a.task.id) ? rank.get(a.task.id) : Number.MAX_SAFE_INTEGER;
+          const br = rank.has(b.task.id) ? rank.get(b.task.id) : Number.MAX_SAFE_INTEGER;
+          return ar - br || a.index - b.index;
+        })
+        .map(item => item.task);
+    }
+
+    function dailyTasksForDay(dayKey = getTodayKey()) {
+      return SECTIONS.flatMap(section => orderedSectionTasks(section, dayKey));
+    }
+
+    function dailyTaskIds(dayKey = getTodayKey()) {
+      return dailyTasksForDay(dayKey).map(task => task.id);
+    }
+
+    window.lockedOsDailyTasksForDay = dailyTasksForDay;
+
+    const baseNormalizeDay = normalizeDay;
+    normalizeDay = function(dayKey, original = {}) {
+      const normalized = baseNormalizeDay(dayKey, original);
+      const allowed = dailyTaskIds(dayKey);
+      const done = cleanList(original.done, allowed);
+      const skipped = cleanList(original.skipped, allowed).filter(id => !done.includes(id));
+      normalized.done = done;
+      normalized.skipped = skipped;
+      normalized.completed = allowed.length > 0 && new Set([...done, ...skipped]).size === allowed.length;
+      return normalized;
+    };
+
+    const baseResolvedSet = getResolvedSet;
+    getResolvedSet = function(day, type = "main") {
+      if (type === "main") return new Set([...(day?.done || []), ...(day?.skipped || [])]);
+      return baseResolvedSet(day, type);
+    };
+
+    const baseMeaningful = hasMeaningfulState;
+    hasMeaningfulState = function(snapshot) {
+      const meta = snapshot?.meta || {};
+      if (meta[META_DETAILS] && Object.keys(meta[META_DETAILS]).length) return true;
+      if (Array.isArray(meta[META_CUSTOM]) && meta[META_CUSTOM].length) return true;
+      if (Array.isArray(meta[META_DELETED]) && meta[META_DELETED].length) return true;
+      if (meta[META_ORDER] && Object.values(meta[META_ORDER]).some(value => Array.isArray(value) && value.length)) return true;
+      if (Object.values(snapshot?.days || {}).some(day => Array.isArray(day?.skipped) && day.skipped.length)) return true;
+      return baseMeaningful(snapshot);
+    };
+
+    function recalcDailyHistory() {
+      for (const [dayKey, day] of Object.entries(state.days || {})) {
+        if (!isDateKey(dayKey) || !day || typeof day !== "object") continue;
+        state.days[dayKey] = normalizeDay(dayKey, day);
+      }
+    }
+
+    function updateDailyStatus(task, kind) {
+      const key = getTodayKey();
+      const day = ensureDay(key);
+      const done = new Set(day.done || []);
+      const skipped = new Set(day.skipped || []);
+
+      if (kind === "done") {
+        if (done.has(task.id)) done.delete(task.id);
+        else {
+          done.add(task.id);
+          skipped.delete(task.id);
+        }
+      } else if (kind === "skipped") {
+        if (skipped.has(task.id)) skipped.delete(task.id);
+        else {
+          skipped.add(task.id);
+          done.delete(task.id);
+        }
+      }
+
+      const allowed = new Set(dailyTaskIds(key));
+      day.done = [...done].filter(id => allowed.has(id));
+      day.skipped = [...skipped].filter(id => allowed.has(id) && !done.has(id));
+      day.completed = allowed.size > 0 && new Set([...day.done, ...day.skipped]).size === allowed.size;
+      saveState();
+      render();
+    }
+
+    toggleMainTask = function(taskId) {
+      const task = dailyTasksForDay().find(item => item.id === taskId);
+      if (task) updateDailyStatus(task, "done");
+    };
+
+    function saveOrder(section, ids) {
+      ensureDailyMeta();
+      state.meta[META_ORDER][section] = [...new Set(ids.filter(Boolean))];
+      saveState();
+    }
+
+    function insertIntoOrder(section, taskId, afterTaskId = null) {
+      ensureDailyMeta();
+      const allIds = orderedSectionTasks(section, getTodayKey(), true).map(task => task.id).filter(id => id !== taskId);
+      const index = afterTaskId ? allIds.indexOf(afterTaskId) + 1 : allIds.length;
+      allIds.splice(Math.max(0, index), 0, taskId);
+      state.meta[META_ORDER][section] = [...new Set(allIds)];
+    }
+
+    function removeFromAllOrders(taskId) {
+      ensureDailyMeta();
+      for (const section of SECTIONS) {
+        state.meta[META_ORDER][section] = (state.meta[META_ORDER][section] || []).filter(id => id !== taskId);
+      }
+    }
+
+    function normalizeEditorDetails(details, fallbackSection) {
+      return {
+        title: String(details?.title || "").trim().slice(0, 160),
+        notes: String(details?.notes || "").trim().slice(0, 4000),
+        section: SECTIONS.includes(details?.section) ? details.section : fallbackSection,
+        schedule: safeSchedule(details?.schedule)
+      };
+    }
+
+    function saveExistingDailyTask(task, rawDetails) {
+      ensureDailyMeta();
+      const details = normalizeEditorDetails(rawDetails, task.section);
+      if (!details.title) return;
+      const oldSection = task.section;
+
+      if (task.custom) {
+        const index = state.meta[META_CUSTOM].findIndex(item => String(item?.id || "") === task.id);
+        if (index >= 0) state.meta[META_CUSTOM][index] = { id: task.id, custom: true, ...details };
+      } else {
+        state.meta[META_DETAILS][task.id] = details;
+      }
+
+      if (oldSection !== details.section) {
+        removeFromAllOrders(task.id);
+        insertIntoOrder(details.section, task.id);
+      }
+      recalcDailyHistory();
+      saveState();
+      render();
+    }
+
+    function addDailyTask(section, afterTaskId = null) {
+      const opener = window.lockedOsTaskEditor;
+      if (typeof opener !== "function") return;
+      opener({ title: "", section, notes: "", schedule: { type: "daily", start: "", end: "", days: [...ALL_DAYS] } }, false, rawDetails => {
+        ensureDailyMeta();
+        const details = normalizeEditorDetails(rawDetails, section);
+        if (!details.title) return;
+        const id = `daily-custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        state.meta[META_CUSTOM].push({ id, custom: true, ...details });
+        insertIntoOrder(details.section, id, details.section === section ? afterTaskId : null);
+        recalcDailyHistory();
+        saveState();
+        render();
+      });
+    }
+
+    function editDailyTask(task) {
+      const opener = window.lockedOsTaskEditor;
+      if (typeof opener !== "function") return;
+      opener({ ...task, schedule: safeSchedule(task.schedule) }, false, details => saveExistingDailyTask(task, details));
+    }
+
+    function resetDailyTask(task) {
+      if (task.custom) return;
+      ensureDailyMeta();
+      delete state.meta[META_DETAILS][task.id];
+      removeFromAllOrders(task.id);
+      insertIntoOrder(TASKS.find(item => item.id === task.id)?.section || task.section, task.id);
+      recalcDailyHistory();
+      saveState();
+      render();
+      toast("Task reset to default.");
+    }
+
+    function deleteDailyTask(task) {
+      ensureDailyMeta();
+      if (task.custom) {
+        state.meta[META_CUSTOM] = state.meta[META_CUSTOM].filter(item => String(item?.id || "") !== task.id);
+      } else if (!state.meta[META_DELETED].includes(task.id)) {
+        state.meta[META_DELETED].push(task.id);
+      }
+      delete state.meta[META_DETAILS][task.id];
+      removeFromAllOrders(task.id);
+      for (const day of Object.values(state.days || {})) {
+        if (!day || typeof day !== "object") continue;
+        day.done = (day.done || []).filter(id => id !== task.id);
+        day.skipped = (day.skipped || []).filter(id => id !== task.id);
+      }
+      recalcDailyHistory();
+      saveState();
+      render();
+      toast("Task deleted.");
+    }
+
+    function addInfoPanel(row, task) {
+      const menu = row.querySelector("details.task-menu");
+      const popover = menu?.querySelector(".task-menu-popover");
+      if (!popover) return;
+
+      const infoButton = document.createElement("button");
+      infoButton.type = "button";
+      infoButton.className = "task-menu-action info-action";
+      infoButton.textContent = task.notes ? "See more information" : "Add more information";
+      infoButton.addEventListener("click", event => {
+        event.stopPropagation();
+        menu.open = false;
+        if (!task.notes) {
+          editDailyTask(task);
+          return;
+        }
+        let panel = row.querySelector(".daily-task-info-panel");
+        if (panel) {
+          panel.remove();
+          row.classList.remove("showing-info");
+          return;
+        }
+        panel = document.createElement("div");
+        panel.className = "task-more-info-panel daily-task-info-panel";
+        const head = document.createElement("div");
+        head.className = "task-more-info-head";
+        const label = document.createElement("strong");
+        label.textContent = "Task information";
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "task-info-close";
+        close.setAttribute("aria-label", "Close task information");
+        close.textContent = "×";
+        head.append(label, close);
+        const text = document.createElement("div");
+        text.className = "task-more-info-text";
+        text.textContent = task.notes;
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "task-info-edit";
+        edit.textContent = "Edit task information";
+        close.onclick = () => { panel.remove(); row.classList.remove("showing-info"); };
+        edit.onclick = () => editDailyTask(task);
+        panel.append(head, text, edit);
+        row.classList.add("showing-info");
+        row.appendChild(panel);
+      });
+
+      const addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "task-menu-action add-action";
+      addButton.textContent = "Add task below";
+      addButton.addEventListener("click", event => {
+        event.stopPropagation();
+        menu.open = false;
+        addDailyTask(task.section, task.id);
+      });
+
+      const deleteButton = popover.querySelector(".delete-action");
+      popover.insertBefore(infoButton, deleteButton || null);
+      popover.insertBefore(addButton, deleteButton || null);
+
+      if (!task.custom && state.meta[META_DETAILS]?.[task.id]) {
+        const resetButton = document.createElement("button");
+        resetButton.type = "button";
+        resetButton.className = "task-menu-action";
+        resetButton.textContent = "Reset to default";
+        resetButton.addEventListener("click", event => {
+          event.stopPropagation();
+          menu.open = false;
+          resetDailyTask(task);
+        });
+        popover.insertBefore(resetButton, deleteButton || null);
+      }
+    }
+
+    function renderDailySection(element, tasks, day, section) {
+      element.innerHTML = "";
+      const done = new Set(day.done || []);
+      const skipped = new Set(day.skipped || []);
+
+      for (const task of tasks) {
+        const row = createTaskRow(
+          task,
+          done.has(task.id),
+          skipped.has(task.id),
+          "daily-task",
+          () => updateDailyStatus(task, "done"),
+          () => updateDailyStatus(task, "skipped"),
+          () => {},
+          {
+            section,
+            onEditDetails: () => editDailyTask(task),
+            onDelete: () => deleteDailyTask(task)
+          }
+        );
+        row.dataset.taskId = task.id;
+        row.draggable = window.matchMedia("(pointer: fine)").matches;
+        row.setAttribute("aria-grabbed", "false");
+        addInfoPanel(row, task);
+
+        row.addEventListener("dragstart", event => {
+          if (row.classList.contains("editing") || row.classList.contains("adding") || row.classList.contains("showing-info")) {
+            event.preventDefault();
+            return;
+          }
+          row.classList.add("dragging");
+          row.setAttribute("aria-grabbed", "true");
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", task.id);
+        });
+        row.addEventListener("dragend", () => {
+          row.classList.remove("dragging");
+          row.setAttribute("aria-grabbed", "false");
+        });
+        element.appendChild(row);
+      }
+
+      if (!tasks.length) {
+        const empty = document.createElement("p");
+        empty.className = "daily-empty-state";
+        empty.textContent = "No tasks scheduled in this section today.";
+        element.appendChild(empty);
+      }
+
+      element.ondragover = event => {
+        event.preventDefault();
+        const dragging = element.querySelector(".task-row.dragging");
+        if (!dragging) return;
+        const rows = [...element.querySelectorAll(".task-row:not(.dragging)")];
+        const next = rows.find(row => {
+          const rect = row.getBoundingClientRect();
+          return event.clientY < rect.top + rect.height / 2;
+        });
+        if (next) element.insertBefore(dragging, next);
+        else element.appendChild(dragging);
+      };
+
+      element.ondrop = event => {
+        event.preventDefault();
+        const visibleIds = [...element.querySelectorAll(".task-row")].map(row => row.dataset.taskId).filter(Boolean);
+        const hiddenIds = orderedSectionTasks(section, getTodayKey(), true).map(task => task.id).filter(id => !visibleIds.includes(id));
+        saveOrder(section, [...visibleIds, ...hiddenIds]);
+        toast("Task order saved.");
+      };
+    }
+
+    renderTaskLists = function() {
+      ensureDailyMeta();
+      const key = getTodayKey();
+      const day = ensureDay(key);
+      renderDailySection($("morningList"), orderedSectionTasks("morning", key), day, "morning");
+      renderDailySection($("afternoonList"), orderedSectionTasks("afternoon", key), day, "afternoon");
+      renderDailySection($("nightList"), orderedSectionTasks("night", key), day, "night");
+    };
+
+    renderProgress = function() {
+      const key = getTodayKey();
+      const day = ensureDay(key);
+      const ids = dailyTaskIds(key);
+      const done = new Set((day.done || []).filter(id => ids.includes(id)));
+      const skipped = new Set((day.skipped || []).filter(id => ids.includes(id) && !done.has(id)));
+      const resolved = done.size + skipped.size;
+      const total = ids.length;
+      const left = Math.max(0, total - resolved);
+      const percent = total ? Math.round((resolved / total) * 100) : 0;
+      $("percent").textContent = `${percent}%`;
+      $("doneCount").textContent = skipped.size ? `${done.size} done • ${skipped.size} skipped` : `${done.size} / ${total}`;
+      $("tasksLeft").textContent = total === 0
+        ? "No daily tasks are scheduled today."
+        : left === 0
+          ? "Daily checklist resolved. The streak updated immediately."
+          : `${left} daily task${left === 1 ? "" : "s"} left today.`;
+      $("progressCircle").style.background = `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
+    };
+
+    renderPhoneLock = function() {
+      const key = getTodayKey();
+      const morningIds = orderedSectionTasks("morning", key).map(task => task.id);
+      const day = ensureDay(key);
+      const resolved = new Set([...(day.done || []), ...(day.skipped || [])]);
+      const remaining = morningIds.filter(id => !resolved.has(id)).length;
+      const complete = remaining === 0;
+      $("phoneLockCard").classList.toggle("locked", !complete);
+      $("phoneLockCard").classList.toggle("unlocked", complete);
+      $("phoneLockTitle").textContent = complete ? "Phone unlocked" : "Phone locked";
+      $("phoneLockText").textContent = complete ? "Morning list is resolved." : `${remaining} morning task${remaining === 1 ? "" : "s"} left.`;
+      $("phoneLockBadge").textContent = complete ? "Unlocked" : "Locked";
+    };
+
+    function installSectionAddButtons() {
+      const configs = [
+        ["morningList", "morning"],
+        ["afternoonList", "afternoon"],
+        ["nightList", "night"]
+      ];
+      for (const [listId, section] of configs) {
+        const list = document.getElementById(listId);
+        const header = list?.closest(".section")?.querySelector(".section-header");
+        if (!header || header.querySelector(`[data-daily-add-section="${section}"]`)) continue;
+        header.classList.add("daily-editable-header");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn blue compact daily-section-add";
+        button.dataset.dailyAddSection = section;
+        button.textContent = "+ Add task";
+        button.addEventListener("click", () => addDailyTask(section));
+        header.appendChild(button);
+      }
+    }
+
+    ensureDailyMeta();
+    installSectionAddButtons();
+    recalcDailyHistory();
+    saveLocalState();
+    if (!mainApp.classList.contains("hidden")) render();
+
+    const checklistTab = document.querySelector('.tab[data-tab="checklistPage"]');
+    checklistTab?.addEventListener("click", () => {
+      setTimeout(() => {
+        installSectionAddButtons();
+        renderTaskLists();
+        renderProgress();
+        renderPhoneLock();
+      }, 0);
+    });
+  }
+
+  window.addEventListener("DOMContentLoaded", () => setTimeout(installDailyChecklistEditing, 0));
+})();
+
+</script>
+
 </body>
 </html>
 
