@@ -332,6 +332,7 @@
 <header class="top">
 <div><h1>Locked OS</h1></div>
 <nav aria-label="App tabs" class="tabs">
+<button class="tab" data-tab="checklistPage" type="button">Daily Checklist</button>
 <button class="tab active" data-tab="looksPage" type="button">Looksmaxxing</button>
 <button class="tab mk-tab" data-tab="mk677Page" type="button">MK-677</button>
 <button class="tab ghk-tab" data-tab="ghkCuPage" type="button">GHK-Cu</button>
@@ -1672,6 +1673,28 @@ window.addEventListener("DOMContentLoaded", () => {
 
   renderLooks();
   purgeDeletedTaskRows();
+});
+</script>
+
+<script id="lockedOsRomanianDeadliftRemoval">
+"use strict";
+
+/* Keep Romanian Deadlift out of every rendered Gym workout. */
+window.addEventListener("DOMContentLoaded", () => {
+  const removeRomanianDeadlift = () => {
+    document.querySelectorAll('#gymPage [data-exercise], #cleanGymWorkoutBody .clean-gym-exercise').forEach(row => {
+      const name = String(
+        row.dataset?.exercise ||
+        row.querySelector?.(".clean-gym-exercise-name strong")?.textContent ||
+        ""
+      ).trim();
+      if (name === "Romanian Deadlift") row.remove();
+    });
+  };
+
+  removeRomanianDeadlift();
+  const observer = new MutationObserver(removeRomanianDeadlift);
+  observer.observe(document.body, { childList: true, subtree: true });
 });
 </script>
 
