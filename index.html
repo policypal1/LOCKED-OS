@@ -12,6 +12,7 @@
 <style id="lockedOsInlinePatchStyles">
 /* LOCKED OS - 2026-08-29 requested UI fixes */
 
+
 /* Keep an open task menu above the following task cards/sections. */
 .section:has(.task-menu[open]) {
   position: relative;
@@ -26,6 +27,7 @@
 .task-menu-popover {
   z-index: 150 !important;
 }
+
 
 /* Looksmaxxing day history controls. */
 .looks-day-nav {
@@ -69,6 +71,7 @@
   font-weight: 900;
 }
 
+
 /* Glucose tracker: date + time + reading + context + save. */
 #glucoseTrackerDisclosure .glucose-log-strip {
   grid-template-columns: minmax(145px,.8fr) minmax(125px,.65fr) minmax(165px,.8fr) minmax(190px,1fr) auto;
@@ -82,6 +85,7 @@
   justify-content: end;
 }
 
+
 /* Forums cleanup after the saved-count badges are removed. */
 #forumsPage .forums-hero {
   align-items: flex-start;
@@ -89,6 +93,7 @@
 #forumsPage .forums-library-actions {
   margin-left: auto;
 }
+
 
 /* Important: appointments must only render under their own active admin tab. */
 #adminPage .admin-subpanel.appointments-panel:not(.active) {
@@ -99,6 +104,7 @@
   gap: 16px;
 }
 
+
 @media (max-width: 980px) {
   #glucoseTrackerDisclosure .glucose-log-strip {
     grid-template-columns: repeat(2,minmax(0,1fr));
@@ -107,6 +113,7 @@
     grid-column: 1 / -1;
   }
 }
+
 
 @media (max-width: 760px) {
   #glucoseTrackerDisclosure .glucose-log-strip {
@@ -119,6 +126,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+
 
 
 
@@ -272,6 +282,8 @@
 }
 
 
+
+
 /* Requested Looksmaxxing task information + Arms neck detail. */
 .looks-task-info-textarea {
   width: 100%;
@@ -308,6 +320,7 @@
   font-weight: 900;
 }
 
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="app.js?v=20261003"></script>
@@ -328,6 +341,7 @@
 </div>
 </section>
 
+
 <section class="hidden" id="mainApp">
 <header class="top">
 <div><h1>Locked OS</h1></div>
@@ -339,6 +353,7 @@
 <button class="tab admin-tab" data-tab="adminPage" type="button">Admin</button>
 </nav>
 </header>
+
 
 <section class="page" id="checklistPage">
 <div class="layout">
@@ -354,6 +369,7 @@
 <aside class="mini-side"><section class="card panel-card day-streak-card"><div class="panel-title"><h3>Day streak</h3></div><div class="day-streak-value"><strong id="dayStreakNumber">0</strong><span id="dayStreakLabel">days</span></div><p class="rank-copy">Complete the daily checklist to keep the streak going.</p></section></aside>
 </div>
 </section>
+
 
 <section class="page active" id="looksPage">
 <div class="looks-hero">
@@ -384,6 +400,7 @@
 </div>
 </section>
 
+
 <section class="page" id="ghkCuPage">
 <div class="ghk-page">
 <section class="card ghk-hero-card"><div><p class="eyebrow blue">Reference + schedule</p><h2>GHK-Cu</h2><p>Keep supplies, storage checks, vial appearance guidance, and your clinician-directed schedule in one place.</p></div><div class="ghk-hero-badge">Copper peptide</div></section>
@@ -396,6 +413,8 @@
 <section class="card ghk-note-card ghk-note-wide"><p class="eyebrow blue">Appearance changes</p><h3>Track specific changes, not internet labels</h3><p>If something changes, note the actual symptom or appearance change, such as puffiness, rash, bruising, discoloration, or another reaction, and discuss concerning symptoms with a clinician.</p></section>
 </div>
 </section>
+
+
 
 
 <section class="page" id="contentPage">
@@ -413,6 +432,7 @@
 </div>
 </section>
 
+
 <section class="page" id="adminPage">
 <div aria-label="Admin sections" class="admin-subtabs" role="tablist"><button class="admin-subtab active" data-admin-panel="adminRoutinePanel" type="button">Routine settings</button><button class="admin-subtab" data-admin-panel="weeklyPage" type="button">Weekly review</button></div>
 <div class="admin-subpanel active" id="adminRoutinePanel"><div class="admin-grid routine-admin-grid">
@@ -429,12 +449,16 @@
 </main>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
 
+
 <script>
 "use strict";
 
 
+
+
 const LOCKED_OS_LOOKS_DAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 let lockedOsTaskAddContext = null;
+
 
 function lockedOsNormalizeTaskDays(value) {
   if (!Array.isArray(value)) return null;
@@ -442,6 +466,7 @@ function lockedOsNormalizeTaskDays(value) {
   const unique = [...new Set(value.map(day => String(day || "").trim()).filter(day => allowed.has(day)))];
   return unique.length ? LOCKED_OS_LOOKS_DAY_ORDER.filter(day => unique.includes(day)) : null;
 }
+
 
 function lockedOsSelectedTaskDays() {
   const modal = document.getElementById("looksTaskAddModal");
@@ -451,12 +476,14 @@ function lockedOsSelectedTaskDays() {
     .filter(Boolean);
 }
 
+
 function lockedOsUpdateTaskDayCount() {
   const count = document.getElementById("looksTaskDayCount");
   if (!count) return;
   const days = lockedOsSelectedTaskDays();
   count.textContent = `${days.length} day${days.length === 1 ? "" : "s"} selected`;
 }
+
 
 function lockedOsSetTaskDays(days) {
   const chosen = new Set(days);
@@ -465,6 +492,7 @@ function lockedOsSetTaskDays(days) {
   });
   lockedOsUpdateTaskDayCount();
 }
+
 
 function lockedOsCloseTaskAddModal() {
   const context = lockedOsTaskAddContext;
@@ -476,6 +504,7 @@ function lockedOsCloseTaskAddModal() {
   }
 }
 
+
 function lockedOsOpenTaskAddModal(row, menu, section, afterTaskId, onAdd) {
   lockedOsCloseTaskAddModal();
   const wasDraggable = row.draggable;
@@ -483,6 +512,7 @@ function lockedOsOpenTaskAddModal(row, menu, section, afterTaskId, onAdd) {
   row.draggable = false;
   menu.open = false;
   lockedOsTaskAddContext = { row, menu, section, afterTaskId, onAdd, wasDraggable };
+
 
   const backdrop = document.createElement("div");
   backdrop.id = "looksTaskAddModalBackdrop";
@@ -522,6 +552,7 @@ function lockedOsOpenTaskAddModal(row, menu, section, afterTaskId, onAdd) {
     </section>`;
   document.body.appendChild(backdrop);
 
+
   const input = document.getElementById("looksTaskAddName");
   const error = document.getElementById("looksTaskAddError");
   const save = () => {
@@ -540,6 +571,7 @@ function lockedOsOpenTaskAddModal(row, menu, section, afterTaskId, onAdd) {
     lockedOsCloseTaskAddModal();
     context?.onAdd?.(context.section, title, context.afterTaskId, days);
   };
+
 
   backdrop.addEventListener("click", event => {
     if (event.target === backdrop) lockedOsCloseTaskAddModal();
@@ -563,6 +595,7 @@ function lockedOsOpenTaskAddModal(row, menu, section, afterTaskId, onAdd) {
   requestAnimationFrame(() => input?.focus());
 }
 
+
 function lockedOsInstallScheduledCustomTasks() {
   /* Preserve a days[] schedule when app.js normalizes custom tasks. */
   normalizeLooksCustomTasks = function(original) {
@@ -585,6 +618,7 @@ function lockedOsInstallScheduledCustomTasks() {
     return normalized;
   };
 
+
   const baseApplyLooksTaskCustomizations = applyLooksTaskCustomizations;
   getLooksRoutine = function(dayKey = getTodayKey()) {
     const dayName = getRoutineDayName(dayKey);
@@ -600,14 +634,17 @@ function lockedOsInstallScheduledCustomTasks() {
     };
   };
 
+
   addLooksTask = function(section, title, afterTaskId = null, days = LOCKED_OS_LOOKS_DAY_ORDER) {
     const cleaned = String(title || "").trim().slice(0, 160);
     const scheduledDays = lockedOsNormalizeTaskDays(days) || [...LOCKED_OS_LOOKS_DAY_ORDER];
     if (!cleaned) return;
     ensureLooksTaskCustomizationState();
 
+
     const task = { id: makeCustomLooksTaskId(), section, title: cleaned, custom: true, days: scheduledDays };
     state.meta.looksCustomTasks.push(task);
+
 
     const dayKey = typeof lockedOsLooksKey === "function" ? lockedOsLooksKey() : getTodayKey();
     const currentIds = getLooksRoutine(dayKey)[section].map(item => item.id).filter(id => id !== task.id);
@@ -615,20 +652,25 @@ function lockedOsInstallScheduledCustomTasks() {
     currentIds.splice(Math.max(0, insertAt), 0, task.id);
     state.meta.looksTaskOrder[section] = [...new Set([...(state.meta.looksTaskOrder[section] || []), ...currentIds])];
 
+
     saveState();
     render();
     toast(`Task added for ${scheduledDays.length === 7 ? "every day" : `${scheduledDays.length} day${scheduledDays.length === 1 ? "" : "s"}`}.`);
   };
+
 
   startInlineTaskAdd = function(row, menu, section, afterTaskId, onAdd) {
     if (row.classList.contains("editing") || row.classList.contains("adding")) return;
     lockedOsOpenTaskAddModal(row, menu, section, afterTaskId, onAdd);
   };
 
+
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && document.getElementById("looksTaskAddModalBackdrop")) lockedOsCloseTaskAddModal();
   });
 }
+
+
 
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -637,12 +679,14 @@ window.addEventListener("DOMContentLoaded", () => {
   const getRotationForDay = dayKey => dayKey >= WORKOUT_ROTATION_V2_START ? WORKOUT_ROTATION_V2 : WORKOUT_ROTATION;
   const getRotationAnchorForDay = dayKey => dayKey >= WORKOUT_ROTATION_V2_START ? WORKOUT_ROTATION_V2_START : WORKOUT_ROTATION_ANCHOR;
 
+
   getDefaultWorkoutIndex = function(dayKey = getTodayKey()) {
     const rotation = getRotationForDay(dayKey);
     const anchorKey = getRotationAnchorForDay(dayKey);
     const daysFromAnchor = keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(anchorKey);
     return ((daysFromAnchor % rotation.length) + rotation.length) % rotation.length;
   };
+
 
   getWorkoutIndex = function(dayKey = getTodayKey()) {
     const rotation = getRotationForDay(dayKey);
@@ -656,6 +700,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const index = anchorIndex + daysFromAnchor;
     return ((index % rotation.length) + rotation.length) % rotation.length;
   };
+
 
   const getBaseWorkoutName = dayKey => {
     const rotation = getRotationForDay(dayKey);
@@ -716,8 +761,10 @@ window.addEventListener("DOMContentLoaded", () => {
 <script id="lockedOsInlinePatchScript">
 "use strict";
 
+
 /* LOCKED OS - 2026-08-29 requested behavior/UI fixes. */
 let lockedOsSelectedLooksDayKey = null;
+
 
 function lockedOsLooksKey() {
   const today = getTodayKey();
@@ -725,6 +772,7 @@ function lockedOsLooksKey() {
   if (lockedOsSelectedLooksDayKey > today) lockedOsSelectedLooksDayKey = today;
   return lockedOsSelectedLooksDayKey;
 }
+
 
 function lockedOsShiftLooksDay(amount) {
   const today = getTodayKey();
@@ -735,16 +783,19 @@ function lockedOsShiftLooksDay(amount) {
   renderLooks();
 }
 
+
 function lockedOsGoLooksToday() {
   lockedOsSelectedLooksDayKey = getTodayKey();
   workoutDraftDirty = false;
   renderLooks();
 }
 
+
 function lockedOsInstallLooksDayNav() {
   if (document.getElementById("looksDayNav")) return;
   const dateText = document.getElementById("looksDateText");
   if (!dateText) return;
+
 
   const nav = document.createElement("div");
   nav.className = "looks-day-nav";
@@ -760,6 +811,7 @@ function lockedOsInstallLooksDayNav() {
   document.getElementById("looksNextDayBtn")?.addEventListener("click", () => lockedOsShiftLooksDay(1));
 }
 
+
 function lockedOsInstallWaterHistoryHandlers() {
   document.querySelectorAll("[data-water-add]").forEach(button => {
     button.addEventListener("click", event => {
@@ -769,10 +821,12 @@ function lockedOsInstallWaterHistoryHandlers() {
     }, true);
   });
 
+
   document.getElementById("resetWaterBtn")?.addEventListener("click", event => {
     event.stopImmediatePropagation();
     setWaterOz(0);
   }, true);
+
 
   document.getElementById("addCustomWaterBtn")?.addEventListener("click", event => {
     event.stopImmediatePropagation();
@@ -787,6 +841,7 @@ function lockedOsInstallWaterHistoryHandlers() {
     input.value = "";
   }, true);
 
+
   document.getElementById("waterCustomInput")?.addEventListener("keydown", event => {
     if (event.key !== "Enter") return;
     event.preventDefault();
@@ -795,26 +850,33 @@ function lockedOsInstallWaterHistoryHandlers() {
   }, true);
 }
 
+
 function lockedOsCleanMk677() {
   const page = document.getElementById("mk677Page");
   if (!page) return;
 
+
   const heroText = page.querySelector(".mk-hero-copy > p:last-child");
   if (heroText) heroText.textContent = "Weekly reminders, weight, and glucose in one clean place.";
 
+
   page.querySelector(".mk-notes-card")?.remove();
+
 
   const disclosure = document.getElementById("glucoseTrackerDisclosure");
   const strip = disclosure?.querySelector(".tracker-log-strip");
   if (strip && !document.getElementById("glucoseTimeInput")) {
     strip.classList.add("glucose-log-strip");
 
+
     const dateField = strip.querySelector("#glucoseDateInput")?.closest("label");
     const valueField = strip.querySelector("#glucoseValueInput")?.closest("label");
+
 
     const timeField = document.createElement("label");
     timeField.className = "weight-field";
     timeField.innerHTML = '<span>Time</span><input class="weight-input" id="glucoseTimeInput" type="time"/>';
+
 
     const contextField = document.createElement("label");
     contextField.className = "weight-field";
@@ -829,9 +891,11 @@ function lockedOsCleanMk677() {
         <option value="Random">Random</option>
       </select>`;
 
+
     if (dateField) dateField.insertAdjacentElement("afterend", timeField);
     if (valueField) valueField.insertAdjacentElement("afterend", contextField);
   }
+
 
   document.getElementById("glucoseLatestBadge")?.remove();
   const stats = disclosure?.querySelector(".weight-chart-stats");
@@ -841,9 +905,11 @@ function lockedOsCleanMk677() {
   }
 }
 
+
 function lockedOsCleanGhkCu() {
   const page = document.getElementById("ghkCuPage");
   if (!page) return;
+
 
   const hero = page.querySelector(".ghk-hero-card");
   if (hero) {
@@ -854,6 +920,7 @@ function lockedOsCleanGhkCu() {
     hero.querySelector(".ghk-hero-badge")?.remove();
   }
 
+
   const schedule = page.querySelector(".ghk-schedule-card");
   if (schedule) {
     const eyebrow = schedule.querySelector(".eyebrow");
@@ -861,14 +928,17 @@ function lockedOsCleanGhkCu() {
     schedule.querySelector(".ghk-fine-print")?.remove();
   }
 
+
   page.querySelector(".ghk-top-grid")?.remove();
   page.querySelector(".ghk-check-card")?.remove();
   page.querySelector(".ghk-note-card")?.remove();
 }
 
+
 function lockedOsCleanForumsAndAppointments() {
   document.getElementById("forumResourceCount")?.remove();
   document.getElementById("forumLibraryBadge")?.remove();
+
 
   const actions = document.querySelector("#forumsPage .forums-library-actions");
   if (actions) {
@@ -877,7 +947,9 @@ function lockedOsCleanForumsAndAppointments() {
     });
   }
 
+
 }
+
 
 window.addEventListener("DOMContentLoaded", () => {
   lockedOsInstallScheduledCustomTasks();
@@ -885,6 +957,7 @@ window.addEventListener("DOMContentLoaded", () => {
   lockedOsInstallLooksDayNav();
   lockedOsCleanMk677();
   lockedOsCleanGhkCu();
+
 
   /* Make Looksmaxxing state edits operate on the selected day. */
   refreshLooksTaskRow = function(taskId) {
@@ -915,6 +988,7 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+
   refreshLooksProgressUI = function() {
     const key = lockedOsLooksKey();
     const day = ensureDay(key);
@@ -932,11 +1006,13 @@ window.addEventListener("DOMContentLoaded", () => {
     $("looksProgressCircle").style.background = `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
   };
 
+
   setLooksStatus = function(task, status) {
     const key = lockedOsLooksKey();
     const day = ensureDay(key);
     const done = new Set(day.looksDone);
     const skipped = new Set(day.looksSkipped);
+
 
     if (status === "done") {
       if (done.has(task.id)) done.delete(task.id);
@@ -952,9 +1028,11 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+
     if (task.meta === "morningWater" && status === "done" && done.has(task.id) && day.waterOz < LOOKS_MORNING_WATER_OZ) {
       day.waterOz = LOOKS_MORNING_WATER_OZ;
     }
+
 
     day.looksDone = [...done];
     day.looksSkipped = [...skipped];
@@ -969,10 +1047,12 @@ window.addEventListener("DOMContentLoaded", () => {
     scheduleInteractionRender();
   };
 
+
   renderWater = function() {
     const day = ensureDay(lockedOsLooksKey());
     const waterOz = day.waterOz;
     const displayPercent = Math.round((waterOz / WATER_TARGET_OZ) * 100);
+
 
     $("waterAmount").innerHTML = `${waterOz} <span>oz / ${WATER_TARGET_OZ} oz</span>`;
     $("waterBadge").textContent = `${displayPercent}%`;
@@ -981,6 +1061,7 @@ window.addEventListener("DOMContentLoaded", () => {
     else if (waterOz < WATER_TARGET_OZ) $("waterStatus").textContent = `Minimum hit. ${WATER_TARGET_OZ - waterOz} oz until target.`;
     else $("waterStatus").textContent = waterOz === WATER_TARGET_OZ ? `${WATER_TARGET_OZ} oz target complete.` : `${waterOz - WATER_TARGET_OZ} oz above target.`;
   };
+
 
   setWaterOz = function(value) {
     const key = lockedOsLooksKey();
@@ -992,13 +1073,16 @@ window.addEventListener("DOMContentLoaded", () => {
     renderLooks();
   };
 
+
   renderWorkoutPicker = function() {
     const key = lockedOsLooksKey();
     const today = getTodayKey();
     const currentIndex = getWorkoutIndex(key);
     const isToday = key === today;
 
+
     if (!isToday || !workoutDraftDirty || !Number.isInteger(workoutDraftIndex)) workoutDraftIndex = currentIndex;
+
 
     const previewName = $("workoutPreviewName");
     const status = $("workoutRotationStatus");
@@ -1006,8 +1090,10 @@ window.addEventListener("DOMContentLoaded", () => {
     const next = $("workoutNextBtn");
     const set = $("setWorkoutBtn");
 
+
     if (previewName) previewName.textContent = formatWorkoutName(workoutDraftIndex, key);
     [prev, next, set].forEach(button => { if (button) button.disabled = !isToday; });
+
 
     if (status) {
       if (!isToday) status.textContent = "Viewing the workout scheduled for this day.";
@@ -1016,6 +1102,7 @@ window.addEventListener("DOMContentLoaded", () => {
         : "Previewing a different point in the rotation. Hit Set to use it.";
     }
   };
+
 
   renderLooks = function() {
     const key = lockedOsLooksKey();
@@ -1026,8 +1113,10 @@ window.addEventListener("DOMContentLoaded", () => {
     const date = keyToLocalDate(key);
     const isToday = key === today;
 
+
     $("looksDayName").textContent = `${dayName} routine`;
     $("looksDateText").textContent = `${isToday ? "Today · " : ""}${dayName}, ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
+
 
     let historyLabel = document.getElementById("looksHistoryLabel");
     if (!isToday) {
@@ -1043,14 +1132,17 @@ window.addEventListener("DOMContentLoaded", () => {
       historyLabel.hidden = true;
     }
 
+
     const nextButton = document.getElementById("looksNextDayBtn");
     if (nextButton) nextButton.disabled = isToday;
     const todayButton = document.getElementById("looksTodayBtn");
     if (todayButton) todayButton.disabled = isToday;
 
+
     renderLooksTaskList($("looksMorningList"), routine.morning, day, "morning");
     renderLooksTaskList($("looksMiddayList"), routine.midday, day, "midday");
     renderLooksTaskList($("looksNightList"), routine.night, day, "night");
+
 
     const total = getLooksTaskIds(key).length;
     const done = day.looksDone.length;
@@ -1058,6 +1150,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const resolved = done + skipped;
     const left = total - resolved;
     const percent = total ? Math.round((resolved / total) * 100) : 0;
+
 
     $("looksPercent").textContent = `${percent}%`;
     $("looksDoneCount").textContent = skipped ? `${done} done • ${skipped} skipped` : `${done} / ${total}`;
@@ -1067,11 +1160,14 @@ window.addEventListener("DOMContentLoaded", () => {
     $("looksProgressCircle").style.background = `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
     $("workoutName").textContent = getWorkoutName(key);
 
+
     renderWorkoutPicker();
     renderWater();
   };
 
+
   lockedOsInstallWaterHistoryHandlers();
+
 
   /* ghk-cu.js installs Forums + Appointments in its own DOMContentLoaded handler.
      Run this after those handlers finish, then keep the cleanup resilient. */
@@ -1081,10 +1177,13 @@ window.addEventListener("DOMContentLoaded", () => {
   }, 0);
 });
 
+
 </script>
+
 
 <script id="lockedOsRequestedTaskPatch">
 "use strict";
+
 
 /* Requested 2026-09-11 changes only: Arms neck work, per-task info, reliable task deletion. */
 window.addEventListener("DOMContentLoaded", () => {
@@ -1096,14 +1195,17 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+
   function getLooksTaskInfo(taskId) {
     const value = state?.meta?.looksTaskInfo?.[String(taskId || "")];
     return typeof value === "string" ? value.trim() : "";
   }
 
+
   function closeLooksTaskInfoModal() {
     document.getElementById("looksTaskInfoModalBackdrop")?.remove();
   }
+
 
   function saveLooksTaskInfo(taskId, value) {
     ensureLooksTaskCustomizationState();
@@ -1118,12 +1220,14 @@ window.addEventListener("DOMContentLoaded", () => {
     toast(cleaned ? "Information saved." : "Information removed.");
   }
 
+
   function openLooksTaskInfoModal(task) {
     closeLooksTaskInfoModal();
     const taskId = String(task?.id || "").trim();
     if (!taskId) return;
     const existing = getLooksTaskInfo(taskId);
     const hasExisting = Boolean(existing);
+
 
     const backdrop = document.createElement("div");
     backdrop.id = "looksTaskInfoModalBackdrop";
@@ -1146,11 +1250,13 @@ window.addEventListener("DOMContentLoaded", () => {
       </section>`;
     document.body.appendChild(backdrop);
 
+
     const name = backdrop.querySelector(".looks-task-info-name");
     if (name) name.textContent = task.title || taskId;
     const textarea = document.getElementById("looksTaskInfoText");
     const actions = document.getElementById("looksTaskInfoActions");
     textarea.value = existing;
+
 
     const close = () => closeLooksTaskInfoModal();
     const showViewMode = () => {
@@ -1192,6 +1298,7 @@ window.addEventListener("DOMContentLoaded", () => {
       requestAnimationFrame(() => textarea.focus());
     };
 
+
     document.getElementById("looksTaskInfoClose")?.addEventListener("click", close);
     backdrop.addEventListener("click", event => {
       if (event.target === backdrop) close();
@@ -1200,14 +1307,17 @@ window.addEventListener("DOMContentLoaded", () => {
     else showEditMode();
   }
 
+
   const originalCreateTaskRow = createTaskRow;
   createTaskRow = function(task, done, skipped, theme, onToggle, onSkip, onEdit, controls = {}) {
     const row = originalCreateTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit, controls);
     if (theme !== "looks-task") return row;
 
+
     const menu = row.querySelector("details.task-menu");
     const popover = menu?.querySelector(".task-menu-popover");
     if (!popover) return row;
+
 
     const infoButton = document.createElement("button");
     infoButton.type = "button";
@@ -1219,10 +1329,12 @@ window.addEventListener("DOMContentLoaded", () => {
       openLooksTaskInfoModal(task);
     });
 
+
     const deleteButton = popover.querySelector(".delete-action");
     popover.insertBefore(infoButton, deleteButton || null);
     return row;
   };
+
 
   /* Always tombstone a deleted task, including custom tasks, so stale synced copies cannot reappear. */
   deleteLooksTask = function(task, section) {
@@ -1230,21 +1342,25 @@ window.addEventListener("DOMContentLoaded", () => {
     const taskId = String(task?.id || "").trim();
     if (!taskId) return;
 
+
     state.meta.looksCustomTasks = state.meta.looksCustomTasks.filter(item => String(item?.id || "") !== taskId);
     if (!state.meta.looksDeletedTaskIds.includes(taskId)) state.meta.looksDeletedTaskIds.push(taskId);
     delete state.meta.looksTaskEdits[taskId];
     delete state.meta.looksTaskInfo[taskId];
+
 
     for (const key of ["morning", "midday", "night"]) {
       const order = Array.isArray(state.meta.looksTaskOrder[key]) ? state.meta.looksTaskOrder[key] : [];
       state.meta.looksTaskOrder[key] = order.filter(id => String(id) !== taskId);
     }
 
+
     for (const day of Object.values(state.days || {})) {
       if (!day || typeof day !== "object") continue;
       day.looksDone = (day.looksDone || []).filter(id => String(id) !== taskId);
       day.looksSkipped = (day.looksSkipped || []).filter(id => String(id) !== taskId);
     }
+
 
     const selectedKey = typeof lockedOsLooksKey === "function" ? lockedOsLooksKey() : getTodayKey();
     const selectedDay = ensureDay(selectedKey);
@@ -1255,6 +1371,7 @@ window.addEventListener("DOMContentLoaded", () => {
     toast("Task deleted.");
   };
 
+
   /* Preserve deletion tombstones if a stale remote snapshot arrives during sync. */
   const originalApplyRemoteState = applyRemoteState;
   applyRemoteState = function(remoteState, statusMessage, options = {}) {
@@ -1264,6 +1381,7 @@ window.addEventListener("DOMContentLoaded", () => {
         ? state.meta.looksTaskInfo
         : {};
       const preservePendingInfo = typeof hasPendingLocalChanges === "function" && hasPendingLocalChanges();
+
 
       if (localDeleted.length || (preservePendingInfo && Object.keys(localInfo).length)) {
         remoteState = JSON.parse(JSON.stringify(remoteState));
@@ -1292,6 +1410,7 @@ window.addEventListener("DOMContentLoaded", () => {
     return originalApplyRemoteState(remoteState, statusMessage, options);
   };
 
+
   const originalHasMeaningfulState = hasMeaningfulState;
   hasMeaningfulState = function(snapshot) {
     const info = snapshot?.meta?.looksTaskInfo;
@@ -1299,12 +1418,14 @@ window.addEventListener("DOMContentLoaded", () => {
     return originalHasMeaningfulState(snapshot);
   };
 
+
   /* Keep the current rotation exactly the same, but Arms now includes neck work. */
   const originalFormatWorkoutName = formatWorkoutName;
   formatWorkoutName = function(index, dayKey = getTodayKey()) {
     const name = originalFormatWorkoutName(index, dayKey);
     return name === "Arms + Abs" ? "Arms + Abs + Neck" : name;
   };
+
 
   function renderArmsNeckDetail() {
     const workoutName = document.getElementById("workoutName");
@@ -1322,11 +1443,13 @@ window.addEventListener("DOMContentLoaded", () => {
     detail.hidden = !isArmsDay;
   }
 
+
   const originalRenderLooks = renderLooks;
   renderLooks = function() {
     originalRenderLooks();
     renderArmsNeckDetail();
   };
+
 
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && document.getElementById("looksTaskInfoModalBackdrop")) closeLooksTaskInfoModal();
@@ -1335,12 +1458,16 @@ window.addEventListener("DOMContentLoaded", () => {
 </script>
 
 
+
+
 <script id="lockedOsDeletionHardFix">
 "use strict";
+
 
 /* Hard-delete Looksmaxxing tasks even when a stale/custom copy comes back with a different id. */
 window.addEventListener("DOMContentLoaded", () => {
   const normalizeDeleteTitle = value => String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+
 
   function ensureHardDeleteState() {
     ensureLooksTaskCustomizationState();
@@ -1348,6 +1475,7 @@ window.addEventListener("DOMContentLoaded", () => {
       ? [...new Set(state.meta.looksDeletedTaskTitles.map(normalizeDeleteTitle).filter(Boolean))]
       : [];
   }
+
 
   const routineBeforeHardDelete = getLooksRoutine;
   getLooksRoutine = function(dayKey = getTodayKey()) {
@@ -1368,6 +1496,7 @@ window.addEventListener("DOMContentLoaded", () => {
     };
   };
 
+
   const addLooksTaskBeforeHardDelete = addLooksTask;
   addLooksTask = function(section, title, afterTaskId = null, days = LOCKED_OS_LOOKS_DAY_ORDER) {
     ensureHardDeleteState();
@@ -1378,6 +1507,7 @@ window.addEventListener("DOMContentLoaded", () => {
     return addLooksTaskBeforeHardDelete(section, title, afterTaskId, days);
   };
 
+
   deleteLooksTask = function(task, section) {
     ensureHardDeleteState();
     const taskId = String(task?.id || "").trim();
@@ -1386,6 +1516,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const titleKeys = new Set([normalizeDeleteTitle(displayTitle), normalizeDeleteTitle(rawTitle)].filter(Boolean));
     const idsToDelete = new Set(taskId ? [taskId] : []);
 
+
     /* Catch duplicated/stale custom copies of the same visible task. */
     for (const item of state.meta.looksCustomTasks || []) {
       const id = String(item?.id || "").trim();
@@ -1393,6 +1524,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const itemTitles = [item?.title, edited].map(normalizeDeleteTitle).filter(Boolean);
       if (id === taskId || itemTitles.some(title => titleKeys.has(title))) idsToDelete.add(id);
     }
+
 
     /* Catch any currently generated copy with the same title, even if its id differs. */
     try {
@@ -1408,6 +1540,7 @@ window.addEventListener("DOMContentLoaded", () => {
       console.warn("Could not scan routine during hard delete:", error);
     }
 
+
     state.meta.looksCustomTasks = (state.meta.looksCustomTasks || []).filter(item => {
       const id = String(item?.id || "");
       const edited = String(state.meta.looksTaskEdits?.[id] || "").trim();
@@ -1415,23 +1548,28 @@ window.addEventListener("DOMContentLoaded", () => {
       return !idsToDelete.has(id) && !sameTitle;
     });
 
+
     const deletedIds = new Set((state.meta.looksDeletedTaskIds || []).map(id => String(id || "")));
     idsToDelete.forEach(id => { if (id) deletedIds.add(id); });
     state.meta.looksDeletedTaskIds = [...deletedIds];
 
+
     const deletedTitles = new Set((state.meta.looksDeletedTaskTitles || []).map(normalizeDeleteTitle));
     titleKeys.forEach(title => deletedTitles.add(title));
     state.meta.looksDeletedTaskTitles = [...deletedTitles];
+
 
     for (const id of idsToDelete) {
       delete state.meta.looksTaskEdits[id];
       if (state.meta.looksTaskInfo) delete state.meta.looksTaskInfo[id];
     }
 
+
     for (const key of ["morning", "midday", "night"]) {
       const order = Array.isArray(state.meta.looksTaskOrder[key]) ? state.meta.looksTaskOrder[key] : [];
       state.meta.looksTaskOrder[key] = order.filter(id => !idsToDelete.has(String(id || "")));
     }
+
 
     for (const day of Object.values(state.days || {})) {
       if (!day || typeof day !== "object") continue;
@@ -1439,12 +1577,14 @@ window.addEventListener("DOMContentLoaded", () => {
       day.looksSkipped = (day.looksSkipped || []).filter(id => !idsToDelete.has(String(id || "")));
     }
 
+
     saveState();
     saveLocalState();
     render();
     queueSupabaseSave(0);
     toast("Task permanently deleted.");
   };
+
 
   /* Preserve title tombstones too, so a stale Supabase snapshot cannot recreate the task under a new id. */
   /* The specific stuck task the user has already deleted repeatedly: remove it on load too. */
@@ -1471,6 +1611,7 @@ window.addEventListener("DOMContentLoaded", () => {
     queueSupabaseSave(0);
   }
 
+
   const applyRemoteStateBeforeHardDelete = applyRemoteState;
   applyRemoteState = function(remoteState, statusMessage, options = {}) {
     ensureHardDeleteState();
@@ -1481,6 +1622,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const remoteTitles = new Set((remoteState.meta.looksDeletedTaskTitles || []).map(normalizeDeleteTitle).filter(Boolean));
       localTitles.forEach(title => remoteTitles.add(title));
       remoteState.meta.looksDeletedTaskTitles = [...remoteTitles];
+
 
       if (Array.isArray(remoteState.meta.looksCustomTasks)) {
         remoteState.meta.looksCustomTasks = remoteState.meta.looksCustomTasks.filter(item => {
@@ -1497,13 +1639,17 @@ window.addEventListener("DOMContentLoaded", () => {
 </script>
 
 
+
+
 <script id="lockedOsDeletionRenderGuard">
 "use strict";
+
 
 /* Final render guard for Looksmaxxing deletions.
    Deleted tasks are blocked at the last possible rendering step, not only in saved state. */
 window.addEventListener("DOMContentLoaded", () => {
   const normalizeDeletedTaskTitle = value => String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+
 
   function ensureDeletionGuardState() {
     ensureLooksTaskCustomizationState();
@@ -1515,6 +1661,7 @@ window.addEventListener("DOMContentLoaded", () => {
       : [];
   }
 
+
   function getDeletionGuardSets() {
     ensureDeletionGuardState();
     return {
@@ -1522,6 +1669,7 @@ window.addEventListener("DOMContentLoaded", () => {
       titles: new Set(state.meta.looksDeletedTaskTitles)
     };
   }
+
 
   function isTaskPermanentlyDeleted(task) {
     if (!task) return false;
@@ -1537,6 +1685,7 @@ window.addEventListener("DOMContentLoaded", () => {
     );
   }
 
+
   function purgeDeletedTaskRows() {
     const { ids, titles } = getDeletionGuardSets();
     document.querySelectorAll("#looksMorningList .looks-task, #looksMiddayList .looks-task, #looksNightList .looks-task").forEach(row => {
@@ -1545,6 +1694,7 @@ window.addEventListener("DOMContentLoaded", () => {
       if ((id && ids.has(id)) || (title && titles.has(title))) row.remove();
     });
   }
+
 
   /* Block deleted tasks at the actual list renderer. */
   const renderLooksTaskListBeforeDeletionGuard = renderLooksTaskList;
@@ -1555,6 +1705,7 @@ window.addEventListener("DOMContentLoaded", () => {
     return result;
   };
 
+
   /* Make progress/count logic use the same final deletion rule. */
   getLooksTaskIds = function(dayKey = getTodayKey()) {
     const routine = getLooksRoutine(dayKey);
@@ -1562,6 +1713,7 @@ window.addEventListener("DOMContentLoaded", () => {
       .filter(task => !isTaskPermanentlyDeleted(task))
       .map(task => task.id);
   };
+
 
   /* Remove the row immediately after Delete, before any async sync activity can occur. */
   const deleteLooksTaskBeforeDeletionGuard = deleteLooksTask;
@@ -1572,7 +1724,9 @@ window.addEventListener("DOMContentLoaded", () => {
       normalizeDeletedTaskTitle((() => { try { return getLooksTaskTitle(task); } catch { return ""; } })())
     ].filter(Boolean));
 
+
     deleteLooksTaskBeforeDeletionGuard(task, section);
+
 
     ensureDeletionGuardState();
     if (taskId && !state.meta.looksDeletedTaskIds.includes(taskId)) state.meta.looksDeletedTaskIds.push(taskId);
@@ -1580,10 +1734,12 @@ window.addEventListener("DOMContentLoaded", () => {
       if (!state.meta.looksDeletedTaskTitles.includes(title)) state.meta.looksDeletedTaskTitles.push(title);
     }
 
+
     purgeDeletedTaskRows();
     saveLocalState();
     queueSupabaseSave(0);
   };
+
 
   /* This is the specific stuck task already deleted repeatedly. Keep it permanently tombstoned. */
   ensureDeletionGuardState();
@@ -1591,6 +1747,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const azelaicTitle = normalizeDeletedTaskTitle("Apply azelaic acid");
   if (!state.meta.looksDeletedTaskIds.includes(azelaicId)) state.meta.looksDeletedTaskIds.push(azelaicId);
   if (!state.meta.looksDeletedTaskTitles.includes(azelaicTitle)) state.meta.looksDeletedTaskTitles.push(azelaicTitle);
+
 
   state.meta.looksCustomTasks = (state.meta.looksCustomTasks || []).filter(task => {
     const id = String(task?.id || "").trim();
@@ -1611,12 +1768,14 @@ window.addEventListener("DOMContentLoaded", () => {
   }
   saveLocalState();
 
+
   /* Last-resort DOM guard: if any other existing code inserts a deleted task later, remove it immediately. */
   const observer = new MutationObserver(() => purgeDeletedTaskRows());
   ["looksMorningList", "looksMiddayList", "looksNightList"].forEach(id => {
     const list = document.getElementById(id);
     if (list) observer.observe(list, { childList: true, subtree: true });
   });
+
 
   const renderLooksBeforeDeletionGuard = renderLooks;
   renderLooks = function() {
@@ -1625,13 +1784,16 @@ window.addEventListener("DOMContentLoaded", () => {
     return result;
   };
 
+
   renderLooks();
   purgeDeletedTaskRows();
 });
 </script>
 
+
 <script id="lockedOsRomanianDeadliftRemoval">
 "use strict";
+
 
 /* Keep Romanian Deadlift out of every rendered Gym workout. */
 window.addEventListener("DOMContentLoaded", () => {
@@ -1646,16 +1808,19 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+
   removeRomanianDeadlift();
   const observer = new MutationObserver(removeRomanianDeadlift);
   observer.observe(document.body, { childList: true, subtree: true });
 });
 </script>
 
+
 <script id="lockedOsEditableDailyChecklist">
 /* ===== 2026-10-06: FULLY EDITABLE DAILY CHECKLIST ===== */
 (() => {
   "use strict";
+
 
   const META_DETAILS = "dailyTaskDetailsV1";
   const META_CUSTOM = "dailyCustomTasksV1";
@@ -1664,9 +1829,11 @@ window.addEventListener("DOMContentLoaded", () => {
   const ALL_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const SECTIONS = ["morning", "afternoon", "night"];
 
+
   function installDailyChecklistEditing() {
     if (window.__lockedOsEditableDailyChecklist20261006) return;
     window.__lockedOsEditableDailyChecklist20261006 = true;
+
 
     function ensureDailyMeta(target = state) {
       target.meta = target.meta && typeof target.meta === "object" && !Array.isArray(target.meta) ? target.meta : {};
@@ -1685,6 +1852,7 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+
     function safeSchedule(schedule) {
       if (!schedule || typeof schedule !== "object") return { type: "daily", start: "", end: "", days: [...ALL_DAYS] };
       const type = ["daily", "once", "weekly", "everyOtherDay"].includes(schedule.type) ? schedule.type : "daily";
@@ -1696,6 +1864,7 @@ window.addEventListener("DOMContentLoaded", () => {
         days: days.length ? days : [...ALL_DAYS]
       };
     }
+
 
     function dailyAppears(task, dayKey) {
       const schedule = safeSchedule(task.schedule);
@@ -1710,11 +1879,13 @@ window.addEventListener("DOMContentLoaded", () => {
       return true;
     }
 
+
     function dailyCatalog() {
       ensureDailyMeta();
       const deleted = new Set(state.meta[META_DELETED]);
       const details = state.meta[META_DETAILS];
       const catalog = [];
+
 
       for (const base of TASKS) {
         if (deleted.has(String(base.id))) continue;
@@ -1730,6 +1901,7 @@ window.addEventListener("DOMContentLoaded", () => {
           custom: false
         });
       }
+
 
       const seen = new Set(catalog.map(task => String(task.id)));
       for (const raw of state.meta[META_CUSTOM]) {
@@ -1752,6 +1924,7 @@ window.addEventListener("DOMContentLoaded", () => {
       return catalog;
     }
 
+
     function orderedSectionTasks(section, dayKey = getTodayKey(), includeHidden = false) {
       ensureDailyMeta();
       const tasks = dailyCatalog().filter(task => task.section === section && (includeHidden || dailyAppears(task, dayKey)));
@@ -1767,15 +1940,19 @@ window.addEventListener("DOMContentLoaded", () => {
         .map(item => item.task);
     }
 
+
     function dailyTasksForDay(dayKey = getTodayKey()) {
       return SECTIONS.flatMap(section => orderedSectionTasks(section, dayKey));
     }
+
 
     function dailyTaskIds(dayKey = getTodayKey()) {
       return dailyTasksForDay(dayKey).map(task => task.id);
     }
 
+
     window.lockedOsDailyTasksForDay = dailyTasksForDay;
+
 
     const baseNormalizeDay = normalizeDay;
     normalizeDay = function(dayKey, original = {}) {
@@ -1789,11 +1966,13 @@ window.addEventListener("DOMContentLoaded", () => {
       return normalized;
     };
 
+
     const baseResolvedSet = getResolvedSet;
     getResolvedSet = function(day, type = "main") {
       if (type === "main") return new Set([...(day?.done || []), ...(day?.skipped || [])]);
       return baseResolvedSet(day, type);
     };
+
 
     const baseMeaningful = hasMeaningfulState;
     hasMeaningfulState = function(snapshot) {
@@ -1806,6 +1985,7 @@ window.addEventListener("DOMContentLoaded", () => {
       return baseMeaningful(snapshot);
     };
 
+
     function recalcDailyHistory() {
       for (const [dayKey, day] of Object.entries(state.days || {})) {
         if (!isDateKey(dayKey) || !day || typeof day !== "object") continue;
@@ -1813,11 +1993,13 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+
     function updateDailyStatus(task, kind) {
       const key = getTodayKey();
       const day = ensureDay(key);
       const done = new Set(day.done || []);
       const skipped = new Set(day.skipped || []);
+
 
       if (kind === "done") {
         if (done.has(task.id)) done.delete(task.id);
@@ -1833,6 +2015,7 @@ window.addEventListener("DOMContentLoaded", () => {
         }
       }
 
+
       const allowed = new Set(dailyTaskIds(key));
       day.done = [...done].filter(id => allowed.has(id));
       day.skipped = [...skipped].filter(id => allowed.has(id) && !done.has(id));
@@ -1841,16 +2024,19 @@ window.addEventListener("DOMContentLoaded", () => {
       render();
     }
 
+
     toggleMainTask = function(taskId) {
       const task = dailyTasksForDay().find(item => item.id === taskId);
       if (task) updateDailyStatus(task, "done");
     };
+
 
     function saveOrder(section, ids) {
       ensureDailyMeta();
       state.meta[META_ORDER][section] = [...new Set(ids.filter(Boolean))];
       saveState();
     }
+
 
     function insertIntoOrder(section, taskId, afterTaskId = null) {
       ensureDailyMeta();
@@ -1860,12 +2046,14 @@ window.addEventListener("DOMContentLoaded", () => {
       state.meta[META_ORDER][section] = [...new Set(allIds)];
     }
 
+
     function removeFromAllOrders(taskId) {
       ensureDailyMeta();
       for (const section of SECTIONS) {
         state.meta[META_ORDER][section] = (state.meta[META_ORDER][section] || []).filter(id => id !== taskId);
       }
     }
+
 
     function normalizeEditorDetails(details, fallbackSection) {
       return {
@@ -1876,11 +2064,13 @@ window.addEventListener("DOMContentLoaded", () => {
       };
     }
 
+
     function saveExistingDailyTask(task, rawDetails) {
       ensureDailyMeta();
       const details = normalizeEditorDetails(rawDetails, task.section);
       if (!details.title) return;
       const oldSection = task.section;
+
 
       if (task.custom) {
         const index = state.meta[META_CUSTOM].findIndex(item => String(item?.id || "") === task.id);
@@ -1888,6 +2078,7 @@ window.addEventListener("DOMContentLoaded", () => {
       } else {
         state.meta[META_DETAILS][task.id] = details;
       }
+
 
       if (oldSection !== details.section) {
         removeFromAllOrders(task.id);
@@ -1897,6 +2088,7 @@ window.addEventListener("DOMContentLoaded", () => {
       saveState();
       render();
     }
+
 
     function addDailyTask(section, afterTaskId = null) {
       const opener = window.lockedOsTaskEditor;
@@ -1914,11 +2106,13 @@ window.addEventListener("DOMContentLoaded", () => {
       });
     }
 
+
     function editDailyTask(task) {
       const opener = window.lockedOsTaskEditor;
       if (typeof opener !== "function") return;
       opener({ ...task, schedule: safeSchedule(task.schedule) }, false, details => saveExistingDailyTask(task, details));
     }
+
 
     function resetDailyTask(task) {
       if (task.custom) return;
@@ -1931,6 +2125,7 @@ window.addEventListener("DOMContentLoaded", () => {
       render();
       toast("Task reset to default.");
     }
+
 
     function deleteDailyTask(task) {
       ensureDailyMeta();
@@ -1952,10 +2147,12 @@ window.addEventListener("DOMContentLoaded", () => {
       toast("Task deleted.");
     }
 
+
     function addInfoPanel(row, task) {
       const menu = row.querySelector("details.task-menu");
       const popover = menu?.querySelector(".task-menu-popover");
       if (!popover) return;
+
 
       const infoButton = document.createElement("button");
       infoButton.type = "button";
@@ -2000,6 +2197,7 @@ window.addEventListener("DOMContentLoaded", () => {
         row.appendChild(panel);
       });
 
+
       const addButton = document.createElement("button");
       addButton.type = "button";
       addButton.className = "task-menu-action add-action";
@@ -2010,9 +2208,11 @@ window.addEventListener("DOMContentLoaded", () => {
         addDailyTask(task.section, task.id);
       });
 
+
       const deleteButton = popover.querySelector(".delete-action");
       popover.insertBefore(infoButton, deleteButton || null);
       popover.insertBefore(addButton, deleteButton || null);
+
 
       if (!task.custom && state.meta[META_DETAILS]?.[task.id]) {
         const resetButton = document.createElement("button");
@@ -2028,10 +2228,12 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+
     function renderDailySection(element, tasks, day, section) {
       element.innerHTML = "";
       const done = new Set(day.done || []);
       const skipped = new Set(day.skipped || []);
+
 
       for (const task of tasks) {
         const row = createTaskRow(
@@ -2053,6 +2255,7 @@ window.addEventListener("DOMContentLoaded", () => {
         row.setAttribute("aria-grabbed", "false");
         addInfoPanel(row, task);
 
+
         row.addEventListener("dragstart", event => {
           if (row.classList.contains("editing") || row.classList.contains("adding") || row.classList.contains("showing-info")) {
             event.preventDefault();
@@ -2070,12 +2273,14 @@ window.addEventListener("DOMContentLoaded", () => {
         element.appendChild(row);
       }
 
+
       if (!tasks.length) {
         const empty = document.createElement("p");
         empty.className = "daily-empty-state";
         empty.textContent = "No tasks scheduled in this section today.";
         element.appendChild(empty);
       }
+
 
       element.ondragover = event => {
         event.preventDefault();
@@ -2090,6 +2295,7 @@ window.addEventListener("DOMContentLoaded", () => {
         else element.appendChild(dragging);
       };
 
+
       element.ondrop = event => {
         event.preventDefault();
         const visibleIds = [...element.querySelectorAll(".task-row")].map(row => row.dataset.taskId).filter(Boolean);
@@ -2099,6 +2305,7 @@ window.addEventListener("DOMContentLoaded", () => {
       };
     }
 
+
     renderTaskLists = function() {
       ensureDailyMeta();
       const key = getTodayKey();
@@ -2107,6 +2314,7 @@ window.addEventListener("DOMContentLoaded", () => {
       renderDailySection($("afternoonList"), orderedSectionTasks("afternoon", key), day, "afternoon");
       renderDailySection($("nightList"), orderedSectionTasks("night", key), day, "night");
     };
+
 
     renderProgress = function() {
       const key = getTodayKey();
@@ -2128,6 +2336,7 @@ window.addEventListener("DOMContentLoaded", () => {
       $("progressCircle").style.background = `conic-gradient(var(--blue) ${total ? Math.round((resolved / total) * 360) : 0}deg, rgba(42,30,18,.09) 0deg)`;
     };
 
+
     renderPhoneLock = function() {
       const key = getTodayKey();
       const morningIds = orderedSectionTasks("morning", key).map(task => task.id);
@@ -2141,6 +2350,7 @@ window.addEventListener("DOMContentLoaded", () => {
       $("phoneLockText").textContent = complete ? "Morning list is resolved." : `${remaining} morning task${remaining === 1 ? "" : "s"} left.`;
       $("phoneLockBadge").textContent = complete ? "Unlocked" : "Locked";
     };
+
 
     function installSectionAddButtons() {
       const configs = [
@@ -2163,11 +2373,13 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+
     ensureDailyMeta();
     installSectionAddButtons();
     recalcDailyHistory();
     saveLocalState();
     if (!mainApp.classList.contains("hidden")) render();
+
 
     const checklistTab = document.querySelector('.tab[data-tab="checklistPage"]');
     checklistTab?.addEventListener("click", () => {
@@ -2180,11 +2392,299 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+
   window.addEventListener("DOMContentLoaded", () => setTimeout(installDailyChecklistEditing, 0));
 })();
 
+
 </script>
+
+
+<script id="lockedOsDailyImportV1">
+/* ===== 2026-10-07: BLANK DAILY CHECKLIST + CHATGPT IMPORT ===== */
+(() => {
+  "use strict";
+
+
+  const RESET_KEY = "dailyBlankSlateImportV1";
+  const CUSTOM = "dailyCustomTasksV1";
+  const DELETED = "dailyDeletedTaskIdsV1";
+  const DETAILS = "dailyTaskDetailsV1";
+  const ORDER = "dailyTaskOrderV1";
+  const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const SECTIONS = ["morning", "afternoon", "night"];
+
+
+  function meta() {
+    state.meta = state.meta && typeof state.meta === "object" && !Array.isArray(state.meta) ? state.meta : {};
+    state.meta[CUSTOM] = Array.isArray(state.meta[CUSTOM]) ? state.meta[CUSTOM] : [];
+    state.meta[DELETED] = Array.isArray(state.meta[DELETED]) ? state.meta[DELETED] : [];
+    state.meta[DETAILS] = state.meta[DETAILS] && typeof state.meta[DETAILS] === "object" && !Array.isArray(state.meta[DETAILS])
+      ? state.meta[DETAILS]
+      : {};
+    state.meta[ORDER] = state.meta[ORDER] && typeof state.meta[ORDER] === "object" && !Array.isArray(state.meta[ORDER])
+      ? state.meta[ORDER]
+      : {};
+    for (const section of SECTIONS) {
+      state.meta[ORDER][section] = Array.isArray(state.meta[ORDER][section])
+        ? state.meta[ORDER][section]
+        : [];
+    }
+    return state.meta;
+  }
+
+
+  function resetOnce() {
+    const m = meta();
+    if (m[RESET_KEY]) return false;
+
+
+    m[CUSTOM] = [];
+    m[DETAILS] = {};
+    m[ORDER] = { morning: [], afternoon: [], night: [] };
+    m[DELETED] = TASKS.map(task => String(task.id));
+    m[RESET_KEY] = true;
+
+
+    for (const day of Object.values(state.days || {})) {
+      if (!day || typeof day !== "object") continue;
+      day.done = [];
+      day.skipped = [];
+      day.completed = false;
+    }
+
+
+    normalizeState();
+    return true;
+  }
+
+
+  function promptText() {
+    return [
+      "Convert the checklist you just made for me into LOCKED OS checklist import JSON.",
+      "Return ONLY valid JSON. No markdown, no code fences, and no explanation.",
+      "{\"version\":1,\"tasks\":[{\"title\":\"Task name\",\"section\":\"morning\",\"repeat\":\"today\"}]}",
+      "section must be \"morning\", \"afternoon\", or \"night\".",
+      "Use repeat \"today\" for normal checklist items.",
+      "Only use repeat \"daily\" when I explicitly said it is every day, daily, recurring, or a non-negotiable.",
+      "Preserve the checklist order. Do not add IDs. Do not invent tasks.",
+      "Use the checklist from our current conversation."
+    ].join("\n");
+  }
+
+
+  function setStatus(message, isError = false) {
+    const el = document.getElementById("dailyImportStatus");
+    if (!el) return;
+    el.textContent = message;
+    el.style.color = isError ? "var(--red)" : "var(--muted)";
+  }
+
+
+  async function copyPrompt() {
+    const value = promptText();
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch (_) {
+      const temp = document.createElement("textarea");
+      temp.value = value;
+      temp.style.position = "fixed";
+      temp.style.opacity = "0";
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand("copy");
+      temp.remove();
+    }
+
+
+    setStatus("Prompt copied. Paste it into ChatGPT after it makes your checklist.");
+    if (typeof toast === "function") toast("ChatGPT prompt copied.");
+  }
+
+
+  function parseImport(raw) {
+    let text = String(raw || "").trim()
+      .replace(/^\x60\x60\x60(?:json)?\s*/i, "")
+      .replace(/\s*\x60\x60\x60$/i, "")
+      .trim();
+
+
+    const first = text.indexOf("{");
+    const last = text.lastIndexOf("}");
+    if (first >= 0 && last > first) text = text.slice(first, last + 1);
+
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      throw new Error("That import code is not valid JSON.");
+    }
+
+
+    if (!data || Number(data.version) !== 1 || !Array.isArray(data.tasks)) {
+      throw new Error("Use LOCKED OS import version 1 with a tasks array.");
+    }
+    if (data.tasks.length > 100) {
+      throw new Error("Import 100 tasks or fewer at a time.");
+    }
+
+
+    const tasks = data.tasks
+      .map(item => ({
+        title: String(item && item.title || "").trim().slice(0, 160),
+        section: SECTIONS.includes(item && item.section) ? item.section : "afternoon",
+        repeat: item && item.repeat === "daily" ? "daily" : "today"
+      }))
+      .filter(item => item.title);
+
+
+    if (!tasks.length) throw new Error("No usable tasks were found.");
+    return tasks;
+  }
+
+
+  function importTasks() {
+    const input = document.getElementById("dailyImportCode");
+    if (!input) return;
+
+
+    let incoming;
+    try {
+      incoming = parseImport(input.value);
+    } catch (error) {
+      setStatus(error.message, true);
+      return;
+    }
+
+
+    const m = meta();
+    const today = getTodayKey();
+    let added = 0;
+
+
+    for (const item of incoming) {
+      const schedule = item.repeat === "daily"
+        ? { type: "daily", start: "", end: "", days: [...DAYS] }
+        : { type: "once", start: today, end: "", days: [...DAYS] };
+
+
+      const duplicate = m[CUSTOM].some(task => {
+        const sameTitle = String(task && task.title || "").trim().toLowerCase() === item.title.toLowerCase();
+        const sameSection = String(task && task.section || "") === item.section;
+        const oldSchedule = task && task.schedule || {};
+        const sameRepeat = schedule.type === "daily"
+          ? oldSchedule.type === "daily"
+          : oldSchedule.type === "once" && oldSchedule.start === today;
+        return sameTitle && sameSection && sameRepeat;
+      });
+
+
+      if (duplicate) continue;
+
+
+      const id = "daily-import-" + Date.now().toString(36) + "-" + added.toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+      m[CUSTOM].push({
+        id,
+        custom: true,
+        title: item.title,
+        section: item.section,
+        notes: "",
+        schedule
+      });
+      m[ORDER][item.section].push(id);
+      added += 1;
+    }
+
+
+    if (!added) {
+      setStatus("Nothing new was added. Those tasks are already on the checklist.", true);
+      return;
+    }
+
+
+    normalizeState();
+    saveState();
+    input.value = "";
+    setStatus("Imported " + added + " task" + (added === 1 ? "" : "s") + ".");
+    render();
+    if (typeof toast === "function") toast("Checklist imported.");
+  }
+
+
+  function installCard() {
+    if (document.getElementById("dailyImportCard")) return;
+
+
+    const summary = document.querySelector("#checklistPage .summary");
+    if (!summary) return;
+
+
+    const card = document.createElement("section");
+    card.id = "dailyImportCard";
+    card.className = "card";
+    card.style.cssText = "padding:20px;margin:16px 0;background:rgba(255,250,241,.84)";
+    card.innerHTML =
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">' +
+        '<div><p class="eyebrow blue">Checklist tools</p><h3 style="margin:2px 0 6px">ChatGPT checklist import</h3><p style="margin:0;color:var(--muted);font-weight:700;line-height:1.45">Copy the prompt, use it after ChatGPT makes your checklist, then paste the JSON below.</p></div>' +
+        '<button class="btn secondary compact" id="copyDailyImportPrompt" type="button">Copy ChatGPT prompt</button>' +
+      '</div>' +
+      '<textarea id="dailyImportCode" placeholder=\'Paste {"version":1,"tasks":[...]} here\' style="box-sizing:border-box;width:100%;min-height:120px;margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.72);color:var(--text);font:inherit;resize:vertical"></textarea>' +
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px"><button class="btn blue" id="importDailyChecklistBtn" type="button">Import checklist</button><span id="dailyImportStatus" style="font-size:.82rem;font-weight:800;color:var(--muted)"></span></div>';
+
+
+    summary.insertAdjacentElement("afterend", card);
+    document.getElementById("copyDailyImportPrompt").addEventListener("click", copyPrompt);
+    document.getElementById("importDailyChecklistBtn").addEventListener("click", importTasks);
+  }
+
+
+  function relabelButtons() {
+    document.querySelectorAll("[data-daily-add-section]").forEach(button => {
+      button.textContent = "+ Daily task";
+    });
+  }
+
+
+  function install() {
+    if (window.__lockedOsDailyImportV1) return;
+    window.__lockedOsDailyImportV1 = true;
+
+
+    const didReset = resetOnce();
+    installCard();
+    relabelButtons();
+
+
+    if (didReset) {
+      saveState();
+      setStatus("Daily Checklist reset. Add your non-negotiables or import today's checklist.");
+    }
+
+
+    render();
+
+
+    const tab = document.querySelector('.tab[data-tab="checklistPage"]');
+    if (tab) {
+      tab.addEventListener("click", () => {
+        setTimeout(() => {
+          installCard();
+          relabelButtons();
+        }, 0);
+      });
+    }
+  }
+
+
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", () => setTimeout(install, 30));
+  } else {
+    setTimeout(install, 30);
+  }
+})();
+</script>
+
 
 </body>
 </html>
-
