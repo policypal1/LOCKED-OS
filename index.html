@@ -7,7 +7,7 @@
 <title>Locked OS</title>
 <link href="favicon.png" rel="icon" type="image/png" sizes="512x512"/>
 <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
-<link href="styles.css?v=20261003" rel="stylesheet"/>
+<link href="styles.css?v=20261009minimal" rel="stylesheet"/>
 <link href="ghk-cu.css?v=20261003" rel="stylesheet"/>
 <style id="lockedOsInlinePatchStyles">
 /* LOCKED OS - 2026-08-29 requested UI fixes */
@@ -324,7 +324,7 @@
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="app.js?v=20261003"></script>
-<script defer src="ghk-cu.js?v=20261003"></script>
+<script defer src="ghk-cu.js?v=20261009minimal"></script>
 </head>
 <body>
 <main class="app">
@@ -373,7 +373,7 @@
 
 <section class="page active" id="looksPage">
 <div class="looks-hero">
-<section class="card looks-title-card"><p class="eyebrow blue">Separate routine</p><h2 id="looksDayName">Monday routine</h2><p id="looksDateText">Today</p><div class="looks-streak-line">Looksmaxxing streak: <strong id="looksStreak">0</strong></div></section>
+<section class="card looks-title-card"><h2 id="looksDayName">Today</h2><p id="looksDateText">Today</p><div class="looks-streak-line">Looksmaxxing streak: <strong id="looksStreak">0</strong></div></section>
 <section class="card summary"><div class="circle looks-circle" id="looksProgressCircle"><div class="circle-inner"><div class="percent" id="looksPercent">0%</div><div class="done-count" id="looksDoneCount">0 / 0</div></div></div><div><p class="quote">Build it daily.</p><p class="tasks-left" id="looksTasksLeft">Your routine is loading.</p></div></section>
 </div>
 <div class="layout">
@@ -1114,8 +1114,8 @@ window.addEventListener("DOMContentLoaded", () => {
     const isToday = key === today;
 
 
-    $("looksDayName").textContent = `${dayName} routine`;
-    $("looksDateText").textContent = `${isToday ? "Today · " : ""}${dayName}, ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
+    $("looksDayName").textContent = `${dayName} · ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    $("looksDateText").textContent = isToday ? "Today" : "Previous day";
 
 
     let historyLabel = document.getElementById("looksHistoryLabel");

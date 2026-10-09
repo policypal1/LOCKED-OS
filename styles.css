@@ -1158,3 +1158,313 @@ h1 { margin: 0; font-size: clamp(2.25rem, 5.5vw, 4rem); line-height: 1; }
 @media (max-width: 760px) {
   .content-production-card { padding: 16px; }
 }
+
+/* ========================================================================
+   LOCKED OS: MINIMAL UI / OCTOBER 2026
+   Presentation-only overrides; all trackers, menus, editors and forms remain.
+   ======================================================================== */
+:root {
+  --bg: #f5f6f4;
+  --card: #ffffff;
+  --text: #1b2921;
+  --muted: #6b776f;
+  --line: rgba(25, 48, 33, .11);
+  --line-strong: rgba(25, 48, 33, .22);
+  --green: #257252;
+  --green-dark: #19523b;
+  --green-soft: rgba(37, 114, 82, .085);
+  --blue: #257252;
+  --blue-dark: #19523b;
+  --blue-soft: rgba(37, 114, 82, .085);
+  --red: #b44646;
+  --red-soft: rgba(180,70,70,.08);
+  --gold: #956f43;
+  --gold-soft: rgba(149,111,67,.085);
+  --shadow: 0 1px 3px rgba(25,42,30,.045);
+  --radius: 15px;
+}
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg) !important;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  padding: 18px !important;
+}
+.app { width: min(1280px, 100%) !important; }
+.top {
+  align-items: center !important;
+  gap: 17px !important;
+  padding: 4px 0 18px;
+  margin-bottom: 18px !important;
+  border-bottom: 1px solid var(--line);
+}
+.top h1 {
+  font-size: clamp(1.5rem, 2.7vw, 2rem) !important;
+  font-weight: 760 !important;
+  letter-spacing: -.055em;
+}
+.tabs, .admin-subtabs {
+  display: flex;
+  gap: 4px !important;
+  padding: 4px !important;
+  background: #eef0ed !important;
+  border: 1px solid rgba(25,48,33,.06) !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+.tab, .admin-subtab {
+  min-height: 36px !important;
+  padding: 0 13px !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  color: #647067 !important;
+  font-size: .86rem !important;
+  font-weight: 650 !important;
+  letter-spacing: -.01em !important;
+  box-shadow: none !important;
+}
+.tab.active, .admin-subtab.active {
+  background: #fff !important;
+  color: var(--text) !important;
+  box-shadow: 0 1px 3px rgba(25,42,30,.09) !important;
+}
+.tab:hover:not(.active), .admin-subtab:hover:not(.active) {
+  background: rgba(255,255,255,.4) !important;
+  color: var(--text) !important;
+}
+.card, .login-card,
+#gymPage .clean-gym-hero, #gymPage .clean-gym-log-card,
+#gymPage .clean-gym-week-card, #gymPage .clean-gym-history-card {
+  background: var(--card) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow) !important;
+  backdrop-filter: none !important;
+}
+.card:hover { box-shadow: var(--shadow) !important; }
+.btn, button.btn, .weight-save-btn {
+  min-height: 39px !important;
+  padding: 0 14px !important;
+  border-radius: 9px !important;
+  background: var(--text) !important;
+  color: #fff !important;
+  font-size: .84rem !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+.btn.secondary, button.btn.secondary {
+  background: #f6f8f5 !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+}
+.btn.blue, .btn.green, button.btn.blue, button.btn.green {
+  background: var(--green) !important;
+  color: #fff !important;
+}
+.btn:hover, button.btn:hover { filter: brightness(.97); opacity: 1 !important; }
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--green) !important;
+  outline-offset: 3px !important;
+}
+input, select, textarea { accent-color: var(--green); }
+:is(.water-input,.weight-input,.gym-date-input,.gym-workout-select,
+.feature-field input,.feature-field select,.feature-field textarea,
+.looks-task-modal-input,.clean-gym-set input,.clean-gym-schedule-row select,
+.login-row input) {
+  background: #fff !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 9px !important;
+  color: var(--text) !important;
+  font-weight: 550 !important;
+}
+.badge {
+  border-radius: 7px !important;
+  font-weight: 650 !important;
+  box-shadow: none !important;
+}
+:is(.looks-title-card,.summary,.section,.water-card,.workout-card,.admin-card,
+    .feature-card,.clean-gym-week-card,.clean-gym-log-card,.clean-gym-history-card,
+    .content-production-card) { padding: 18px !important; }
+:is(.layout,.admin-grid,.looks-hero,.weekly-stat-grid,.ghk-page,.content-page) {
+  gap: 13px !important;
+}
+:where(.section-header,.panel-title) h3 {
+  font-size: 1rem !important;
+  font-weight: 735 !important;
+  letter-spacing: -.025em !important;
+}
+.section-header { margin-bottom: 12px !important; }
+.section-header p { display: none !important; }
+.task-row, .content-task, .resource-card, .appointment-card,
+.clean-gym-exercise, .clean-gym-history-row, .weekly-day-row {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+.task-row, .clean-gym-exercise, .resource-card, .appointment-card {
+  background: #fff !important;
+  border-color: var(--line) !important;
+}
+.task-row:hover, .content-task:hover, .clean-gym-history-row:hover {
+  background: #f8faf8 !important;
+}
+.eyebrow {
+  color: var(--muted) !important;
+  font-size: .69rem !important;
+  font-weight: 700 !important;
+  letter-spacing: .03em !important;
+  text-transform: uppercase;
+}
+.login-card { max-width: 410px; padding: 27px !important; }
+.login-card h1 { font-size: 2.2rem !important; }
+.login-card p { font-weight: 500 !important; }
+.login-icon { border-radius: 13px !important; background: var(--green) !important; }
+
+/* Looks: one day/date line replaces three repetitive headings. */
+#looksPage .looks-title-card .eyebrow,
+#looksDateText, #looksHistoryLabel, #looksPage .summary .quote,
+#contentPage .content-card-head .eyebrow,
+#contentPage .content-card-head p:not(.eyebrow),
+#gymPage .clean-gym-hero .eyebrow,
+#gymPage .clean-gym-hero p:not(.eyebrow),
+#forumsPage .forums-hero .eyebrow,
+#forumsPage .forums-hero p:not(.eyebrow) {
+  display: none !important;
+}
+#looksPage .looks-hero { align-items: stretch !important; }
+#looksPage .looks-title-card {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+}
+#looksDayName {
+  font-size: clamp(1.4rem,3vw,1.85rem) !important;
+  letter-spacing: -.04em !important;
+  font-weight: 770 !important;
+  line-height: 1.15 !important;
+}
+#looksPage .looks-streak-line {
+  font-size: .77rem !important;
+  color: var(--muted) !important;
+  margin-top: 10px !important;
+}
+#looksPage .summary { grid-template-columns: 76px 1fr !important; gap: 15px !important; }
+#looksPage .circle { width: 76px !important; height: 76px !important; }
+#looksPage .circle-inner { width: 59px !important; height: 59px !important; }
+#looksPage .percent { font-size: 1.2rem !important; }
+#looksPage .done-count { font-size: .63rem !important; }
+#looksPage .tasks-left { font-size: .91rem !important; font-weight: 600 !important; }
+.looks-day-nav { margin-top: 11px !important; gap: 6px !important; }
+.looks-day-nav-btn, .looks-today-btn {
+  border-radius: 9px !important;
+  border-color: var(--line-strong) !important;
+  background: #f7f8f6 !important;
+  color: var(--text) !important;
+  font-weight: 650 !important;
+}
+#waterBadge { display: none !important; } /* Amount and bar already show it. */
+.water-card .water-amount { font-size: 1.8rem !important; font-weight: 750 !important; }
+.water-controls { gap: 5px !important; }
+#looksPage .workout-rotation-label { display: none !important; }
+#looksPage .workout-card .panel-title { margin-bottom: 7px !important; }
+#looksPage .workout-preview {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* Gym: condensed hierarchy; log, history, inputs and navigation all remain. */
+#gymPage .clean-gym-page { gap: 12px !important; }
+#gymPage .clean-gym-hero { padding: 18px !important; background: #fff !important; }
+#gymPage .clean-gym-hero h2 {
+  font-size: clamp(1.45rem,2.8vw,1.9rem) !important;
+  font-weight: 770 !important;
+  letter-spacing: -.045em !important;
+}
+#gymPage .clean-gym-today {
+  background: var(--green-soft) !important;
+  color: var(--green-dark) !important;
+  border: 1px solid rgba(37,114,82,.15) !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+#gymPage .clean-gym-day {
+  border-radius: 10px !important;
+  background: #f9faf8 !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+#gymPage #cleanGymWeekGrid .clean-gym-day.selected {
+  background: var(--green-soft) !important;
+  border-color: rgba(37,114,82,.6) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+#gymPage .clean-gym-exercise { gap: 13px !important; padding: 14px !important; }
+#gymPage .clean-gym-exercise-name strong { font-size: .94rem !important; font-weight: 750 !important; }
+#gymPage .clean-gym-exercise-name span {
+  font-size: .72rem !important;
+  font-weight: 500 !important;
+  color: var(--muted) !important;
+}
+#gymPage .clean-gym-previous { border-radius: 9px !important; background: #f7f8f7 !important; }
+#gymPage .clean-gym-set input { min-height: 39px !important; }
+#gymPage .clean-gym-nav button { border-radius: 9px !important; }
+#gymPage .clean-gym-history-row { background: #fff !important; }
+
+/* Admin: Forums lives beside Routine Settings, Weekly Review and Appointments. */
+#adminPage .admin-subtabs {
+  margin-bottom: 16px !important;
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+#adminPage .admin-subpanel:not(.active) { display: none !important; }
+#adminPage .admin-subpanel.forums-panel.active { display: block !important; }
+#adminPage .forums-page { display: grid; gap: 13px; }
+#adminPage .forums-hero { padding: 18px !important; background: #fff !important; }
+#adminPage .forums-hero h2 { font-size: 1.65rem !important; font-weight: 760 !important; }
+#adminPage .forums-library-actions { margin-left: auto !important; }
+#adminPage .resource-add-popdown { z-index: 40; }
+
+/* Mobile gets the same controls, with smaller spacing and scrollable tabs. */
+@media(max-width: 920px) {
+  body { padding: 11px !important; }
+  .top { align-items: stretch !important; flex-direction: column; gap: 12px; }
+  .tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap !important; }
+  .layout, #looksPage .layout { grid-template-columns: 1fr !important; }
+}
+@media(max-width: 640px) {
+  body { padding: 9px !important; }
+  .top { padding: 6px 0 12px; margin-bottom: 11px !important; }
+  .tab, .admin-subtab {
+    min-height: 35px !important;
+    padding: 0 11px !important;
+    font-size: .79rem !important;
+  }
+  :is(.looks-title-card,.summary,.section,.water-card,.workout-card,.admin-card,
+      .feature-card,.clean-gym-week-card,.clean-gym-log-card,.clean-gym-history-card,
+      .content-production-card) { padding: 14px !important; }
+  #looksPage .looks-hero { grid-template-columns: 1fr !important; }
+  #looksPage .summary { grid-template-columns: 65px 1fr !important; }
+  #looksPage .circle { width: 65px !important; height: 65px !important; }
+  #looksPage .circle-inner { width: 50px !important; height: 50px !important; }
+  #looksPage .percent { font-size: 1rem !important; }
+  #looksPage .done-count { font-size: .57rem !important; }
+  #gymPage .clean-gym-exercise { gap: 10px !important; }
+  #adminPage .admin-subtabs { width: 100%; flex-wrap: nowrap; overflow-x: auto; }
+}
+
+/* Keep the Looksmaxxing overview genuinely compact, not a tall empty hero. */
+#looksPage .looks-title-card,
+#looksPage .summary {
+  min-height: 118px !important;
+}
+#looksPage .looks-hero { margin-bottom: 12px !important; }
+#looksPage .section { margin-bottom: 12px !important; }
+#looksPage .section-header { padding: 10px 14px !important; }
+#looksPage .checklist { padding: 10px !important; }

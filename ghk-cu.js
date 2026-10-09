@@ -393,19 +393,18 @@
 
   function installMainTab() {
     if (document.getElementById("forumsPage")) return;
-    const nav = document.querySelector(".tabs");
     const adminPage = document.getElementById("adminPage");
-    if (!nav || !adminPage) return;
+    const subtabs = adminPage?.querySelector(".admin-subtabs");
+    if (!adminPage || !subtabs) return;
     const button = document.createElement("button");
-    button.className = "tab forums-tab";
-    button.dataset.tab = "forumsPage";
+    button.className = "admin-subtab forums-subtab";
+    button.dataset.adminPanel = "forumsPage";
     button.type = "button";
     button.textContent = "Forums";
-    const anchorTab = [...nav.querySelectorAll(".tab")].find(item => item.dataset.tab === "ghkCuPage");
-    if (anchorTab) nav.insertBefore(button, anchorTab); else nav.appendChild(button);
+    subtabs.appendChild(button);
 
     const page = document.createElement("section");
-    page.className = "page";
+    page.className = "admin-subpanel forums-panel";
     page.id = "forumsPage";
     page.innerHTML = `
       <div class="forums-page">
@@ -415,15 +414,9 @@
           <div class="resource-list" id="forumResourceList"></div>
         </section>
       </div>`;
-    adminPage.parentNode.insertBefore(page, adminPage);
-    button.addEventListener("click", () => {
-      document.querySelectorAll(".tab").forEach(item => item.classList.remove("active"));
-      document.querySelectorAll(".page").forEach(item => item.classList.remove("active"));
-      button.classList.add("active"); page.classList.add("active"); renderForums();
-    });
-    document.querySelectorAll(".tab").forEach(tab => {
-      if (tab !== button) tab.addEventListener("click", () => { button.classList.remove("active"); page.classList.remove("active"); });
-    });
+    adminPage.appendChild(page);
+    // Existing Admin sub-tab delegation changes panels. Keep Forums render/edit logic.
+    button.addEventListener("click", renderForums);
   }
 
 
@@ -3712,6 +3705,45 @@
     }
   }
 
+  // Learn exercise sequence from the order of actual entries and reuse next week.
+  function orderedExerciseNames(workout, dayKey) {
+    const base = (EXERCISES[workout] || []).filter(name => name !== "Romanian Deadlift");
+    const meta = state.meta?.gymClean || {};
+    const dayOrder = meta.exerciseEntryOrderByDate?.[dayKey] || [];
+    const preferred = meta.exerciseOrderByWorkout?.[workout]?.names || [];
+    const rank = new Map();
+    for (const name of [...dayOrder, ...preferred]) {
+      if (!rank.has(name)) rank.set(name, rank.size);
+    }
+    return [...base].sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity));
+  }
+
+  function recordExerciseEntry(event) {
+    const input = event.target.closest?.('input[data-field][data-set]');
+    const row = input?.closest("#cleanGymWorkoutBody .clean-gym-exercise");
+    if (!row || !(Number(input.value) > 0) || !validDateKey(uiSelectedDate)) return;
+    const name = row.dataset.exercise;
+    const workout = workoutFor(uiSelectedDate);
+    if (!name || name === "Romanian Deadlift" || !(EXERCISES[workout] || []).includes(name)) return;
+
+    ensureGym();
+    const gym = state.meta.gymClean;
+    if (!gym.exerciseEntryOrderByDate || typeof gym.exerciseEntryOrderByDate !== "object")
+      gym.exerciseEntryOrderByDate = {};
+    if (!gym.exerciseOrderByWorkout || typeof gym.exerciseOrderByWorkout !== "object")
+      gym.exerciseOrderByWorkout = {};
+    const dayOrder = Array.isArray(gym.exerciseEntryOrderByDate[uiSelectedDate])
+      ? gym.exerciseEntryOrderByDate[uiSelectedDate]
+      : (gym.exerciseEntryOrderByDate[uiSelectedDate] = []);
+    if (dayOrder.includes(name)) return;
+    dayOrder.push(name);
+    const previous = gym.exerciseOrderByWorkout[workout];
+    if (!previous?.date || uiSelectedDate >= previous.date)
+      gym.exerciseOrderByWorkout[workout] = { date: uiSelectedDate, names: [...dayOrder] };
+    // Save on the first entry for an exercise, not on each keystroke.
+    saveState();
+  }
+
   function renderWorkoutForm() {
     const body = document.getElementById("cleanGymWorkoutBody");
     const title = document.getElementById("cleanGymWorkoutTitle");
@@ -3743,7 +3775,7 @@
     const list = document.createElement("div");
     list.className = "clean-gym-exercises";
 
-    for (const name of EXERCISES[workout] || []) {
+    for (const name of orderedExerciseNames(workout, uiSelectedDate)) {
       const current = session?.exercises?.find(exercise => exercise?.name === name) || { sets: [] };
       const previous = previousExercise(name, uiSelectedDate);
 
@@ -4007,6 +4039,7 @@
   }
 
   function installControls() {
+    document.getElementById("cleanGymWorkoutBody")?.addEventListener("input", recordExerciseEntry, { capture: true });
     replaceControl("cleanGymPrev", () => {
       const target = adjacentWorkout(uiSelectedDate || firstWorkoutOnOrAfter(getTodayKey()), -1);
       if (!target) {
