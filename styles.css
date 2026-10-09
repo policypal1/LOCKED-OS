@@ -1351,11 +1351,33 @@ input, select, textarea { accent-color: var(--green); }
   color: var(--muted) !important;
   margin-top: 10px !important;
 }
-#looksPage .summary { grid-template-columns: 76px 1fr !important; gap: 15px !important; }
-#looksPage .circle { width: 76px !important; height: 76px !important; }
-#looksPage .circle-inner { width: 59px !important; height: 59px !important; }
-#looksPage .percent { font-size: 1.2rem !important; }
-#looksPage .done-count { font-size: .63rem !important; }
+/* Progress ring: keep the Daily Checklist's comfortable text spacing.
+   The previous 76px/59px ring squeezed the percent and counts together. */
+#looksPage .summary { grid-template-columns: 128px minmax(0, 1fr) !important; gap: 15px !important; }
+#looksPage .circle {
+  width: 128px !important;
+  height: 128px !important;
+  flex-shrink: 0;
+}
+#looksPage .circle-inner {
+  width: 100px !important;
+  height: 100px !important;
+  padding: 9px !important;
+  box-sizing: border-box;
+}
+#looksPage .percent {
+  font-size: 1.7rem !important;
+  line-height: 1.05 !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#looksPage .done-count {
+  max-width: 100%;
+  font-size: .7rem !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+  overflow-wrap: anywhere;
+}
 #looksPage .tasks-left { font-size: .91rem !important; font-weight: 600 !important; }
 .looks-day-nav { margin-top: 11px !important; gap: 6px !important; }
 .looks-day-nav-btn, .looks-today-btn {
@@ -1450,11 +1472,11 @@ input, select, textarea { accent-color: var(--green); }
       .feature-card,.clean-gym-week-card,.clean-gym-log-card,.clean-gym-history-card,
       .content-production-card) { padding: 14px !important; }
   #looksPage .looks-hero { grid-template-columns: 1fr !important; }
-  #looksPage .summary { grid-template-columns: 65px 1fr !important; }
-  #looksPage .circle { width: 65px !important; height: 65px !important; }
-  #looksPage .circle-inner { width: 50px !important; height: 50px !important; }
-  #looksPage .percent { font-size: 1rem !important; }
-  #looksPage .done-count { font-size: .57rem !important; }
+  #looksPage .summary { grid-template-columns: 112px minmax(0, 1fr) !important; gap: 12px !important; }
+  #looksPage .circle { width: 112px !important; height: 112px !important; }
+  #looksPage .circle-inner { width: 88px !important; height: 88px !important; padding: 7px !important; }
+  #looksPage .percent { font-size: 1.5rem !important; }
+  #looksPage .done-count { font-size: .63rem !important; }
   #gymPage .clean-gym-exercise { gap: 10px !important; }
   #adminPage .admin-subtabs { width: 100%; flex-wrap: nowrap; overflow-x: auto; }
 }
