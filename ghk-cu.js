@@ -8744,3 +8744,244 @@
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,450));else setTimeout(boot,450);
 })();
+/* LOCKED OS: Business Focus. Intentional standalone mode, no new checklist tasks. */
+(() => {
+  'use strict';
+  if (window.__lockedOsBusinessFocusV1) return;
+  window.__lockedOsBusinessFocusV1 = true;
+  const KEY = 'lockedBusinessFocusV1';
+  const ACTIONS = ['Open one prospect’s website', 'Write the first sentence', 'Send one follow-up'];
+  const ACTION_LABELS = { outreach: 'Contacts', followups: 'Follow-ups', calls: 'Calls booked' };
+  let focusTab = null, focusPage = null, dialog = null, tickTimer = null, recentStatsRefresh = 0;
+  const $ = id => document.getElementById(id);
+  const today = () => typeof getTodayKey === 'function' ? getTodayKey() : new Date().toISOString().slice(0, 10);
+  const money = value => '$' + Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  const esc = value => String(value || '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  function ready() { return typeof state !== 'undefined' && state && typeof saveState === 'function'; }
+  function model() {
+    if (!ready()) return null;
+    if (!state.meta || typeof state.meta !== 'object') state.meta = {};
+    if (!state.meta[KEY] || typeof state.meta[KEY] !== 'object') {
+      state.meta[KEY] = {
+        currentMrr: 600, targetMrr: 1200, clientValue: 600,
+        intention: 'Send one personalized message to a bathroom remodeler',
+        duration: 10, daily: {}, active: null
+      };
+    }
+    const m = state.meta[KEY];
+    if (!m.daily || typeof m.daily !== 'object' || Array.isArray(m.daily)) m.daily = {};
+    if (![10, 25].includes(m.duration)) m.duration = 10;
+    if (typeof m.intention !== 'string') m.intention = 'Send one personalized message to a bathroom remodeler';
+    for (const k of ['currentMrr', 'targetMrr', 'clientValue']) {
+      if (!Number.isFinite(Number(m[k])) || Number(m[k]) < 0) m[k] = k === 'currentMrr' ? 600 : k === 'targetMrr' ? 1200 : 600;
+    }
+    return m;
+  }
+  function dayData(m, key = today()) {
+    if (!m.daily[key] || typeof m.daily[key] !== 'object') m.daily[key] = { blocks:0, minutes:0, outreach:0, followups:0, calls:0 };
+    return m.daily[key];
+  }
+  function save() { if (ready()) saveState(); }
+  const setText = (id, val) => { const el = $(id); if (el && el.textContent !== String(val)) el.textContent = val; };
+  function minutes(ms) { return `${String(Math.floor(Math.max(0,ms)/60000)).padStart(2,'0')}:${String(Math.floor((Math.max(0,ms)%60000)/1000)).padStart(2,'0')}`; }
+  function sessionRemaining(s) { return s?.status === 'running' ? Math.max(0, (s.deadline || 0) - Date.now()) : Math.max(0,s?.remainingMs || 0); }
+  function renderDaily() {
+    const m = model(); if (!m || !focusPage) return;
+    const d = dayData(m);
+    setText('lofMrrNow', money(m.currentMrr));
+    setText('lofMrrGoal', money(m.targetMrr));
+    const left = Math.max(0, Number(m.targetMrr) - Number(m.currentMrr));
+    const needed = m.clientValue > 0 ? Math.ceil(left / m.clientValue) : 0;
+    setText('lofGoalDetail', left > 0 ? `${money(left)} to go · ${needed} ${needed === 1 ? 'client' : 'clients'} at ${money(m.clientValue)}/mo` : 'Revenue goal reached');
+    const bar = $('lofGoalBar'); if (bar) bar.style.width = `${m.targetMrr > 0 ? Math.min(100, Math.round(m.currentMrr/m.targetMrr * 100)) : 0}%`;
+    setText('lofCountBlocks', d.blocks || 0);
+    setText('lofCountOutreach', d.outreach || 0);
+    setText('lofCountFollowups', d.followups || 0);
+    setText('lofCountCalls', d.calls || 0);
+    setText('lofMinutes', d.minutes ? `${d.minutes} focused min logged` : 'First work block not logged yet');
+    setText('lofStartButton', m.active ? 'Continue session' : `Start ${m.duration}-minute focus`);
+    setText('lofMotivationNote', d.blocks ? `${d.blocks} ${d.blocks===1?'block':'blocks'} completed today. Small actions count.` : 'One small, finished work block. Then decide what comes next.');
+    focusPage.querySelectorAll('[data-focus-duration]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.focusDuration)===m.duration)));
+    const intention = $('lofIntention');
+    if (intention && document.activeElement !== intention && intention.value !== m.intention) intention.value = m.intention;
+    for (const [field,id] of [['currentMrr','lofEditCurrent'],['targetMrr','lofEditTarget'],['clientValue','lofEditClient']]) {
+      const el=$(id); if (el && document.activeElement!==el && el.value!==String(m[field])) el.value=String(m[field]);
+    }
+    const strip=$('lofWeeklyStrip');
+    if (strip) {
+      const now = new Date(today()+'T12:00:00');
+      const data=[];
+      for(let i=6;i>=0;i--){const date=new Date(now);date.setDate(now.getDate()-i);const key=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;data.push({key,name:date.toLocaleDateString(undefined,{weekday:'short'}),n:m.daily[key]?.blocks||0});}
+      const html=data.map(x=>`<div class="lof-day ${x.key===today()?'lof-today':''}" title="${x.n} focus blocks"><span>${esc(x.name)}</span><strong class="${x.n?'lof-active-day':''}">${x.n ? x.n : '·'}</strong></div>`).join('');
+      if(strip.innerHTML!==html)strip.innerHTML=html;
+    }
+  }
+  function renderTimer() {
+    const m=model(); if(!m||!dialog)return;
+    const s=m.active;
+    const active = Boolean(s);
+    dialog.querySelector('#lofDialogActive').hidden = !active;
+    dialog.querySelector('#lofDialogIntro').hidden = active;
+    if (!active) return;
+    const left = sessionRemaining(s);
+    setText('lofTimer', minutes(left));
+    setText('lofTimerHeadline', s.rescue && s.rescue.until > Date.now() ? 'Just do the next small step' : 'One thing at a time');
+    setText('lofTimerTask', s.rescue && s.rescue.until > Date.now() ? s.rescue.text : s.intention);
+    setText('lofTimerStatus', left<=0 ? 'Time is up. Log what you actually did, or stop without logging.' : s.status==='paused' ? 'Paused · take your time' : 'Stay on this one action until the timer finishes.');
+    setText('lofPauseButton', s.status==='paused' ? 'Resume timer' : 'Pause');
+    const pause=$('lofPauseButton'); if (pause) pause.disabled = left<=0;
+    const rescueBox=$('lofRescueBox'); if (rescueBox) rescueBox.hidden = !(s.rescue && s.rescue.until>Date.now());
+    const rescueOptions=$('lofRescueOptions'); if(rescueOptions) rescueOptions.hidden=!!(s.rescue && s.rescue.until>Date.now());
+    setText('lofRescueSeconds', s.rescue && s.rescue.until>Date.now() ? `${Math.ceil((s.rescue.until-Date.now())/1000)}s: just this step` : '');
+    const log=$('lofLogButton'); if(log) log.textContent=left<=0?'Log completed block':'Finished working · log block';
+  }
+  function startOrContinue() {
+    const m=model();if(!m)return;
+    if (!m.active) {
+      m.active = {
+        id:`focus-${Date.now()}`, date:today(), intention:(m.intention||'Make one outreach attempt').trim().slice(0,180),
+        duration:m.duration, startedAt:Date.now(), remainingMs:m.duration*60000,
+        deadline:Date.now()+m.duration*60000, status:'running', rescue:null
+      };
+      save();
+    }
+    if(dialog && !dialog.open)dialog.showModal();
+    renderTimer();renderDaily();
+  }
+  function pauseOrResume() {
+    const m=model(),s=m?.active;if(!s)return;
+    if(s.status==='paused'){s.status='running';s.deadline=Date.now()+s.remainingMs;}
+    else{s.remainingMs=sessionRemaining(s);s.status='paused';}
+    save();renderTimer();
+  }
+  function logSession() {
+    const m=model(),s=m?.active;if(!s)return;
+    const elapsed=Math.max(0,s.duration*60000-sessionRemaining(s));
+    if(elapsed<2*60000) {
+      setText('lofTimerFeedback','Work for at least two minutes before logging a focus block.');return;
+    }
+    const d=dayData(m, s.date);
+    d.blocks=(d.blocks||0)+1;
+    const actual=Math.max(2,Math.min(s.duration, Math.round(elapsed/60000)));
+    d.minutes=(d.minutes||0)+actual;
+    m.active=null;
+    save();
+    if(dialog?.open)dialog.close();
+    setText('lofTimerFeedback','');renderDaily();
+  }
+  function discardSession() {
+    const m=model();if(!m?.active)return;
+    m.active=null;save();if(dialog?.open)dialog.close();renderDaily();
+  }
+  function chooseRescue(index) {
+    const m=model(),s=m?.active;if(!s)return;
+    s.rescue={text:ACTIONS[index],until:Date.now()+120000};save();renderTimer();
+  }
+  function adjustCount(key,diff) {
+    const m=model();if(!m||!Object.hasOwn(ACTION_LABELS,key))return;
+    const d=dayData(m);d[key]=Math.min(999,Math.max(0,(Number(d[key])||0)+diff));save();renderDaily();
+  }
+  function createPage() {
+    const nav=document.querySelector('.tabs');const parent=document.getElementById('mainApp');
+    if(!nav||!parent||document.getElementById('businessFocusPage'))return;
+    const after=nav.querySelector('[data-tab="looksPage"]');
+    focusTab=document.createElement('button');focusTab.type='button';focusTab.className='tab lof-tab';focusTab.dataset.tab='businessFocusPage';focusTab.textContent='Focus';
+    if(after)after.insertAdjacentElement('afterend',focusTab);else nav.appendChild(focusTab);
+    focusPage=document.createElement('section');focusPage.className='page';focusPage.id='businessFocusPage';
+    focusPage.innerHTML=`
+    <div class="lof-wrap">
+      <section class="lof-head card">
+        <div class="lof-topline"><span>BUSINESS FOCUS</span><span class="lof-mission-tag">ONE CLIENT</span></div>
+        <h2>Get back to work. Start small.</h2>
+        <p class="lof-small">You don't need a six-hour grind. Finish one useful block, then choose the next one.</p>
+        <div class="lof-mrr-row"><span id="lofMrrNow">$600</span><span class="lof-arrow">→</span><strong id="lofMrrGoal">$1,200</strong><span class="lof-muted">monthly</span></div>
+        <div class="lof-bar"><div id="lofGoalBar"></div></div><p class="lof-goal-detail" id="lofGoalDetail">$600 to go</p>
+      </section>
+      <section class="card lof-prime">
+        <div class="lof-overline">YOUR NEXT ACTION</div>
+        <label class="lof-sr-only" for="lofIntention">What is the next business action?</label>
+        <input id="lofIntention" maxlength="180" autocomplete="off" spellcheck="true" value="Send one personalized message to a bathroom remodeler" />
+        <div class="lof-start-row">
+          <div class="lof-choices" role="group" aria-label="Focus block length"><button type="button" data-focus-duration="10" aria-pressed="true">10 min</button><button type="button" data-focus-duration="25">25 min</button></div>
+          <button id="lofStartButton" type="button" class="lof-primary">Start 10-minute focus</button>
+        </div>
+        <p class="lof-help" id="lofMotivationNote">One small, finished work block. Then decide what comes next.</p>
+      </section>
+      <section class="card lof-results">
+        <div class="lof-section-header"><h3>Today's real progress</h3><span id="lofMinutes">First work block not logged yet</span></div>
+        <div class="lof-metric-grid">
+          <div><strong id="lofCountBlocks">0</strong><span>Focus blocks</span><small>Logged after real work</small></div>
+          <div><strong id="lofCountOutreach">0</strong><span>Contacts</span><div class="lof-steppers"><button type="button" data-lof-dec="outreach" aria-label="Remove a contact">−</button><button type="button" data-lof-add="outreach" aria-label="Log a contact">+</button></div></div>
+          <div><strong id="lofCountFollowups">0</strong><span>Follow-ups</span><div class="lof-steppers"><button type="button" data-lof-dec="followups" aria-label="Remove a follow-up">−</button><button type="button" data-lof-add="followups" aria-label="Log a follow-up">+</button></div></div>
+          <div><strong id="lofCountCalls">0</strong><span>Calls booked</span><div class="lof-steppers"><button type="button" data-lof-dec="calls" aria-label="Remove a booked call">−</button><button type="button" data-lof-add="calls" aria-label="Log a booked call">+</button></div></div>
+        </div>
+      </section>
+      <section class="card lof-week">
+        <div class="lof-section-header"><h3>Last seven days</h3><span>Completed work blocks, not a streak to protect</span></div><div id="lofWeeklyStrip" class="lof-weekly-strip"></div>
+      </section>
+      <details class="lof-settings"><summary>Revenue goal settings</summary><div class="lof-settings-fields"><label>Current monthly revenue <input id="lofEditCurrent" type="number" min="0" max="1000000" step="1"></label><label>Monthly goal <input id="lofEditTarget" type="number" min="1" max="1000000" step="1"></label><label>Typical client value <input id="lofEditClient" type="number" min="1" max="1000000" step="1"></label></div><button type="button" id="lofSaveGoal" class="lof-secondary">Save goal</button><span id="lofGoalFeedback" aria-live="polite"></span></details>
+    </div>`;
+    const anchor=document.getElementById('ghkCuPage');
+    if(anchor)anchor.insertAdjacentElement('beforebegin',focusPage);else parent.appendChild(focusPage);
+    focusTab.addEventListener('click',()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      focusTab.classList.add('active');focusPage.classList.add('active');renderDaily();
+    });
+    document.querySelectorAll('.tab').forEach(t=>{if(t!==focusTab)t.addEventListener('click',()=>{focusTab.classList.remove('active');focusPage.classList.remove('active');});});
+    focusPage.querySelectorAll('[data-focus-duration]').forEach(btn=>btn.addEventListener('click',()=>{
+      const m=model();if(!m||m.active)return;m.duration=Number(btn.dataset.focusDuration);save();renderDaily();
+    }));
+    $('lofStartButton').addEventListener('click',startOrContinue);
+    $('lofIntention').addEventListener('change',e=>{const m=model();if(!m)return;m.intention=e.target.value.trim().slice(0,180)||'Message one qualified prospect';save();renderDaily();});
+    focusPage.querySelectorAll('[data-lof-add]').forEach(b=>b.addEventListener('click',()=>adjustCount(b.dataset.lofAdd,1)));
+    focusPage.querySelectorAll('[data-lof-dec]').forEach(b=>b.addEventListener('click',()=>adjustCount(b.dataset.lofDec,-1)));
+    $('lofSaveGoal').addEventListener('click',()=>{
+      const now=Number($('lofEditCurrent').value),goal=Number($('lofEditTarget').value),client=Number($('lofEditClient').value);
+      if(![now,goal,client].every(Number.isFinite)||now<0||goal<=0||client<=0||[now,goal,client].some(x=>x>1000000)){setText('lofGoalFeedback','Enter valid positive amounts.');return;}
+      const m=model();m.currentMrr=now;m.targetMrr=goal;m.clientValue=client;save();renderDaily();setText('lofGoalFeedback','Saved.');
+    });
+  }
+  function createDialog() {
+    if(dialog||!focusPage)return;
+    dialog=document.createElement('dialog');dialog.id='lofDialog';
+    dialog.innerHTML=`<div class="lof-dialog-shell">
+      <header><span>LOCKED OS · FOCUS</span><button id="lofCloseDialog" type="button" aria-label="Close focus view">✕</button></header>
+      <div id="lofDialogIntro" hidden><h2>Start a session from Focus.</h2></div>
+      <div id="lofDialogActive">
+        <p class="lof-dialog-kicker" id="lofTimerHeadline">One thing at a time</p>
+        <div id="lofTimer" class="lof-timer" role="timer" aria-live="off">10:00</div>
+        <p class="lof-task-label">YOUR ONLY NEXT ACTION</p>
+        <p class="lof-timer-task" id="lofTimerTask"></p>
+        <p class="lof-timer-status" id="lofTimerStatus"></p>
+        <div class="lof-dialog-actions"><button id="lofPauseButton" type="button" class="lof-secondary">Pause</button><button id="lofLogButton" type="button" class="lof-primary">Finished working · log block</button></div>
+        <p id="lofTimerFeedback" class="lof-error" aria-live="polite"></p>
+        <details class="lof-rescue-details" id="lofRescue"><summary>Stuck? Make it a two-minute step ↓</summary>
+          <div id="lofRescueOptions" class="lof-rescue-choices"><button data-rescue="0" type="button">Find one prospect</button><button data-rescue="1" type="button">Write the first sentence</button><button data-rescue="2" type="button">Send one follow-up</button></div>
+          <div id="lofRescueBox" hidden><strong id="lofRescueSeconds"></strong><button id="lofRescueClear" type="button">Back to the main task</button></div>
+        </details>
+        <button class="lof-discard" id="lofDiscard" type="button">End without logging</button>
+      </div></div>`;
+    document.body.appendChild(dialog);
+    $('lofCloseDialog').onclick=()=>dialog.close();
+    $('lofPauseButton').onclick=pauseOrResume;
+    $('lofLogButton').onclick=logSession;
+    $('lofDiscard').onclick=discardSession;
+    $('lofRescueClear').onclick=()=>{const s=model()?.active;if(s){s.rescue=null;save();renderTimer();}};
+    dialog.querySelectorAll('[data-rescue]').forEach(b=>b.onclick=()=>chooseRescue(Number(b.dataset.rescue)));
+    dialog.addEventListener('close',()=>{setText('lofTimerFeedback','');renderDaily();});
+  }
+  function install() {
+    if (!ready()) return;
+    createPage();createDialog();renderDaily();renderTimer();
+    if (tickTimer) return;
+    tickTimer=setInterval(()=>{
+      if(!ready())return;
+      if(dialog?.open)renderTimer();
+      if(focusPage?.classList.contains('active')&&Date.now()-recentStatsRefresh>4000){renderDaily();recentStatsRefresh=Date.now();}
+    },1000);
+    window.addEventListener('focus',()=>{renderDaily();renderTimer();});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install,600));
+  else setTimeout(install,600);
+})();
