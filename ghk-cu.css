@@ -381,47 +381,64 @@
   }
 }
 
-/* LOCKED OS · lightweight visual markers and recurring-task reminder center */
-.locked-reminder-center {
-  margin: 0 0 20px;
-  padding: 18px 20px;
-  border: 1px solid var(--line, #dededb);
-  border-radius: 18px;
-  background: var(--card, var(--surface, #fff));
-  color: var(--text, #252525);
-  box-shadow: none;
+/* LOCKED OS: compact reminders, collapsed by default. */
+#locked-reminder-center {
+  display:block; margin: 0 0 10px; padding:0;
+  border:1px solid var(--line,#dededb); border-radius:12px;
+  background:var(--card,#fff); color:var(--text,#252525);
+  box-shadow:none; overflow:visible;
 }
-.locked-reminder-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; }
-.locked-reminder-heading h3 {font-size:1rem;line-height:1.2;margin:0;font-weight:750;letter-spacing:-.02em;}
-.locked-reminder-heading p {color:var(--muted,#797979);margin:5px 0 0;font-size:.78rem;line-height:1.4;}
-.locked-settings-button {border:1px solid var(--line,#dededb); border-radius:10px; background:transparent;color:var(--text,#252525);font-size:1rem; flex:0 0 36px; height:36px;cursor:pointer;}
-.locked-reminder-group {margin-top:14px;}
-.locked-reminder-group + .locked-reminder-group {border-top:1px solid var(--line, #dededb);padding-top:12px;}
-.locked-reminder-label{font-size:.69rem; font-weight:750;letter-spacing:.055em;text-transform:uppercase;margin:0 0 7px;color:var(--muted,#737373);}
-.locked-overdue-count{display:inline-block;min-width:17px;border-radius:9px;background:#fff0dd;color:#965117;text-align:center;margin-left:5px;padding:0 4px;}
-.locked-reminder-item{display:flex;align-items:center;gap:10px;padding:7px 0;min-width:0;}
-.locked-item-copy{min-width:0; flex:1; display:flex;flex-direction:column;gap:2px;}
-.locked-item-copy strong{font-size:.83rem;font-weight:700;line-height:1.35;overflow-wrap:anywhere;}
-.locked-item-copy small{font-size:.72rem;color:var(--muted,#777);line-height:1.4;}
-.locked-reminder-item button[data-complete]{background:transparent;border:0;color:#a66b29;cursor:pointer;padding:0;display:grid;place-items:center;min-width:22px;height:26px;}
-.locked-check{font-size:1.4rem;line-height:1;}
-.locked-snooze{border:1px solid var(--line,#dededb);border-radius:8px;color:var(--muted,#666);font-size:.71rem;font-weight:600;padding:6px 9px;background:transparent;cursor:pointer;}
-.locked-dot{width:8px;height:8px;background:#b98345;border-radius:50%;flex:none;margin:0 7px;}
-.locked-day-chip{width:35px;flex:none;text-align:center;padding:6px 0;background:var(--soft,#f2f1ee);border:1px solid var(--line,#e6e5df);border-radius:8px;font-weight:700;color:var(--text,#333);font-size:.7rem;}
-.locked-reminder-empty{margin:14px 0 0;color:var(--muted,#777);font-size:.8rem;}
-.locked-reminder-options{margin-top:14px;padding-top:14px;border-top:1px solid var(--line,#dededb);}
-.locked-reminder-options[hidden]{display:none!important;}
-.locked-reminder-options p{color:var(--muted,#777);font-size:.76rem;line-height:1.45;margin:0 0 11px;}
-.locked-reminder-actions{display:flex;gap:8px;flex-wrap:wrap;}
-.locked-reminder-actions button{background:transparent;color:var(--text,#222);border:1px solid var(--line,#dededb);font:inherit;font-size:.75rem;font-weight:700;padding:9px 11px;border-radius:9px;cursor:pointer;}
-.locked-reminder-options h4{font-size:.78rem;margin:15px 0 10px;}
-.locked-reminder-time-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px;}
-.locked-reminder-time-grid label{font-size:.75rem;color:var(--muted,#777);display:flex;flex-direction:column;gap:5px;line-height:1.4;}
-.locked-reminder-time-grid input{width:100%;max-width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--line,#dededb);background:transparent;border-radius:9px;color:var(--text,#222);font:inherit;}
-/* A slim left accent and a restrained label, rather than bright cards or new widgets. */
+#locked-reminder-center > summary {
+  display:flex; align-items:center; gap:10px; cursor:pointer;
+  list-style:none; padding:10px 13px; min-height:40px;
+  font-size:.82rem; line-height:1.3;
+}
+#locked-reminder-center > summary::-webkit-details-marker {display:none;}
+#locked-reminder-center > summary strong {font-weight:750; flex:1; min-width:0;}
+.locked-reminder-count {font-size:.72rem; color:var(--muted,#777); white-space:nowrap;}
+.locked-reminder-chevron {font-size:1.2rem; color:var(--muted,#777); display:inline-block; line-height:1; transition:transform .15s ease;}
+#locked-reminder-center[open] > summary .locked-reminder-chevron {transform:rotate(180deg);}
+.locked-reminder-content {border-top:1px solid var(--line,#dededb); padding:5px 13px 10px;}
+.locked-reminder-group {margin-top:8px;}
+.locked-reminder-group + .locked-reminder-group {border-top:1px solid var(--line,#dededb);padding-top:7px;}
+.locked-reminder-label {font-size:.65rem;font-weight:750;letter-spacing:.035em;text-transform:uppercase;margin:0 0 4px;color:var(--muted,#777);}
+.locked-overdue-count {margin-left:4px;color:#965117;}
+.locked-reminder-item {display:flex;align-items:center;gap:8px;padding:5px 0;min-width:0;}
+.locked-item-copy {min-width:0;flex:1;display:flex;flex-direction:column;gap:1px;}
+.locked-item-copy strong {font-size:.78rem;font-weight:650;line-height:1.3;overflow-wrap:anywhere;}
+.locked-item-copy small {font-size:.7rem;color:var(--muted,#777);line-height:1.35;}
+.locked-reminder-item button[data-complete] {background:transparent;border:0;color:#a66b29;cursor:pointer;padding:0;min-width:24px;height:28px;}
+.locked-check {font-size:1.1rem;line-height:1;}
+.locked-snooze {border:1px solid var(--line,#dededb);border-radius:7px;color:var(--muted,#666);font-size:.7rem;padding:5px 7px;background:transparent;cursor:pointer;}
+.locked-dot {width:6px;height:6px;background:#b98345;border-radius:50%;flex:none;margin:0 8px;}
+.locked-day-chip {min-width:31px;flex:none;text-align:center;padding:4px 2px;background:var(--soft,#f2f1ee);border:1px solid var(--line,#e6e5df);border-radius:7px;font-weight:700;color:var(--text,#333);font-size:.68rem;}
+.locked-reminder-empty {margin:8px 0;color:var(--muted,#777);font-size:.77rem;}
+.locked-supplement-guide, .locked-reminder-settings {margin-top:7px;border-top:1px solid var(--line,#dededb);}
+.locked-supplement-guide > summary, .locked-reminder-settings > summary {cursor:pointer; padding:8px 0; font-size:.76rem;font-weight:700;list-style:revert;}
+.locked-supplement-guide > summary span {font-size:.68rem;font-weight:500;color:var(--muted,#777);margin-left:6px;}
+.locked-supplement-list {display:grid;gap:0;}
+.locked-supplement-line {display:grid;grid-template-columns:minmax(105px,.8fr) minmax(130px,1.2fr);column-gap:10px;row-gap:2px;border-bottom:1px solid var(--line,#dededb);padding:7px 0;align-items:baseline;}
+.locked-supplement-line strong {font-size:.73rem;font-weight:720;}
+.locked-supplement-line span {font-size:.73rem;}
+.locked-supplement-line small {grid-column:1/-1;font-size:.67rem;line-height:1.3;color:var(--muted,#777);}
+.locked-supplement-caution {color:var(--muted,#777);font-size:.7rem;line-height:1.4;margin:8px 0 0;}
+.locked-reminder-settings p {color:var(--muted,#777);font-size:.74rem;line-height:1.4;margin:2px 0 10px;}
+.locked-reminder-actions {display:flex;gap:7px;flex-wrap:wrap;}
+.locked-reminder-actions button {background:transparent;color:var(--text,#222);border:1px solid var(--line,#dededb);font:inherit;font-size:.72rem;font-weight:650;padding:7px 9px;border-radius:8px;cursor:pointer;}
+.locked-reminder-settings h4 {font-size:.75rem;margin:12px 0 8px;}
+.locked-reminder-time-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:9px;}
+.locked-reminder-time-grid label {font-size:.72rem;color:var(--muted,#777);display:flex;flex-direction:column;gap:4px;line-height:1.3;}
+.locked-reminder-time-grid input {box-sizing:border-box;width:100%;padding:7px;border:1px solid var(--line,#dededb);background:transparent;border-radius:8px;color:var(--text,#222);font:inherit;}
+/* Distinguish the truly infrequent checklist rows without adding vertical bulk. */
 #looksPage .task-row.locked-rare-task, #checklistPage .task-row.locked-rare-task {border-left:3px solid #b98345!important;}
-.locked-rare-label{display:inline-block;margin-left:0;margin-top:4px;width:fit-content;color:#a56d34;border:1px solid #d9c19e;background:rgba(195,146,74,.07);padding:1px 6px;font-weight:700;border-radius:6px;font-size:.61rem;letter-spacing:.015em;line-height:1.45;}
-@media(max-width:620px){.locked-reminder-center{padding:15px;margin-bottom:16px}.locked-reminder-heading p{font-size:.73rem}.locked-reminder-time-grid{grid-template-columns:1fr 1fr;}}
-@media(max-width:370px){.locked-reminder-time-grid{grid-template-columns:1fr;}}
-
-.locked-time-chip{width:auto;min-width:45px;padding:6px 7px;white-space:nowrap;}
+.locked-rare-label {display:inline;margin-left:7px;color:#a56d34;font-size:.63rem;font-weight:700;line-height:1.4;}
+/* Align the previously uneven task counter in the Looksmaxxing summary. */
+#looksPage .summary > div:last-child {display:flex;flex-direction:column;justify-content:center;align-items:flex-start;min-width:0;}
+#looksPage #looksTasksLeft {margin:0!important;text-align:left;line-height:1.35!important;max-width:100%;overflow-wrap:break-word;}
+@media(max-width:620px) {
+  #locked-reminder-center {margin-bottom:8px;}
+  #locked-reminder-center > summary {min-height:38px;padding:9px 11px;}
+  .locked-reminder-content {padding:4px 11px 9px;}
+  .locked-supplement-line {grid-template-columns: minmax(100px,.8fr) minmax(0,1.2fr);}
+  #looksPage .summary > div:last-child {align-self:center;}
+}

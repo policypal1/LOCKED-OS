@@ -8340,17 +8340,23 @@
   const ALL_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const DAY_CODE = ['SU','MO','TU','WE','TH','FR','SA'];
   const KEY_RESOLVED = 'lockedOSCarryoverResolvedV1';
+  const KEY_CARRYOVER_START = 'lockedOSCarryoverStartV1';
   const KEY_TIMES = 'lockedOSReminderTimesV1';
   const KEY_ALERTS = 'lockedOSReminderAlertsV1';
   const KEY_INSTALLED = 'lockedOSSupplementsSetupV1';
   const KEY_NOTIFICATIONS = 'lockedOSNotificationsEnabledV1';
-  const SUPPLEMENTS = [
-    {id:'locked-supp-youglow',title:'YouGlow — with lunch (follow label)',section:'midday',time:'12:30',note:'Your existing amount only. Verify the exact product label and ingredients with a clinician before relying on this schedule.'},
-    {id:'locked-supp-zinc',title:'Zinc — with lunch',section:'midday',time:'12:30',note:'Use your existing dose only if appropriate. Check total zinc from YouGlow and other products.'},
-    {id:'locked-supp-ashwagandha',title:'Ashwagandha — with dinner (if approved)',section:'night',time:'18:30',note:'This herbal supplement has limited adolescent safety data and possible drug, thyroid and liver risks. Discuss with a clinician.'},
-    {id:'locked-supp-melatonin',title:'Melatonin — before bed (if needed/approved)',section:'night',time:'21:00',note:'Follow your clinician’s timing and your existing dose. Avoid adding a dose or doubling a missed dose.'}
+  // The previous release inadvertently created tasks. Only these exact IDs belong to it.
+  const PREVIOUS_AUTO_TASK_IDS = new Set([
+    'locked-supp-youglow','locked-supp-zinc','locked-supp-ashwagandha','locked-supp-melatonin'
+  ]);
+  // Information only: never inserted into either checklist or notification queue.
+  const TIMING_GUIDE = [
+    ['Creatine', 'With lunch or after training', 'Consistency matters more than timing.'],
+    ['UGlow (existing 3 pills)', 'With lunch', 'Follow the product label. Check its ingredients before combining supplements.'],
+    ['Beta-carotene', 'With lunch containing dietary fat', 'Check the current amount and UGlow ingredients; not a recommendation to supplement.'],
+    ['Zinc (existing 30 mg)', 'With lunch, every other day', 'Your stated schedule, not an added dose or a new checklist task. Review total zinc intake.'],
+    ['Ashwagandha', 'With dinner, only if cleared to use', 'Adolescent safety data are limited; check with a clinician.']
   ];
-  const ALL_SUPPLEMENT_IDS = new Set(['creatine','clinician-night-plan',...SUPPLEMENTS.map(s=>s.id)]);
   const RISKY = /(?:tretinoin|azelaic|microneedl|injection|peptide|mk-?677|cjc|ghk|medication|supplement|creatine|melatonin|ashwagandha|zinc|youglow|tablet|capsule|pill|dose|serum|acid)/i;
   let applying = false;
   let busy = false;
@@ -8395,7 +8401,7 @@
     return count;
   }
   function isRare(task) {
-    if (!task || ALL_SUPPLEMENT_IDS.has(task.id) || RISKY.test(task.title)) return false;
+    if (!task || PREVIOUS_AUTO_TASK_IDS.has(task.id) || task.id==='creatine' || task.id==='clinician-night-plan' || RISKY.test(task.title)) return false;
     if (task.id==='lip-care') return /scrub|exfoliat/i.test(task.title);
     const count=weeklyCount(task);
     return count>0 && count<=2;
@@ -8412,6 +8418,9 @@
     // Only carry weekly maintenance chores. Missed supplements and skin treatments never carry over.
     for(let offset=14;offset>=1;offset--) {
       const key=shift(current,-offset);
+      // After setup, missed chores carry over even if the app was not opened that day.
+      // Before setup, only use dates with actual saved task history.
+      if (key < (meta[KEY_CARRYOVER_START] || current) && !state.days?.[key]) continue;
       for(const task of tasksOn(key)) {
         if(!isRare(task)) continue;
         const identity=`${task.scope}|${task.id}`;
@@ -8437,8 +8446,6 @@
   function getTime(t) {
     const custom=ensure()?.[KEY_TIMES]?.[`${t.scope}|${t.id}`];
     if (typeof custom==='string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(custom)) return custom;
-    const supplement=SUPPLEMENTS.find(s=>s.id===t.id);
-    if(supplement) return supplement.time;
     if(t.id==='creatine')return '12:30';
     if(t.id==='clinician-night-plan') return '21:00';
     if(t.id==='wash-bed-sheets' || /wash bed sheet/i.test(t.title)) return '13:00';
@@ -8450,27 +8457,38 @@
     const [h,m]=getTime(t).split(':').map(Number);
     return `${(h%12)||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;
   }
-  function installSupplementTasks() {
-    const meta=ensure(); if(!meta || meta[KEY_INSTALLED]) return;
-    // Preserve any existing user-entered tasks and doses. Creatine already exists in Midday.
-    meta.looksCustomTasks = Array.isArray(meta.looksCustomTasks)?meta.looksCustomTasks:[];
-    meta.looksTaskInfo = meta.looksTaskInfo || {};
-    meta.looksDeletedTaskIds = Array.isArray(meta.looksDeletedTaskIds)?meta.looksDeletedTaskIds:[];
-    const names=meta.looksCustomTasks.map(t=>String(t.title||'').toLowerCase());
-    for(const item of SUPPLEMENTS) {
-      if(meta.looksCustomTasks.some(t=>t.id===item.id))continue;
-      const matching=names.some(s=>s.includes(item.id.replace('locked-supp-','')));
-      if(matching)continue;
-      meta.looksCustomTasks.push({id:item.id,title:item.title,section:item.section,days:[...ALL_DAYS],custom:true});
-      meta.looksTaskInfo[item.id]=item.note;
+  function removePreviousAutoTasks() {
+    const meta=ensure(); if(!meta) return;
+    const existing=Array.isArray(meta.looksCustomTasks) ? meta.looksCustomTasks : [];
+    const generated=existing.filter(t=>PREVIOUS_AUTO_TASK_IDS.has(String(t?.id||'')));
+    if(!generated.length) return;
+    // Use tombstones so the Supabase task merge cannot bring these unwanted tasks back.
+    const stamp=new Date().toISOString();
+    meta.taskTombstones = meta.taskTombstones && typeof meta.taskTombstones==='object' ? meta.taskTombstones : {};
+    meta.taskEntityVersions = meta.taskEntityVersions && typeof meta.taskEntityVersions==='object' ? meta.taskEntityVersions : {};
+    meta.looksCustomTasks=existing.filter(t=>!PREVIOUS_AUTO_TASK_IDS.has(String(t?.id||'')));
+    for(const id of PREVIOUS_AUTO_TASK_IDS) {
+      meta.taskTombstones[id]=stamp;
+      meta.taskEntityVersions[id]=stamp;
+      if(meta.looksTaskInfo) delete meta.looksTaskInfo[id];
+      if(meta.looksTaskEdits) delete meta.looksTaskEdits[id];
+      if(meta.taskDetailsV3) delete meta.taskDetailsV3[id];
+      if(meta.customTaskSchedules) delete meta.customTaskSchedules[id];
+      for(const section of ['morning','midday','night']) {
+        if(Array.isArray(meta.looksTaskOrder?.[section])) meta.looksTaskOrder[section]=meta.looksTaskOrder[section].filter(v=>v!==id);
+      }
+      for(const day of Object.values(state.days||{})) {
+        if(Array.isArray(day.looksDone)) day.looksDone=day.looksDone.filter(v=>v!==id);
+        if(Array.isArray(day.looksSkipped)) day.looksSkipped=day.looksSkipped.filter(v=>v!==id);
+      }
     }
-    // Replace the vague built-in weekday task, not an individually customized item.
-    if(!meta.looksTaskEdits?.['clinician-night-plan'] && !meta.looksDeletedTaskIds.includes('clinician-night-plan')) {
-      meta.looksDeletedTaskIds.push('clinician-night-plan');
-    }
-    meta[KEY_INSTALLED]=true;
     persist();
     if(typeof render==='function' && visible()) render();
+  }
+  function tidyLooksSummary() {
+    const target=document.getElementById('looksTasksLeft'); if(!target) return;
+    const match=target.textContent.trim().match(/^(\d+) looks? tasks? left (?:today|for this day)\.?$/i);
+    if(match) target.textContent=`${match[1]} tasks remaining`;
   }
   function markCarryover(t) {
     const meta=ensure(); if(!meta) return;
@@ -8512,10 +8530,11 @@
   function buildCard() {
     const page=document.getElementById('looksPage'); if(!page) return null;
     let card=document.getElementById('locked-reminder-center'); if(card)return card;
-    card=document.createElement('section');card.className='locked-reminder-center';card.id='locked-reminder-center';
-    card.innerHTML=`<div class="locked-reminder-heading"><div><h3>Routine reminders</h3><p>Recurring chores stand out. Unfinished weekly tasks carry forward.</p></div><button id="locked-reminder-settings" class="locked-settings-button" aria-label="Reminder settings" type="button">⚙</button></div><div id="locked-reminder-body"></div><div class="locked-reminder-options" id="locked-reminder-options" hidden><p>Browser alerts work while LOCKED OS is open. Calendar alerts can work when it is closed after you import them into your calendar.</p><div class="locked-reminder-actions"><button type="button" id="locked-enable-alerts">Enable browser alerts</button><button type="button" id="locked-export-calendar">Export calendar alerts</button></div><p id="locked-reminder-help"></p><div id="locked-reminder-time-editor"></div></div>`;
+    card=document.createElement('details');card.className='locked-reminder-center';card.id='locked-reminder-center';
+    // Intentionally collapsed by default, even when there are upcoming chores.
+    card.innerHTML=`<summary class="locked-reminder-heading"><strong>Routine reminders</strong><span class="locked-reminder-count" id="locked-reminder-count">Checking…</span><span class="locked-reminder-chevron" aria-hidden="true">⌄</span></summary><div class="locked-reminder-content"><div id="locked-reminder-body"></div><details class="locked-supplement-guide"><summary>Supplement timing <span>Reference only</span></summary><div class="locked-supplement-list">${TIMING_GUIDE.map(([name,time,note])=>`<div class="locked-supplement-line"><strong>${esc(name)}</strong><span>${esc(time)}</span><small>${esc(note)}</small></div>`).join('')}</div><p class="locked-supplement-caution">Review the UGlow label before combining products. 30 mg zinc every other day is your current reported routine, not an instruction to increase intake.</p></details><details class="locked-reminder-settings"><summary>Notification settings</summary><p>Browser alerts work only while LOCKED OS is open. For alerts while closed, export and import calendar reminders.</p><div class="locked-reminder-actions"><button type="button" id="locked-enable-alerts">Enable browser alerts</button><button type="button" id="locked-export-calendar">Export calendar alerts</button></div><p id="locked-reminder-help" role="status"></p><div id="locked-reminder-time-editor"></div></details></div>`;
     const hero=page.querySelector('.looks-hero');if(hero)hero.insertAdjacentElement('afterend',card);else page.prepend(card);
-    card.querySelector('#locked-reminder-settings').addEventListener('click',()=>{const el=card.querySelector('#locked-reminder-options');el.hidden=!el.hidden;if(!el.hidden)drawTimes();});
+    card.querySelector('.locked-reminder-settings').addEventListener('toggle',event=>{if(event.target.open)drawTimes();});
     card.querySelector('#locked-enable-alerts').addEventListener('click',async()=>{
       const info=card.querySelector('#locked-reminder-help');
       if(!('Notification' in window)){info.textContent='This browser does not support notification permission here. Use calendar alerts instead.';return;}
@@ -8532,9 +8551,9 @@
     const el=document.getElementById('locked-reminder-time-editor');if(!el)return;
     const items=new Map();
     for(let i=0;i<7;i++)for(const task of tasksOn(shift(today(),i))) {
-      if(isRare(task) || SUPPLEMENTS.some(s=>s.id===task.id) || task.id==='creatine')items.set(`${task.scope}|${task.id}`,task);
+      if(isRare(task))items.set(`${task.scope}|${task.id}`,task);
     }
-    el.innerHTML='<h4>Reminder times</h4><div class="locked-reminder-time-grid">'+[...items.values()].map(t=>`<label>${esc(t.title)}<input type="time" data-time-key="${esc(`${t.scope}|${t.id}`)}" value="${getTime(t)}"></label>`).join('')+'</div>';
+    el.innerHTML='<h4>Chore reminder times</h4><div class="locked-reminder-time-grid">'+[...items.values()].map(t=>`<label>${esc(t.title)}<input type="time" data-time-key="${esc(`${t.scope}|${t.id}`)}" value="${getTime(t)}"></label>`).join('')+'</div>';
     el.querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{ensure()[KEY_TIMES][input.dataset.timeKey]=input.value;persist();paint();}));
   }
   function paint() {
@@ -8542,9 +8561,12 @@
     applying=true;
     try {
       const card=buildCard();if(!card)return;
+      tidyLooksSummary();
       accentRows();
-      const overdue=pendingCarryover(), due=activeRare(), next=upcomingRare(), scheduledSupplements=tasksOn(today()).filter(t=>ALL_SUPPLEMENT_IDS.has(t.id) && !completed(t));
-      const model=JSON.stringify({date:today(),overdue:overdue.map(t=>[token(t),t.title]),due:due.map(t=>[token(t),t.title]),next:next.map(t=>[token(t),t.title]),supplements:scheduledSupplements.map(t=>[token(t),t.title])});
+      const overdue=pendingCarryover(), due=activeRare(), next=upcomingRare();
+      const model=JSON.stringify({date:today(),overdue:overdue.map(t=>[token(t),t.title]),due:due.map(t=>[token(t),t.title]),next:next.map(t=>[token(t),t.title])});
+      const uniqueDue=new Set([...overdue,...due].map(t=>t.scope+'|'+t.id)).size;
+      card.querySelector('#locked-reminder-count').textContent=uniqueDue ? `${uniqueDue} due` : 'All clear';
       if(lastPaint===model)return;
       lastPaint=model;
       const html=[];
@@ -8556,11 +8578,6 @@
       if(due.length) {
         html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Today’s weekly tasks</p>');
         due.forEach(t=>html.push(`<div class="locked-reminder-item"><span class="locked-dot"></span><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>${fmtTime(t)} · Check off in your list</small></div></div>`));
-        html.push('</div>');
-      }
-      if(scheduledSupplements.length) {
-        html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Supplement timing</p>');
-        scheduledSupplements.sort((a,b)=>getTime(a).localeCompare(getTime(b))).forEach(t=>html.push(`<div class="locked-reminder-item"><span class="locked-day-chip locked-time-chip">${esc(fmtTime(t).replace(' AM','a').replace(' PM','p'))}</span><div class="locked-item-copy"><strong>${esc(t.title)}</strong></div></div>`));
         html.push('</div>');
       }
       if(next.length) {
@@ -8578,7 +8595,7 @@
     if (!visible() || !ensure() || !state.meta[KEY_NOTIFICATIONS] || !('Notification' in window) || Notification.permission!=='granted') return;
     const date=today(), clock=new Date(), mins=clock.getHours()*60+clock.getMinutes(), alerts=state.meta[KEY_ALERTS];
     const taskMap=new Map();
-    for(const t of [...activeRare(),...pendingCarryover(),...tasksOn(date).filter(t=>ALL_SUPPLEMENT_IDS.has(t.id))]) {
+    for(const t of [...activeRare(),...pendingCarryover()]) {
       taskMap.set(`${t.scope}|${t.id}`,t);
     }
     for(const t of taskMap.values()){
@@ -8615,7 +8632,9 @@
   }
   function install(){
     if (typeof state==='undefined' || !state || typeof getLooksRoutine!=='function') return;
-    installSupplementTasks();
+    const meta=ensure();
+    if(meta && !meta[KEY_CARRYOVER_START]) {meta[KEY_CARRYOVER_START]=today();persist();}
+    removePreviousAutoTasks();
     paint();maybeNotify();
   }
   const boot=()=>{
