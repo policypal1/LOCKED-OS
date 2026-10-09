@@ -8,7 +8,7 @@
 <link href="favicon.png" rel="icon" type="image/png" sizes="512x512"/>
 <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
 <link href="styles.css?v=20261009circlefix" rel="stylesheet"/>
-<link href="ghk-cu.css?v=20261009reminder3" rel="stylesheet"/>
+<link href="ghk-cu.css?v=20261009dailyreplace4" rel="stylesheet"/>
 <style id="lockedOsInlinePatchStyles">
 /* LOCKED OS - 2026-08-29 requested UI fixes */
 
@@ -324,7 +324,7 @@
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="app.js?v=20261003"></script>
-<script defer src="ghk-cu.js?v=20261009reminder3"></script>
+<script defer src="ghk-cu.js?v=20261009dailyreplace4"></script>
 </head>
 <body>
 <main class="app">
@@ -346,8 +346,8 @@
 <header class="top">
 <div><h1>Locked OS</h1></div>
 <nav aria-label="App tabs" class="tabs">
-<button class="tab" data-tab="checklistPage" type="button">Daily Checklist</button>
-<button class="tab active" data-tab="looksPage" type="button">Looksmaxxing</button>
+<button class="tab active" data-tab="checklistPage" type="button">Focus</button>
+<button class="tab" data-tab="looksPage" type="button">Looksmaxxing</button>
 <button class="tab ghk-tab" data-tab="ghkCuPage" type="button">GHK-Cu</button>
 <button class="tab content-tab" data-tab="contentPage" type="button">Content</button>
 <button class="tab admin-tab" data-tab="adminPage" type="button">Admin</button>
@@ -355,8 +355,13 @@
 </header>
 
 
-<section class="page" id="checklistPage">
-<div class="layout">
+<section class="page active" id="checklistPage" aria-label="Focus">
+<!-- Daily Checklist IS now the business work surface. The old checklist nodes remain
+     hidden solely for backward-compatible state and existing event handlers. -->
+<div id="lockedBusinessFocus" aria-label="Business daily work mode">
+  <section class="card" style="padding:22px"><h2 style="margin:0">Business work mode</h2><p style="margin:6px 0 0">Loading your daily focus…</p></section>
+</div>
+<div class="layout" id="lockedOsOriginalDailyRoot" hidden inert aria-hidden="true" style="display:none">
 <div>
 <section class="card summary">
 <div class="circle" id="progressCircle"><div class="circle-inner"><div class="percent" id="percent">0%</div><div class="done-count" id="doneCount">0 / 11</div></div></div>
@@ -371,7 +376,7 @@
 </section>
 
 
-<section class="page active" id="looksPage">
+<section class="page" id="looksPage">
 <div class="looks-hero">
 <section class="card looks-title-card"><h2 id="looksDayName">Today</h2><p id="looksDateText">Today</p><div class="looks-streak-line">Looksmaxxing streak: <strong id="looksStreak">0</strong></div></section>
 <section class="card summary"><div class="circle looks-circle" id="looksProgressCircle"><div class="circle-inner"><div class="percent" id="looksPercent">0%</div><div class="done-count" id="looksDoneCount">0 / 0</div></div></div><div><p class="quote">Build it daily.</p><p class="tasks-left" id="looksTasksLeft">Your routine is loading.</p></div></section>
@@ -2685,6 +2690,32 @@ window.addEventListener("DOMContentLoaded", () => {
 })();
 </script>
 
+
+<script id="lockedOsFocusDefaultTab">
+/* Select the Focus tab when the app opens. Preserve existing page IDs and state. */
+(() => {
+  const focusWhenAppOpens = () => {
+    const app = document.getElementById('mainApp');
+    const tab = app?.querySelector('.tab[data-tab="checklistPage"]');
+    const page = document.getElementById('checklistPage');
+    if (!app || app.classList.contains('hidden') || !tab || !page) return;
+    if (tab.classList.contains('active') && page.classList.contains('active')) return;
+    tab.click();
+  };
+  const install = () => {
+    const app = document.getElementById('mainApp');
+    if (!app) return;
+    const observer = new MutationObserver(() => {
+      if (!app.classList.contains('hidden')) focusWhenAppOpens();
+    });
+    observer.observe(app, { attributes: true, attributeFilter: ['class'] });
+    focusWhenAppOpens();
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', install, { once: true });
+  } else install();
+})();
+</script>
 
 </body>
 </html>
