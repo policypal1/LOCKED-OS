@@ -8345,17 +8345,18 @@
   const KEY_ALERTS = 'lockedOSReminderAlertsV1';
   const KEY_INSTALLED = 'lockedOSSupplementsSetupV1';
   const KEY_NOTIFICATIONS = 'lockedOSNotificationsEnabledV1';
+  const KEY_CHECKED = 'lockedOSRecentlyCheckedV1';
   // The previous release inadvertently created tasks. Only these exact IDs belong to it.
   const PREVIOUS_AUTO_TASK_IDS = new Set([
     'locked-supp-youglow','locked-supp-zinc','locked-supp-ashwagandha','locked-supp-melatonin'
   ]);
-  // Information only: never inserted into either checklist or notification queue.
+  // A reference, not additional checklist tasks or dosage instructions.
   const TIMING_GUIDE = [
-    ['Creatine', 'With lunch or after training', 'Consistency matters more than timing.'],
-    ['UGlow (existing 3 pills)', 'With lunch', 'Follow the product label. Check its ingredients before combining supplements.'],
-    ['Beta-carotene', 'With lunch containing dietary fat', 'Check the current amount and UGlow ingredients; not a recommendation to supplement.'],
-    ['Zinc (existing 30 mg)', 'With lunch, every other day', 'Your stated schedule, not an added dose or a new checklist task. Review total zinc intake.'],
-    ['Ashwagandha', 'With dinner, only if cleared to use', 'Adolescent safety data are limited; check with a clinician.']
+    ['Creatine', '12:30 PM · lunch or after gym'],
+    ['UGlow', '12:30 PM · with lunch'],
+    ['Beta-carotene', '12:30 PM · with lunch'],
+    ['Zinc · 30 mg', '12:30 PM · with lunch, every other day'],
+    ['Ashwagandha', '6:30 PM · with dinner']
   ];
   const RISKY = /(?:tretinoin|azelaic|microneedl|injection|peptide|mk-?677|cjc|ghk|medication|supplement|creatine|melatonin|ashwagandha|zinc|youglow|tablet|capsule|pill|dose|serum|acid)/i;
   let applying = false;
@@ -8371,7 +8372,7 @@
   const ensure = () => {
     if (typeof state === 'undefined' || !state) return null;
     state.meta = state.meta || {};
-    for (const k of [KEY_RESOLVED,KEY_TIMES,KEY_ALERTS]) if (!state.meta[k] || typeof state.meta[k] !== 'object') state.meta[k] = {};
+    for (const k of [KEY_RESOLVED,KEY_TIMES,KEY_ALERTS,KEY_CHECKED]) if (!state.meta[k] || typeof state.meta[k] !== 'object') state.meta[k] = {};
     return state.meta;
   };
   const persist = () => { if(typeof saveState === 'function') saveState(); };
@@ -8490,19 +8491,87 @@
     const match=target.textContent.trim().match(/^(\d+) looks? tasks? left (?:today|for this day)\.?$/i);
     if(match) target.textContent=`${match[1]} tasks remaining`;
   }
-  function markCarryover(t) {
-    const meta=ensure(); if(!meta) return;
-    meta[KEY_RESOLVED][token(t)]=today();
-    // When today's scheduled instance also appears, check it off for today.
-    const tToday=tasksOn(today()).find(x=>x.scope===t.scope&&x.id===t.id);
-    if(tToday && !completed(tToday) && typeof ensureDay==='function') {
-      const d=ensureDay(); const key=t.scope==='looks'?'looksDone':'done';
-      const skip=t.scope==='looks'?'looksSkipped':'skipped';
-      d[key]=[...new Set([...(d[key]||[]),t.id])]; d[skip]=(d[skip]||[]).filter(x=>x!==t.id);
-      if(t.scope==='looks' && typeof getLooksTaskIds==='function') d.looksCompleted=(d.looksDone.length+d.looksSkipped.length)===getLooksTaskIds().length;
-      if(t.scope==='daily' && typeof window.lockedOsDailyTasksForDay==='function') d.completed=d.done.length===window.lockedOsDailyTasksForDay().length;
+  // Keep finished reminders until the next local noon, with a working Undo button.
+  // Marking after noon stays visible through noon of the following day.
+  function nextNoon() {
+    const now=new Date(), noon=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12,0,0,0);
+    if(noon.getTime()<=now.getTime()) noon.setDate(noon.getDate()+1);
+    return noon.getTime();
+  }
+  function rememberChecked(task, source, addedToday=false) {
+    const meta=ensure(); if(!meta)return;
+    meta[KEY_CHECKED][token(task)]={scope:task.scope,id:task.id,title:task.title,day:task.day,until:nextNoon(),source,addedToday};
+  }
+  function setDone(task, done) {
+    if(typeof ensureDay!=='function')return false;
+    const rec=ensureDay(task.day);
+    if(!rec)return false;
+    const key=task.scope==='looks'?'looksDone':'done';
+    const skip=task.scope==='looks'?'looksSkipped':'skipped';
+    rec[key]=Array.isArray(rec[key])?rec[key]:[];
+    if(done)rec[key]=[...new Set([...rec[key],task.id])];
+    else rec[key]=rec[key].filter(id=>id!==task.id);
+    if(done)rec[skip]=(rec[skip]||[]).filter(id=>id!==task.id);
+    if(task.scope==='looks' && typeof getLooksTaskIds==='function'){
+      const ids=getLooksTaskIds(task.day);
+      rec.looksCompleted=ids.length===new Set([...(rec.looksDone||[]),...(rec.looksSkipped||[])]).size;
     }
-    persist(); if(typeof render==='function') render(); paint();
+    if(task.scope==='daily' && typeof window.lockedOsDailyTasksForDay==='function'){
+      const ids=window.lockedOsDailyTasksForDay(task.day).map(t=>t.id);
+      rec.completed=ids.length===new Set([...(rec.done||[]),...(rec.skipped||[])]).size;
+    }
+    return true;
+  }
+  function markCarryover(t) {
+    const meta=ensure(); if(!meta)return;
+    meta[KEY_RESOLVED][token(t)]=today();
+    const tToday=tasksOn(today()).find(x=>x.scope===t.scope&&x.id===t.id);
+    const addedToday=!!(tToday&&!completed(tToday));
+    if(addedToday)setDone(tToday,true);
+    rememberChecked(t,'carryover',addedToday);
+    lastPaint='';persist(); if(typeof render==='function')render();paint();
+  }
+  function markToday(t) {
+    if(!t || completed(t))return;
+    if(!setDone(t,true))return;
+    rememberChecked(t,'today');
+    lastPaint='';persist();if(typeof render==='function')render();paint();
+  }
+  function undoChecked(t) {
+    const meta=ensure();if(!meta)return;
+    const record=meta[KEY_CHECKED][token(t)];if(!record)return;
+    if(record.source==='carryover'){
+      delete meta[KEY_RESOLVED][token(t)];
+      if(record.addedToday){
+        const tToday=tasksOn(today()).find(x=>x.scope===t.scope&&x.id===t.id);
+        if(tToday)setDone(tToday,false);
+      }
+    } else {
+      setDone(t,false);
+    }
+    delete meta[KEY_CHECKED][token(t)];
+    lastPaint='';persist();if(typeof render==='function')render();paint();
+  }
+  function syncCheckedToday() {
+    const meta=ensure();if(!meta)return;
+    let changed=false;
+    for(const task of tasksOn(today()).filter(isRare)) {
+      const key=token(task),existing=meta[KEY_CHECKED][key];
+      const doneField=task.scope==='looks'?'looksDone':'done';
+      const done=(state.days?.[task.day]?.[doneField]||[]).includes(task.id);
+      const alreadyCarried=Object.values(meta[KEY_CHECKED]).some(v=>v?.source==='carryover' && v.scope===task.scope && v.id===task.id && v.until>Date.now());
+      if(done && !existing && !alreadyCarried) {rememberChecked(task,'list');changed=true;}
+      else if(!done && existing && existing.source!=='carryover') {delete meta[KEY_CHECKED][key];changed=true;}
+    }
+    // Cap stored recent-reminder records, without changing long-term task history.
+    for(const [key,value] of Object.entries(meta[KEY_CHECKED])) {
+      if(!value || !Number.isFinite(value.until) || value.until<Date.now()-86400000){delete meta[KEY_CHECKED][key];changed=true;}
+    }
+    if(changed)persist();
+  }
+  function recentlyChecked() {
+    const meta=ensure();if(!meta)return [];
+    return Object.values(meta[KEY_CHECKED]).filter(t=>t && t.until>Date.now()).map(t=>({...t}));
   }
   function snooze(t) {
     const meta=ensure(); if(!meta)return;
@@ -8532,7 +8601,7 @@
     let card=document.getElementById('locked-reminder-center'); if(card)return card;
     card=document.createElement('details');card.className='locked-reminder-center';card.id='locked-reminder-center';
     // Intentionally collapsed by default, even when there are upcoming chores.
-    card.innerHTML=`<summary class="locked-reminder-heading"><strong>Routine reminders</strong><span class="locked-reminder-count" id="locked-reminder-count">Checking…</span><span class="locked-reminder-chevron" aria-hidden="true">⌄</span></summary><div class="locked-reminder-content"><div id="locked-reminder-body"></div><details class="locked-supplement-guide"><summary>Supplement timing <span>Reference only</span></summary><div class="locked-supplement-list">${TIMING_GUIDE.map(([name,time,note])=>`<div class="locked-supplement-line"><strong>${esc(name)}</strong><span>${esc(time)}</span><small>${esc(note)}</small></div>`).join('')}</div><p class="locked-supplement-caution">Review the UGlow label before combining products. 30 mg zinc every other day is your current reported routine, not an instruction to increase intake.</p></details><details class="locked-reminder-settings"><summary>Notification settings</summary><p>Browser alerts work only while LOCKED OS is open. For alerts while closed, export and import calendar reminders.</p><div class="locked-reminder-actions"><button type="button" id="locked-enable-alerts">Enable browser alerts</button><button type="button" id="locked-export-calendar">Export calendar alerts</button></div><p id="locked-reminder-help" role="status"></p><div id="locked-reminder-time-editor"></div></details></div>`;
+    card.innerHTML=`<summary class="locked-reminder-heading"><strong>Routine reminders</strong><span class="locked-reminder-count" id="locked-reminder-count">Checking…</span><span class="locked-reminder-chevron" aria-hidden="true">⌄</span></summary><div class="locked-reminder-content"><div id="locked-reminder-body"></div><details class="locked-supplement-guide"><summary>Supplement timing</summary><div class="locked-supplement-list">${TIMING_GUIDE.map(([name,time])=>`<div class="locked-supplement-line"><strong>${esc(name)}</strong><span>${esc(time)}</span></div>`).join('')}</div></details><details class="locked-reminder-settings"><summary>Notification settings</summary><p>Browser alerts work only while LOCKED OS is open. For alerts while closed, export and import calendar reminders.</p><div class="locked-reminder-actions"><button type="button" id="locked-enable-alerts">Enable browser alerts</button><button type="button" id="locked-export-calendar">Export calendar alerts</button></div><p id="locked-reminder-help" role="status"></p><div id="locked-reminder-time-editor"></div></details></div>`;
     const hero=page.querySelector('.looks-hero');if(hero)hero.insertAdjacentElement('afterend',card);else page.prepend(card);
     card.querySelector('.locked-reminder-settings').addEventListener('toggle',event=>{if(event.target.open)drawTimes();});
     card.querySelector('#locked-enable-alerts').addEventListener('click',async()=>{
@@ -8556,6 +8625,17 @@
     el.innerHTML='<h4>Chore reminder times</h4><div class="locked-reminder-time-grid">'+[...items.values()].map(t=>`<label>${esc(t.title)}<input type="time" data-time-key="${esc(`${t.scope}|${t.id}`)}" value="${getTime(t)}"></label>`).join('')+'</div>';
     el.querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{ensure()[KEY_TIMES][input.dataset.timeKey]=input.value;persist();paint();}));
   }
+  function showMiddayTiming() {
+    const list=document.getElementById('looksMiddayList');
+    if(!list)return;
+    const section=list.closest('.section');if(!section)return;
+    let line=section.querySelector('#locked-midday-supplement-times');
+    if(line)return;
+    line=document.createElement('div');line.id='locked-midday-supplement-times';
+    line.className='locked-midday-supplement-times';
+    line.innerHTML='<span><b>12:30 PM</b> · Creatine, UGlow, beta-carotene, zinc (30 mg every other day)</span><span><b>6:30 PM</b> · Ashwagandha with dinner</span>';
+    list.parentNode.insertBefore(line,list);
+  }
   function paint() {
     if(applying || !visible() || !ensure())return;
     applying=true;
@@ -8563,21 +8643,34 @@
       const card=buildCard();if(!card)return;
       tidyLooksSummary();
       accentRows();
-      const overdue=pendingCarryover(), due=activeRare(), next=upcomingRare();
-      const model=JSON.stringify({date:today(),overdue:overdue.map(t=>[token(t),t.title]),due:due.map(t=>[token(t),t.title]),next:next.map(t=>[token(t),t.title])});
+      showMiddayTiming();
+      syncCheckedToday();
+      const overdue=pendingCarryover(), due=activeRare(), next=upcomingRare(), checked=recentlyChecked();
+      const model=JSON.stringify({date:today(),overdue:overdue.map(t=>[token(t),t.title]),due:due.map(t=>[token(t),t.title]),next:next.map(t=>[token(t),t.title]),checked:checked.map(t=>[token(t),t.until])});
       const uniqueDue=new Set([...overdue,...due].map(t=>t.scope+'|'+t.id)).size;
-      card.querySelector('#locked-reminder-count').textContent=uniqueDue ? `${uniqueDue} due` : 'All clear';
+      card.querySelector('#locked-reminder-count').textContent=uniqueDue ? `${uniqueDue} due` : (checked.length?`${checked.length} checked`:'All clear');
       if(lastPaint===model)return;
       lastPaint=model;
       const html=[];
-      if(overdue.length) {
-        html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Carried over <span class="locked-overdue-count">'+overdue.length+'</span></p>');
-        overdue.forEach((t,i)=>html.push(`<div class="locked-reminder-item locked-overdue-item"><button type="button" data-complete="${i}" aria-label="Complete ${esc(t.title)}"><span class="locked-check">○</span></button><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>Due ${esc(shortDate(t.day))} · ${fmtTime(t)}</small></div><button class="locked-snooze" data-snooze="${i}" type="button">Snooze</button></div>`));
+      // Recently checked items stay on screen and can be undone before noon.
+      // A checked item is not also repeated as a live overdue or due row.
+      const recentlyIds=new Set(checked.map(t=>`${t.scope}|${t.id}`));
+      const overdueVisible=overdue.filter(t=>!recentlyIds.has(`${t.scope}|${t.id}`));
+      const carriedIds=new Set(overdueVisible.map(t=>`${t.scope}|${t.id}`));
+      const dueVisible=due.filter(t=>!recentlyIds.has(`${t.scope}|${t.id}`) && !carriedIds.has(`${t.scope}|${t.id}`));
+      if(overdueVisible.length) {
+        html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Carried over <span class="locked-overdue-count">'+overdueVisible.length+'</span></p>');
+        overdueVisible.forEach((t,i)=>html.push(`<div class="locked-reminder-item locked-overdue-item"><button type="button" data-complete="${i}" aria-label="Complete ${esc(t.title)}"><span class="locked-check">○</span></button><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>Due ${esc(shortDate(t.day))} · ${fmtTime(t)}</small></div><button class="locked-snooze" data-snooze="${i}" type="button">Snooze</button></div>`));
         html.push('</div>');
       }
-      if(due.length) {
+      if(dueVisible.length) {
         html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Today’s weekly tasks</p>');
-        due.forEach(t=>html.push(`<div class="locked-reminder-item"><span class="locked-dot"></span><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>${fmtTime(t)} · Check off in your list</small></div></div>`));
+        dueVisible.forEach((t,i)=>html.push(`<div class="locked-reminder-item"><button type="button" data-due="${i}" aria-label="Complete ${esc(t.title)}"><span class="locked-check">○</span></button><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>${fmtTime(t)}</small></div></div>`));
+        html.push('</div>');
+      }
+      if(checked.length) {
+        html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Checked · undo until noon</p>');
+        checked.forEach((t,i)=>html.push(`<div class="locked-reminder-item locked-reminder-checked"><button type="button" data-undo="${i}" aria-label="Undo ${esc(t.title)}"><span class="locked-check">✓</span></button><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>Done · click check to undo</small></div><button type="button" class="locked-snooze" data-undo="${i}">Undo</button></div>`));
         html.push('</div>');
       }
       if(next.length) {
@@ -8585,10 +8678,12 @@
         next.slice(0,4).forEach(t=>html.push(`<div class="locked-reminder-item locked-upcoming"><span class="locked-day-chip">${esc(dayName(t.day).slice(0,3))}</span><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>${esc(shortDate(t.day))} · ${fmtTime(t)}</small></div></div>`));
         html.push('</div>');
       }
-      if(!due.length&&!overdue.length&&!next.length)html.push('<p class="locked-reminder-empty">No weekly maintenance tasks scheduled this week.</p>');
+      if(!dueVisible.length&&!overdueVisible.length&&!next.length&&!checked.length)html.push('<p class="locked-reminder-empty">No weekly maintenance tasks scheduled this week.</p>');
       card.querySelector('#locked-reminder-body').innerHTML=html.join('');
-      card.querySelectorAll('[data-complete]').forEach(b=>b.onclick=()=>markCarryover(overdue[Number(b.dataset.complete)]));
-      card.querySelectorAll('[data-snooze]').forEach(b=>b.onclick=()=>snooze(overdue[Number(b.dataset.snooze)]));
+      card.querySelectorAll('[data-complete]').forEach(b=>b.onclick=()=>markCarryover(overdueVisible[Number(b.dataset.complete)]));
+      card.querySelectorAll('[data-due]').forEach(b=>b.onclick=()=>markToday(dueVisible[Number(b.dataset.due)]));
+      card.querySelectorAll('[data-undo]').forEach(b=>b.onclick=()=>undoChecked(checked[Number(b.dataset.undo)]));
+      card.querySelectorAll('[data-snooze]').forEach(b=>b.onclick=()=>snooze(overdueVisible[Number(b.dataset.snooze)]));
     } catch(e){console.warn('LOCKED OS reminders display unavailable:',e);} finally {applying=false;}
   }
   function maybeNotify() {
