@@ -8329,3 +8329,304 @@
   window.addEventListener("DOMContentLoaded", init);
 })();
 
+/* LOCKED OS: focused recurring reminders, carryover, and supplement timing.
+   Keeps original trackers and Supabase state intact. */
+(() => {
+  'use strict';
+  const FLAG = '__lockedOSReminders20261009';
+  if (window[FLAG]) return;
+  window[FLAG] = true;
+
+  const ALL_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const DAY_CODE = ['SU','MO','TU','WE','TH','FR','SA'];
+  const KEY_RESOLVED = 'lockedOSCarryoverResolvedV1';
+  const KEY_TIMES = 'lockedOSReminderTimesV1';
+  const KEY_ALERTS = 'lockedOSReminderAlertsV1';
+  const KEY_INSTALLED = 'lockedOSSupplementsSetupV1';
+  const KEY_NOTIFICATIONS = 'lockedOSNotificationsEnabledV1';
+  const SUPPLEMENTS = [
+    {id:'locked-supp-youglow',title:'YouGlow — with lunch (follow label)',section:'midday',time:'12:30',note:'Your existing amount only. Verify the exact product label and ingredients with a clinician before relying on this schedule.'},
+    {id:'locked-supp-zinc',title:'Zinc — with lunch',section:'midday',time:'12:30',note:'Use your existing dose only if appropriate. Check total zinc from YouGlow and other products.'},
+    {id:'locked-supp-ashwagandha',title:'Ashwagandha — with dinner (if approved)',section:'night',time:'18:30',note:'This herbal supplement has limited adolescent safety data and possible drug, thyroid and liver risks. Discuss with a clinician.'},
+    {id:'locked-supp-melatonin',title:'Melatonin — before bed (if needed/approved)',section:'night',time:'21:00',note:'Follow your clinician’s timing and your existing dose. Avoid adding a dose or doubling a missed dose.'}
+  ];
+  const ALL_SUPPLEMENT_IDS = new Set(['creatine','clinician-night-plan',...SUPPLEMENTS.map(s=>s.id)]);
+  const RISKY = /(?:tretinoin|azelaic|microneedl|injection|peptide|mk-?677|cjc|ghk|medication|supplement|creatine|melatonin|ashwagandha|zinc|youglow|tablet|capsule|pill|dose|serum|acid)/i;
+  let applying = false;
+  let busy = false;
+  let lastPaint = '';
+
+  const today = () => typeof getTodayKey === 'function' ? getTodayKey() : new Date().toLocaleDateString('en-CA');
+  const shift = (key, delta) => { const d = new Date(key+'T12:00:00'); d.setDate(d.getDate()+delta); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  const dayName = key => ALL_DAYS[new Date(key+'T12:00:00').getDay()];
+  const localDate = key => new Date(key+'T12:00:00');
+  const shortDate = key => localDate(key).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+  const visible = () => !!document.getElementById('mainApp') && !document.getElementById('mainApp').classList.contains('hidden');
+  const ensure = () => {
+    if (typeof state === 'undefined' || !state) return null;
+    state.meta = state.meta || {};
+    for (const k of [KEY_RESOLVED,KEY_TIMES,KEY_ALERTS]) if (!state.meta[k] || typeof state.meta[k] !== 'object') state.meta[k] = {};
+    return state.meta;
+  };
+  const persist = () => { if(typeof saveState === 'function') saveState(); };
+  const esc = value => String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // Existing recurring routines are the source of truth. No weekly days are hard-coded here.
+  function looksOn(key) {
+    if (typeof getLooksRoutine !== 'function') return [];
+    const r = getLooksRoutine(key);
+    return ['morning','midday','night'].flatMap(section => (r?.[section]||[]).map(t=>({
+      id:String(t.id), title: typeof getLooksTaskTitle==='function'?getLooksTaskTitle(t):t.title,
+      section, scope:'looks', day:key
+    })));
+  }
+  function dailyOn(key) {
+    return typeof window.lockedOsDailyTasksForDay==='function'
+      ? (window.lockedOsDailyTasksForDay(key)||[]).map(t=>({id:String(t.id),title:t.title,section:t.section,scope:'daily',day:key})) : [];
+  }
+  const tasksOn = key => [...looksOn(key),...dailyOn(key)];
+  function weeklyCount(task, key=today()) {
+    // Seven days, anchored at the current day, to count frequency of the actual saved schedule.
+    let count=0;
+    for(let i=0;i<7;i++) {
+      const items = task.scope==='looks'?looksOn(shift(key,i)):dailyOn(shift(key,i));
+      if(items.some(item=>item.id===task.id)) count++;
+    }
+    return count;
+  }
+  function isRare(task) {
+    if (!task || ALL_SUPPLEMENT_IDS.has(task.id) || RISKY.test(task.title)) return false;
+    if (task.id==='lip-care') return /scrub|exfoliat/i.test(task.title);
+    const count=weeklyCount(task);
+    return count>0 && count<=2;
+  }
+  const token = task => `${task.scope}|${task.id}|${task.day}`;
+  function completed(task) {
+    const record=state.days?.[task.day]||{};
+    return task.scope==='looks' ? (record.looksDone||[]).includes(task.id) || (record.looksSkipped||[]).includes(task.id)
+      : (record.done||[]).includes(task.id) || (record.skipped||[]).includes(task.id);
+  }
+  function pendingCarryover() {
+    const meta=ensure(); if (!meta) return [];
+    const current=today(), byId=new Map();
+    // Only carry weekly maintenance chores. Missed supplements and skin treatments never carry over.
+    for(let offset=14;offset>=1;offset--) {
+      const key=shift(current,-offset);
+      for(const task of tasksOn(key)) {
+        if(!isRare(task)) continue;
+        const identity=`${task.scope}|${task.id}`;
+        if(completed(task) || meta[KEY_RESOLVED][token(task)]) {byId.delete(identity);continue;}
+        // Most recent missed instance of each task. Never stack duplicate chores.
+        byId.set(identity,task);
+      }
+    }
+    return [...byId.values()].filter(task=>!meta[KEY_RESOLVED][token(task)]).sort((a,b)=>a.day.localeCompare(b.day));
+  }
+  function activeRare() {
+    const date=today(); return tasksOn(date).filter(isRare).filter(t=>!completed(t));
+  }
+  function upcomingRare() {
+    const current=today(), found=[];
+    for(let offset=1;offset<=7;offset++) for(const item of tasksOn(shift(current,offset))) {
+      if(!isRare(item))continue;
+      if(item.id==='lip-care' && !/scrub|exfoliat/i.test(item.title))continue;
+      found.push(item);
+    }
+    return found;
+  }
+  function getTime(t) {
+    const custom=ensure()?.[KEY_TIMES]?.[`${t.scope}|${t.id}`];
+    if (typeof custom==='string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(custom)) return custom;
+    const supplement=SUPPLEMENTS.find(s=>s.id===t.id);
+    if(supplement) return supplement.time;
+    if(t.id==='creatine')return '12:30';
+    if(t.id==='clinician-night-plan') return '21:00';
+    if(t.id==='wash-bed-sheets' || /wash bed sheet/i.test(t.title)) return '13:00';
+    if(t.id==='shave-manage-brows' || /shav/i.test(t.title)) return '19:30';
+    if(t.id==='lip-care') return '20:30';
+    return t.section==='morning'?'08:00':t.section==='night'?'20:00':'15:00';
+  }
+  function fmtTime(t) {
+    const [h,m]=getTime(t).split(':').map(Number);
+    return `${(h%12)||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;
+  }
+  function installSupplementTasks() {
+    const meta=ensure(); if(!meta || meta[KEY_INSTALLED]) return;
+    // Preserve any existing user-entered tasks and doses. Creatine already exists in Midday.
+    meta.looksCustomTasks = Array.isArray(meta.looksCustomTasks)?meta.looksCustomTasks:[];
+    meta.looksTaskInfo = meta.looksTaskInfo || {};
+    meta.looksDeletedTaskIds = Array.isArray(meta.looksDeletedTaskIds)?meta.looksDeletedTaskIds:[];
+    const names=meta.looksCustomTasks.map(t=>String(t.title||'').toLowerCase());
+    for(const item of SUPPLEMENTS) {
+      if(meta.looksCustomTasks.some(t=>t.id===item.id))continue;
+      const matching=names.some(s=>s.includes(item.id.replace('locked-supp-','')));
+      if(matching)continue;
+      meta.looksCustomTasks.push({id:item.id,title:item.title,section:item.section,days:[...ALL_DAYS],custom:true});
+      meta.looksTaskInfo[item.id]=item.note;
+    }
+    // Replace the vague built-in weekday task, not an individually customized item.
+    if(!meta.looksTaskEdits?.['clinician-night-plan'] && !meta.looksDeletedTaskIds.includes('clinician-night-plan')) {
+      meta.looksDeletedTaskIds.push('clinician-night-plan');
+    }
+    meta[KEY_INSTALLED]=true;
+    persist();
+    if(typeof render==='function' && visible()) render();
+  }
+  function markCarryover(t) {
+    const meta=ensure(); if(!meta) return;
+    meta[KEY_RESOLVED][token(t)]=today();
+    // When today's scheduled instance also appears, check it off for today.
+    const tToday=tasksOn(today()).find(x=>x.scope===t.scope&&x.id===t.id);
+    if(tToday && !completed(tToday) && typeof ensureDay==='function') {
+      const d=ensureDay(); const key=t.scope==='looks'?'looksDone':'done';
+      const skip=t.scope==='looks'?'looksSkipped':'skipped';
+      d[key]=[...new Set([...(d[key]||[]),t.id])]; d[skip]=(d[skip]||[]).filter(x=>x!==t.id);
+      if(t.scope==='looks' && typeof getLooksTaskIds==='function') d.looksCompleted=(d.looksDone.length+d.looksSkipped.length)===getLooksTaskIds().length;
+      if(t.scope==='daily' && typeof window.lockedOsDailyTasksForDay==='function') d.completed=d.done.length===window.lockedOsDailyTasksForDay().length;
+    }
+    persist(); if(typeof render==='function') render(); paint();
+  }
+  function snooze(t) {
+    const meta=ensure(); if(!meta)return;
+    meta[KEY_ALERTS][`snooze|${token(t)}`]=Date.now()+60*60*1000;
+    persist();paint();
+  }
+  function accentRows() {
+    const targets=[['looks','looksPage'],['daily','checklistPage']];
+    for(const [scope,pageId] of targets) {
+      const page=document.getElementById(pageId);if(!page)continue;
+      for(const row of page.querySelectorAll('.task-row')) {
+        let title=row.querySelector('.task-title');if(!title)continue;
+        const id=row.dataset.taskId;
+        const todayTasks=scope==='looks'?looksOn(today()):dailyOn(today());
+        const task=todayTasks.find(t=>id?t.id===id:t.title===title.textContent);
+        const rare=task && isRare(task);
+        row.classList.toggle('locked-rare-task',!!rare);
+        if(rare && !row.querySelector('.locked-rare-label')) {
+          const label=document.createElement('span');label.className='locked-rare-label';label.textContent='Weekly';
+          title.after(label);
+        } else if (!rare) row.querySelector('.locked-rare-label')?.remove();
+      }
+    }
+  }
+  function buildCard() {
+    const page=document.getElementById('looksPage'); if(!page) return null;
+    let card=document.getElementById('locked-reminder-center'); if(card)return card;
+    card=document.createElement('section');card.className='locked-reminder-center';card.id='locked-reminder-center';
+    card.innerHTML=`<div class="locked-reminder-heading"><div><h3>Routine reminders</h3><p>Recurring chores stand out. Unfinished weekly tasks carry forward.</p></div><button id="locked-reminder-settings" class="locked-settings-button" aria-label="Reminder settings" type="button">⚙</button></div><div id="locked-reminder-body"></div><div class="locked-reminder-options" id="locked-reminder-options" hidden><p>Browser alerts work while LOCKED OS is open. Calendar alerts can work when it is closed after you import them into your calendar.</p><div class="locked-reminder-actions"><button type="button" id="locked-enable-alerts">Enable browser alerts</button><button type="button" id="locked-export-calendar">Export calendar alerts</button></div><p id="locked-reminder-help"></p><div id="locked-reminder-time-editor"></div></div>`;
+    const hero=page.querySelector('.looks-hero');if(hero)hero.insertAdjacentElement('afterend',card);else page.prepend(card);
+    card.querySelector('#locked-reminder-settings').addEventListener('click',()=>{const el=card.querySelector('#locked-reminder-options');el.hidden=!el.hidden;if(!el.hidden)drawTimes();});
+    card.querySelector('#locked-enable-alerts').addEventListener('click',async()=>{
+      const info=card.querySelector('#locked-reminder-help');
+      if(!('Notification' in window)){info.textContent='This browser does not support notification permission here. Use calendar alerts instead.';return;}
+      try {
+        const value=await Notification.requestPermission();
+        ensure()[KEY_NOTIFICATIONS] = value==='granted';persist();
+        info.textContent=value==='granted'?'Browser alerts enabled while the tracker is open.':'Permission was not granted. You can still export calendar alerts.';
+      }catch(err){info.textContent='Notifications could not be enabled here. Use calendar alerts instead.';}
+    });
+    card.querySelector('#locked-export-calendar').addEventListener('click',exportCalendar);
+    return card;
+  }
+  function drawTimes() {
+    const el=document.getElementById('locked-reminder-time-editor');if(!el)return;
+    const items=new Map();
+    for(let i=0;i<7;i++)for(const task of tasksOn(shift(today(),i))) {
+      if(isRare(task) || SUPPLEMENTS.some(s=>s.id===task.id) || task.id==='creatine')items.set(`${task.scope}|${task.id}`,task);
+    }
+    el.innerHTML='<h4>Reminder times</h4><div class="locked-reminder-time-grid">'+[...items.values()].map(t=>`<label>${esc(t.title)}<input type="time" data-time-key="${esc(`${t.scope}|${t.id}`)}" value="${getTime(t)}"></label>`).join('')+'</div>';
+    el.querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{ensure()[KEY_TIMES][input.dataset.timeKey]=input.value;persist();paint();}));
+  }
+  function paint() {
+    if(applying || !visible() || !ensure())return;
+    applying=true;
+    try {
+      const card=buildCard();if(!card)return;
+      accentRows();
+      const overdue=pendingCarryover(), due=activeRare(), next=upcomingRare(), scheduledSupplements=tasksOn(today()).filter(t=>ALL_SUPPLEMENT_IDS.has(t.id) && !completed(t));
+      const model=JSON.stringify({date:today(),overdue:overdue.map(t=>[token(t),t.title]),due:due.map(t=>[token(t),t.title]),next:next.map(t=>[token(t),t.title]),supplements:scheduledSupplements.map(t=>[token(t),t.title])});
+      if(lastPaint===model)return;
+      lastPaint=model;
+      const html=[];
+      if(overdue.length) {
+        html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Carried over <span class="locked-overdue-count">'+overdue.length+'</span></p>');
+        overdue.forEach((t,i)=>html.push(`<div class="locked-reminder-item locked-overdue-item"><button type="button" data-complete="${i}" aria-label="Complete ${esc(t.title)}"><span class="locked-check">○</span></button><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>Due ${esc(shortDate(t.day))} · ${fmtTime(t)}</small></div><button class="locked-snooze" data-snooze="${i}" type="button">Snooze</button></div>`));
+        html.push('</div>');
+      }
+      if(due.length) {
+        html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Today’s weekly tasks</p>');
+        due.forEach(t=>html.push(`<div class="locked-reminder-item"><span class="locked-dot"></span><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>${fmtTime(t)} · Check off in your list</small></div></div>`));
+        html.push('</div>');
+      }
+      if(scheduledSupplements.length) {
+        html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Supplement timing</p>');
+        scheduledSupplements.sort((a,b)=>getTime(a).localeCompare(getTime(b))).forEach(t=>html.push(`<div class="locked-reminder-item"><span class="locked-day-chip locked-time-chip">${esc(fmtTime(t).replace(' AM','a').replace(' PM','p'))}</span><div class="locked-item-copy"><strong>${esc(t.title)}</strong></div></div>`));
+        html.push('</div>');
+      }
+      if(next.length) {
+        html.push('<div class="locked-reminder-group"><p class="locked-reminder-label">Coming up</p>');
+        next.slice(0,4).forEach(t=>html.push(`<div class="locked-reminder-item locked-upcoming"><span class="locked-day-chip">${esc(dayName(t.day).slice(0,3))}</span><div class="locked-item-copy"><strong>${esc(t.title)}</strong><small>${esc(shortDate(t.day))} · ${fmtTime(t)}</small></div></div>`));
+        html.push('</div>');
+      }
+      if(!due.length&&!overdue.length&&!next.length)html.push('<p class="locked-reminder-empty">No weekly maintenance tasks scheduled this week.</p>');
+      card.querySelector('#locked-reminder-body').innerHTML=html.join('');
+      card.querySelectorAll('[data-complete]').forEach(b=>b.onclick=()=>markCarryover(overdue[Number(b.dataset.complete)]));
+      card.querySelectorAll('[data-snooze]').forEach(b=>b.onclick=()=>snooze(overdue[Number(b.dataset.snooze)]));
+    } catch(e){console.warn('LOCKED OS reminders display unavailable:',e);} finally {applying=false;}
+  }
+  function maybeNotify() {
+    if (!visible() || !ensure() || !state.meta[KEY_NOTIFICATIONS] || !('Notification' in window) || Notification.permission!=='granted') return;
+    const date=today(), clock=new Date(), mins=clock.getHours()*60+clock.getMinutes(), alerts=state.meta[KEY_ALERTS];
+    const taskMap=new Map();
+    for(const t of [...activeRare(),...pendingCarryover(),...tasksOn(date).filter(t=>ALL_SUPPLEMENT_IDS.has(t.id))]) {
+      taskMap.set(`${t.scope}|${t.id}`,t);
+    }
+    for(const t of taskMap.values()){
+      const [h,m]=getTime(t).split(':').map(Number);const at=h*60+m;
+      if(mins<at || mins>at+90)continue;
+      const uniq=`sent|${date}|${t.scope}|${t.id}`;
+      if(alerts[uniq] || Number(alerts[`snooze|${token(t)}`]||0)>Date.now())continue;
+      alerts[uniq]=Date.now(); persist();
+      try {new Notification('LOCKED OS reminder',{body:t.title,tag:uniq,icon:'favicon.png'});}catch(_){/* Platform may require a full Web Push server. */}
+    }
+  }
+  function escapeIcs(s){return String(s).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');}
+  function stamp(date,time){return date.replace(/-/g,'')+'T'+time.replace(':','')+'00';}
+  function exportCalendar(){
+    // Native calendar alerts do not rely on a background JavaScript tab or a server.
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Los_Angeles';
+    const byTask=new Map();
+    for(let i=0;i<7;i++)for(const task of tasksOn(shift(today(),i))){
+      if(!isRare(task) || RISKY.test(task.title))continue;
+      const id=`${task.scope}|${task.id}`;
+      if(!byTask.has(id))byTask.set(id,{task,days:new Set(),first:task.day});
+      byTask.get(id).days.add(DAY_CODE[localDate(task.day).getDay()]);
+    }
+    if(!byTask.size){const note=document.querySelector('#locked-reminder-help');if(note)note.textContent='No weekly maintenance tasks are currently scheduled.';return;}
+    const now=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
+    const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//LOCKED OS//Routine Reminder//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:LOCKED OS Weekly Tasks'];
+    for(const [id,item] of byTask){const t=item.task, time=getTime(t);
+      lines.push('BEGIN:VEVENT',`UID:${escapeIcs(id.replace(/[^a-zA-Z0-9|_-]/g,'-'))}@locked-os`,`DTSTAMP:${now}`,`DTSTART;TZID=${tz}:${stamp(item.first,time)}`,`DTEND;TZID=${tz}:${stamp(item.first,(()=>{const [h,m]=time.split(':').map(Number);return `${String((h+Math.floor((m+15)/60))%24).padStart(2,'0')}:${String((m+15)%60).padStart(2,'0')}`;})())}`,`RRULE:FREQ=WEEKLY;BYDAY=${[...item.days].join(',')}`,`SUMMARY:${escapeIcs(t.title)}`,'DESCRIPTION:Recurring maintenance reminder from LOCKED OS. Check the tracker when complete.','BEGIN:VALARM','ACTION:DISPLAY','TRIGGER:PT0M',`DESCRIPTION:${escapeIcs(t.title)}`,'END:VALARM','END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+    const blob=new Blob([lines.join('\r\n')+'\r\n'],{type:'text/calendar;charset=utf-8'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='locked-os-weekly-reminders.ics';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    const note=document.querySelector('#locked-reminder-help');if(note)note.textContent='Calendar file downloaded. Import it into Apple Calendar or another calendar, and enable its alerts. Re-export if you later change your schedule. Importing it twice may create duplicates.';
+  }
+  function install(){
+    if (typeof state==='undefined' || !state || typeof getLooksRoutine!=='function') return;
+    installSupplementTasks();
+    paint();maybeNotify();
+  }
+  const boot=()=>{
+    install();
+    setInterval(()=>{install();},30*1000);
+    window.addEventListener('focus',install);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')install();});
+    document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>setTimeout(install,150)));
+    // Original code rebuilds the checklist dynamically; only watch child additions.
+    const page=document.getElementById('looksPage');
+    if(page){const mo=new MutationObserver(mutations=>{const external=mutations.some(m=>{const el=m.target.nodeType===1?m.target:m.target.parentElement;return el&&!el.closest('#locked-reminder-center');});if(external&&!busy){busy=true;setTimeout(()=>{busy=false;lastPaint='';paint();},100);}});mo.observe(page,{subtree:true,childList:true});}
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,450));else setTimeout(boot,450);
+})();
