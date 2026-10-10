@@ -1,21 +1,20 @@
-LOCKED OS - Daily Checklist Editing Update
+LOCKED OS PERFORMANCE / FOCUS FIX
+=================================
+Upload the edited files directly to the ROOT of GitHub repo policypal1/LOCKED-OS.
+These are the original site filenames, not new standalone patch scripts:
 
-Replace these files in your existing LOCKED-OS project:
-- index.html
-- styles.css
-- ghk-cu.css
+  index.html   (deferred Supabase loading, narrower Gym DOM observer, skips invisible daily checklist)
+  ghk-cu.js    (fixes Focus loading, stops redundant cloud polls, reduces rendering/backup work)
+  styles.css   (integrated Focus styles, preserves existing design)
 
-Changes:
-- Daily Checklist tab remains restored.
-- Daily tasks now use the same editable card behavior as Looksmaxxing.
-- Daily tasks can be completed or skipped.
-- Edit opens the full task editor: name, notes, section, repeat schedule, dates, and weekdays.
-- Add tasks from each section or directly below an existing task.
-- Delete tasks.
-- Reset edited built-in tasks to their default settings.
-- Drag and drop to reorder tasks.
-- Task information/notes can be viewed from the task menu.
-- Daily task edits, schedules, custom tasks, deletion, ordering, completion, and skipping are saved/synced in the existing app state.
-- Romanian Deadlift remains removed from the rendered Gym workout.
+The unchanged accompanying files are:
+  app.js       (included to provide a matching copy, no modifications)
+  ghk-cu.css   (included unchanged)
 
-No BAT files or installer scripts are included.
+If you already have app.js and ghk-cu.css in GitHub, you can leave them alone.
+All existing localStorage keys, Supabase table and database schema remain unchanged.
+Do not clear your browser data. Back up your repository before replacing files.
+
+Important: Built from the verified repository version at October 9/10, 2026.
+Offline JavaScript syntax and a Focus state interaction test passed.
+Full live multi-device/cloud/browser benchmarks were not possible in this environment.

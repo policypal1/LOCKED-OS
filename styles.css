@@ -1490,3 +1490,34 @@ input, select, textarea { accent-color: var(--green); }
 #looksPage .section { margin-bottom: 12px !important; }
 #looksPage .section-header { padding: 10px 14px !important; }
 #looksPage .checklist { padding: 10px !important; }
+
+
+/* ===== FOCUS WORKSPACE ===== */
+/* Isolated styles for the fast-loading Focus workspace. */
+.focus-workspace{max-width:920px;margin:0 auto;padding:16px 0 32px}
+.focus-board{padding:clamp(20px,4vw,34px)}
+.focus-heading{display:flex;align-items:start;justify-content:space-between;gap:20px;margin-bottom:22px}
+.focus-eyebrow{margin:0 0 10px;color:var(--muted,#827968);font-size:11px;letter-spacing:.15em;font-weight:800}
+.focus-heading h2{font-size:clamp(25px,5vw,35px);letter-spacing:-.04em;margin:0}
+.focus-subtitle{margin:8px 0 0;color:var(--muted,#827968);font-size:14px}
+.focus-counter{flex:none;text-align:right}
+.focus-counter strong{display:block;font-size:28px;letter-spacing:-.06em;line-height:1.1}
+.focus-counter strong span{font-size:18px;color:var(--muted,#827968)}
+.focus-counter small{display:block;margin-top:4px;color:var(--muted,#827968)}
+.focus-meter{overflow:hidden;height:6px;border-radius:999px;background:rgba(127,127,127,.17);margin:0 0 24px}
+.focus-meter>span{display:block;height:100%;background:var(--green,#58855e);border-radius:inherit;transition:width .2s ease}
+.focus-task-list{display:grid}
+.focus-task{display:flex;align-items:center;gap:12px;padding:17px 0;border-bottom:1px solid var(--line,rgba(127,127,127,.16));min-width:0}
+.focus-check{width:27px;height:27px;flex:none;border:1.5px solid var(--line,#b8b8b8);background:transparent;border-radius:8px;color:white;font:700 16px/1 inherit;cursor:pointer}
+.focus-task.is-complete .focus-check{background:var(--green,#58855e);border-color:var(--green,#58855e)}
+.focus-task-label{flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.45;font-weight:600}
+.focus-task.is-complete .focus-task-label{text-decoration:line-through;opacity:.52}
+.focus-small-button{background:transparent;border:0;padding:7px 3px;color:var(--muted,#827968);font:inherit;font-size:12px;cursor:pointer}
+.focus-small-button:hover{color:var(--text,#222)}
+.focus-edit-input{flex:1;min-width:0;padding:9px;border:1px solid var(--line,#aaa);border-radius:8px;background:transparent;color:inherit;font:inherit}
+.focus-add-form{display:flex;gap:9px;margin-top:20px}
+.focus-add-form input{flex:1;min-width:0;border:1px solid var(--line,#aaa);border-radius:9px;background:transparent;color:inherit;font:inherit;padding:12px}
+.focus-add{padding:11px 16px;border:0;border-radius:9px;color:#fff;background:var(--green,#54835b);cursor:pointer;font-weight:700}
+.focus-empty{color:var(--muted,#827968);font-size:14px;padding:20px 0}
+.focus-footnote{margin:18px 0 0;color:var(--muted,#827968);font-size:12px;line-height:1.6}
+@media(max-width:540px){.focus-board{padding:18px}.focus-heading{gap:8px}.focus-counter strong{font-size:23px}.focus-task{gap:9px}.focus-add{padding:10px 12px}}

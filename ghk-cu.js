@@ -1071,7 +1071,21 @@
     window.getRotationTasksForDay = wrapped;
   }
 
-  function installRenderWrapper(){if(typeof render!=="function"||render.__featureWrapped)return;const base=render;const wrapped=function(...args){const result=base(...args);highlightGhkToday();renderGhkVialTracker();renderAppointments();renderForums();renderGym();return result;};wrapped.__featureWrapped=true;render=wrapped;}
+  function installRenderWrapper(){
+    if(typeof render!=="function"||render.__featureWrapped)return;
+    const base=render;
+    const wrapped=function(...args){
+      const result=base(...args);
+      const active=document.querySelector('.page.active')?.id;
+      // Large feature panels must not redraw while another tab is visible.
+      if(active==='ghkCuPage'){highlightGhkToday();renderGhkVialTracker();}
+      else if(active==='adminPage'){renderAppointments();renderForums();}
+      else if(active==='gymPage'){renderGym();}
+      return result;
+    };
+    wrapped.__featureWrapped=true;
+    render=wrapped;
+  }
 
   window.addEventListener("DOMContentLoaded",()=>{
     if(typeof state==="undefined")return;
@@ -1154,7 +1168,7 @@
   const DIRTY_KEY = "locked_os_supabase_dirty_clean";
   const RECOVERY_KEY = "locked_os_recovery_snapshots_clean";
   const RETRY_DELAYS = [1000, 2500, 5000, 10000, 20000, 30000];
-  const POLL_MS = 5000;
+  const POLL_MS = 30000;
 
   let cleanGymSelectedDate = "";
   let retryTimer = null;
@@ -1258,8 +1272,12 @@
 
   /* ------------------------- resilient save/sync ------------------------- */
 
+  let lastLocalArchiveAt = 0;
   function archiveSnapshot(label, snapshot = state) {
     if (!snapshot || typeof snapshot !== "object") return;
+    // Keep recovery snapshots, but avoid serializing twenty state copies
+    // on every checkbox click. Primary local saves are still immediate.
+    if (label === "local-change" && Date.now() - lastLocalArchiveAt < 30000) return;
     try {
       const serialized = JSON.stringify(snapshot);
       let entries = [];
@@ -1274,6 +1292,7 @@
         serialized
       });
       localStorage.setItem(RECOVERY_KEY, JSON.stringify(entries.slice(0, 20)));
+      if (label === "local-change") lastLocalArchiveAt = Date.now();
     } catch (error) {
       console.warn("LOCKED OS: could not create local recovery snapshot.", error);
     }
@@ -1608,17 +1627,12 @@
   };
 
   function startPolling() {
-    if (!supabaseClient || pollTimer) return;
-    pollTimer = setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      if (mainApp.classList.contains("hidden")) return;
-      if (hasPendingLocalChanges()) return;
-      refreshSupabaseState();
-    }, POLL_MS);
+    // Retired: October v3 installSync() owns network polling and sync.
+    // Keeping this legacy interval duplicated full state fetch/merge work.
   }
 
   window.addEventListener("focus", () => refreshSupabaseState());
-  archiveSnapshot("clean-rebuild-start", state);
+  if (!localStorage.getItem(RECOVERY_KEY)) archiveSnapshot("clean-rebuild-start", state);
 
   /* ------------------------------ gym state ------------------------------ */
 
@@ -5435,13 +5449,7 @@
   };
 
   function qaStartPolling() {
-    if (!supabaseClient || qaPollTimer) return;
-    qaPollTimer = setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      if (mainApp.classList.contains("hidden")) return;
-      if (hasPendingLocalChanges()) return;
-      refreshSupabaseState();
-    }, 5000);
+    // The conflict-aware October v3 sync supersedes this QA interval.
   }
 
   /*
@@ -7734,7 +7742,9 @@
     refreshing = true;
     try {
       const row = await fetchRow();
-      if (row?.state) receive(row.state,row.updated_at);
+      if (row?.state && (row.updated_at !== baseTimestamp || pending())) {
+        receive(row.state,row.updated_at);
+      }
       if (!row) { base = {}; persist(); }
       if (pending() || !row) { refreshing = false; return await save(); }
       if(syncStatus) syncStatus.textContent = 'Synced across devices.';
@@ -7792,8 +7802,11 @@
     }
   });
   setInterval(()=>{
-    if(document.visibilityState==='visible') { refresh(); if(deferredRender)repaint(); }
-  },5000);
+    if(document.visibilityState==='visible') {
+      refresh();
+      if(deferredRender)repaint();
+    }
+  },30000);
 
   const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && formatDateKey(keyToLocalDate(value))===value;
@@ -8209,7 +8222,35 @@
       const retryButton = document.createElement("button"); retryButton.type = "button"; retryButton.textContent = "Sync now";
       retryButton.onclick = refresh; strip.append(syncStatus, retryButton); header.insertAdjacentElement("afterend", strip);
     }
-    const oldRender=render;render=function(){oldRender();renderProgress();};
+    const oldRender=render;
+    render=function(){
+      const active=document.querySelector('.page.active')?.id;
+      if(active==='checklistPage') {
+        window.lockedOsRenderBusinessFocus?.();
+        return;
+      }
+      if(active==='looksPage') {
+        try { renderLooks(); renderDayStreak(); }
+        catch(error) { console.error('LOCKED OS Looks redraw:',error); }
+        return;
+      }
+      if(active==='contentPage') return; // Content owns its own tab renderer.
+      if(active==='adminPage') {
+        try {
+          renderAdmin();
+          if(document.getElementById('weeklyPage')?.classList.contains('active')) renderWeeklyReview();
+        } catch(error) { console.error('LOCKED OS Admin redraw:',error); }
+        return;
+      }
+      if(active==='gymPage') {
+        // Gym's own tab handlers render its workout editor. Only refresh the
+        // progress widget here, not every hidden checklist and admin panel.
+        window.lockedOsRenderGymProgress?.();
+        return;
+      }
+      // Preserve the existing GHK-Cu render wrappers.
+      try {oldRender();}catch(error){console.error('LOCKED OS panel render:',error);}
+    };
     repaint();refresh();
   },350);
 })();
@@ -8744,3 +8785,142 @@
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,450));else setTimeout(boot,450);
 })();
+
+
+/* ===== FOCUS WORKSPACE: BUILT INTO ghk-cu.js ===== */
+/* LOCKED OS | lightweight Focus workspace.
+ * Uses the existing state/saveState pipeline so tasks sync with Supabase.
+ * Does not touch or delete the legacy daily checklist or its history.
+ */
+(() => {
+  'use strict';
+  const root = document.getElementById('lockedBusinessFocus');
+  if (!root) return;
+  const KEY = 'businessFocusV1';
+  const defaults = [
+    { id: 'focus-prospects', title: 'Contact new potential clients' },
+    { id: 'focus-followups', title: 'Follow up with interested prospects' },
+    { id: 'focus-proof', title: 'Share a result or case study' }
+  ];
+  const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+  const today = () => typeof getTodayKey === 'function'
+    ? getTodayKey()
+    : new Date().toLocaleDateString('en-CA');
+  const getModel = (forEdit = false) => {
+    if (typeof state === 'undefined' || !state || typeof state !== 'object') return null;
+    // Rendering must never silently change application state. This matters
+    // during first cloud reconciliation and avoids accidental sync conflicts.
+    const meta = state.meta && typeof state.meta === 'object' ? state.meta : {};
+    let model = meta[KEY];
+    if (!model || typeof model !== 'object' || Array.isArray(model)) {
+      model = { tasks: defaults.map(item => ({ ...item })), days: {} };
+      if (forEdit) {
+        state.meta = meta;
+        meta[KEY] = model;
+      }
+    }
+    if (!Array.isArray(model.tasks)) model.tasks = defaults.map(item => ({ ...item }));
+    if (!model.days || typeof model.days !== 'object') model.days = {};
+    return model;
+  };
+  const save = () => {
+    if (typeof saveState === 'function') saveState();
+    else if (typeof saveLocalState === 'function') saveLocalState();
+  };
+  function paint() {
+    // The active tab alone owns its work; no background DOM rebuilding.
+    if (!document.getElementById('checklistPage')?.classList.contains('active')) return;
+    const model = getModel();
+    if (!model) return;
+    const day = today();
+    const tasks = model.tasks.filter(task => task && typeof task.id === 'string' && typeof task.title === 'string');
+    const completed = new Set(Array.isArray(model.days[day]) ? model.days[day] : []);
+    const done = tasks.filter(task => completed.has(task.id)).length;
+    const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+    root.innerHTML = `
+      <div class="focus-workspace">
+        <section class="card focus-board">
+          <div class="focus-heading"><div><p class="focus-eyebrow">TODAY'S WORK</p><h2>Business Focus</h2><p class="focus-subtitle">One useful action at a time.</p></div>
+            <div class="focus-counter" aria-label="${done} of ${tasks.length} tasks completed"><strong>${done}<span> / ${tasks.length}</span></strong><small>completed</small></div></div>
+          <div class="focus-meter" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Focus progress"><span style="width:${pct}%"></span></div>
+          <div class="focus-task-list">${tasks.map(task => `
+            <div class="focus-task ${completed.has(task.id) ? 'is-complete' : ''}" data-focus-row="${escape(task.id)}">
+              <button type="button" class="focus-check" data-focus-check="${escape(task.id)}" aria-label="${completed.has(task.id) ? 'Mark incomplete' : 'Complete task'}" aria-pressed="${completed.has(task.id)}">${completed.has(task.id) ? '✓' : ''}</button>
+              <span class="focus-task-label">${escape(task.title)}</span>
+              <button type="button" class="focus-small-button" data-focus-edit="${escape(task.id)}" aria-label="Edit task">Edit</button>
+              <button type="button" class="focus-small-button" data-focus-remove="${escape(task.id)}" aria-label="Remove task">×</button>
+            </div>`).join('')}</div>
+          ${tasks.length ? '' : '<p class="focus-empty">No tasks yet. Add one concrete priority to get started.</p>'}
+          <form class="focus-add-form" id="focusAddForm"><input aria-label="New business focus task" id="focusNewTask" type="text" maxlength="140" placeholder="Add a priority…" autocomplete="off" required /><button class="focus-add" type="submit">Add task</button></form>
+          <p class="focus-footnote">Your progress saves automatically and resets each day. Your previous days are preserved.</p>
+        </section>
+      </div>`;
+  }
+  function changeTask(id, operation, title = '') {
+    const model = getModel(true);
+    if (!model) return;
+    const task = model.tasks.find(item => item.id === id);
+    if (!task) return;
+    if (operation === 'check') {
+      const done = new Set(Array.isArray(model.days[today()]) ? model.days[today()] : []);
+      if (done.has(id)) done.delete(id); else done.add(id);
+      model.days[today()] = [...done];
+    } else if (operation === 'remove') {
+      model.tasks = model.tasks.filter(item => item.id !== id);
+      // Keep historic completion records for a removed task.
+    } else if (operation === 'edit') {
+      if (!title.trim()) return;
+      task.title = title.trim().slice(0, 140);
+    }
+    save(); paint();
+  }
+  function editTask(id) {
+    const model = getModel();
+    const task = model?.tasks?.find(item => item.id === id);
+    const row = [...root.querySelectorAll('[data-focus-row]')].find(item => item.dataset.focusRow === id);
+    const label = row?.querySelector('.focus-task-label');
+    if (!task || !label) return;
+    const input = document.createElement('input');
+    input.className = 'focus-edit-input';
+    input.type = 'text'; input.maxLength = 140; input.value = task.title;
+    label.replaceWith(input); input.focus(); input.select();
+    let done = false;
+    const commit = (cancel = false) => {
+      if (done) return;
+      done = true;
+      if (cancel || !input.value.trim()) { paint(); return; }
+      changeTask(id, 'edit', input.value);
+    };
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); commit(); }
+      if (event.key === 'Escape') { event.preventDefault(); commit(true); }
+    });
+    input.addEventListener('blur', () => commit());
+  }
+  root.addEventListener('click', event => {
+    const btn = event.target.closest('button');
+    if (!btn || !root.contains(btn)) return;
+    if (btn.dataset.focusCheck) changeTask(btn.dataset.focusCheck, 'check');
+    else if (btn.dataset.focusEdit) editTask(btn.dataset.focusEdit);
+    else if (btn.dataset.focusRemove) changeTask(btn.dataset.focusRemove, 'remove');
+  });
+  root.addEventListener('submit', event => {
+    if (event.target.id !== 'focusAddForm') return;
+    event.preventDefault();
+    const title = root.querySelector('#focusNewTask')?.value.trim();
+    if (!title) return;
+    const model = getModel(true);
+    if (!model) return;
+    const id = `focus-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    model.tasks.push({ id, title: title.slice(0, 140) });
+    save(); paint(); root.querySelector('#focusNewTask')?.focus();
+  });
+  window.lockedOsRenderBusinessFocus = paint;
+  document.querySelector('.tab[data-tab="checklistPage"]')?.addEventListener('click', () => requestAnimationFrame(paint));
+  document.addEventListener('DOMContentLoaded', paint, { once: true });
+  // The data can arrive later from Supabase; core render() handles that case.
+  paint();
+})();
+

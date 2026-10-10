@@ -7,7 +7,7 @@
 <title>Locked OS</title>
 <link href="favicon.png" rel="icon" type="image/png" sizes="512x512"/>
 <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
-<link href="styles.css?v=20261009circlefix" rel="stylesheet"/>
+<link href="styles.css?v=20261010optimized" rel="stylesheet"/>
 <link href="ghk-cu.css?v=20261009dailyreplace4" rel="stylesheet"/>
 <style id="lockedOsInlinePatchStyles">
 /* LOCKED OS - 2026-08-29 requested UI fixes */
@@ -322,9 +322,9 @@
 
 
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="app.js?v=20261003"></script>
-<script defer src="ghk-cu.js?v=20261009dailyreplace4"></script>
+<script defer src="ghk-cu.js?v=20261010optimized"></script>
 </head>
 <body>
 <main class="app">
@@ -1816,7 +1816,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
   removeRomanianDeadlift();
   const observer = new MutationObserver(removeRomanianDeadlift);
-  observer.observe(document.body, { childList: true, subtree: true });
+  const gymRoot = document.getElementById("gymPage");
+  if (gymRoot) observer.observe(gymRoot, { childList: true, subtree: true });
 });
 </script>
 
@@ -2388,6 +2389,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const checklistTab = document.querySelector('.tab[data-tab="checklistPage"]');
     checklistTab?.addEventListener("click", () => {
+      // The legacy checklist is hidden behind the Business Focus workspace.
+      // Avoid rebuilding hundreds of offscreen elements on every tab switch.
+      if (document.getElementById("lockedOsOriginalDailyRoot")?.hidden) return;
       setTimeout(() => {
         installSectionAddButtons();
         renderTaskLists();

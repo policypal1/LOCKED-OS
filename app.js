@@ -26,7 +26,7 @@ const DAY_ROLLOVER_HOUR = 4;
 const WATER_MINIMUM_OZ = 80;
 const WATER_TARGET_OZ = 100;
 const WATER_MAX_OZ = 240;
-const LOOKS_MORNING_WATER_OZ = 8;
+const LOOKS_MORNING_WATER_OZ = 16;
 const MS_PER_DAY = 86_400_000;
 const ROTATION_PREVIEW_DAYS = 14;
 
@@ -58,7 +58,7 @@ const SHEET_WASH_DAYS = new Set(["Wednesday", "Sunday"]);
 
 const TASKS = [
   { id: "wake-up", section: "morning", title: "Wake up at planned time" },
-  { id: "water", section: "morning", title: "Chug one 8 oz glass of water after waking up" },
+  { id: "water", section: "morning", title: "Chug 2 glasses of water immediately after waking up" },
   { id: "clean-room", section: "morning", title: "Clean room" },
   { id: "dressed", section: "morning", title: "Get fully dressed and ready for the day" },
   { id: "real-world-good-morning", section: "morning", title: "Real World daily good morning" },
@@ -101,10 +101,7 @@ const supabaseClient = hasSupabaseConfig && window.supabase
   : null;
 
 let state = loadLocalState();
-window.lockedOsInitiallyDirty = localStorage.getItem("locked_os_supabase_dirty_clean") === "1";
 let saveTimer = null;
-let supabaseRetryTimer = null;
-let supabaseRetryAttempts = 0;
 let realtimeChannel = null;
 let toastTimer = null;
 let renderedDayKey = getTodayKey();
@@ -228,7 +225,7 @@ function getTretinoinDays(dayKey = getTodayKey()) {
 
 function makeMorning(dayName) {
   const tasks = [
-    { id: "wake-water", title: "Wake up and chug one 8 oz glass of water", meta: "morningWater" },
+    { id: "wake-water", title: "Wake up and chug 2 glasses of water immediately", meta: "morningWater" },
     { id: "lukewarm-shower", title: "Take a lukewarm shower" },
     { id: "conditional-shampoo", title: "Shampoo only if hair is dirty" },
     { id: "conditioner-soap", title: "Use conditioner and soap" }
@@ -765,6 +762,23 @@ function normalizeState() {
     changed = true;
   }
 
+  // Tretinoin schedule migration: Monday 2026-09-21 was the most recent application.
+  // Keep the older every-other-day patch from overriding the current 2x/week ramp.
+  if (state.meta.tretinoinEveryOtherDayV1?.enabled) {
+    state.meta.tretinoinEveryOtherDayV1 = {
+      ...state.meta.tretinoinEveryOtherDayV1,
+      enabled: false
+    };
+    changed = true;
+  }
+
+  const tretStartDay = ensureDay("2026-09-21");
+  if (!tretStartDay.looksDone.includes("tretinoin")) {
+    tretStartDay.looksDone.push("tretinoin");
+    tretStartDay.looksSkipped = tretStartDay.looksSkipped.filter(id => id !== "tretinoin");
+    changed = true;
+  }
+
   const normalizedEdits = normalizeLooksTaskEdits(state.meta.looksTaskEdits);
   if (JSON.stringify(state.meta.looksTaskEdits || {}) !== JSON.stringify(normalizedEdits)) {
     state.meta.looksTaskEdits = normalizedEdits;
@@ -953,35 +967,17 @@ function subscribeToSupabaseState() {
 }
 
 function saveState() {
-  // Record the change locally immediately. Cloud syncing is asynchronous and
-  // must never make the checkbox appear to have failed.
   localRevision += 1;
   saveLocalState();
-  supabaseRetryAttempts = 0;
   queueSupabaseSave();
 }
 
 function queueSupabaseSave(delay = 180) {
   clearTimeout(saveTimer);
-  clearTimeout(supabaseRetryTimer);
-  supabaseRetryTimer = null;
   saveTimer = setTimeout(() => {
     saveTimer = null;
     saveSupabaseState();
   }, delay);
-}
-
-function retrySupabaseSave() {
-  // Keep the local copy authoritative until a cloud write actually succeeds.
-  // Short initial retries recover temporary connection failures without
-  // requiring the user to toggle the same task over and over.
-  if (supabaseRetryAttempts >= 8 || supabaseRetryTimer || !supabaseClient) return;
-  const waitMs = Math.min(30000, 1500 * (2 ** supabaseRetryAttempts));
-  supabaseRetryAttempts += 1;
-  supabaseRetryTimer = setTimeout(() => {
-    supabaseRetryTimer = null;
-    if (localRevision > syncedRevision) saveSupabaseState();
-  }, waitMs);
 }
 
 async function loadSupabaseState() {
@@ -991,17 +987,7 @@ async function loadSupabaseState() {
   }
 
   const localBeforeLoad = state;
-  const revisionAtLoadStart = localRevision;
   const remoteRow = await fetchSupabaseState();
-
-  // A click made while the initial cloud fetch is pending must not be undone
-  // by its older response. The new local state will be sent to the cloud.
-  if (localRevision !== revisionAtLoadStart) {
-    if (syncStatus) syncStatus.textContent = "Latest edits saved locally; syncing…";
-    queueSupabaseSave(0);
-    subscribeToSupabaseState();
-    return;
-  }
 
   if (remoteRow?.state && typeof remoteRow.state === "object") {
     const remoteHasData = hasMeaningfulState(remoteRow.state);
@@ -1060,24 +1046,22 @@ async function saveSupabaseState() {
       updated_at: writeTimestamp
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error(error);
+      syncStatus.textContent = "Supabase save failed. Saved locally only.";
+      return false;
+    }
 
     syncedRevision = Math.max(syncedRevision, revisionToSave);
     latestSupabaseWriteAt = writeTimestamp;
     saveSucceeded = true;
-    supabaseRetryAttempts = 0;
-    clearTimeout(supabaseRetryTimer);
-    supabaseRetryTimer = null;
     syncStatus.textContent = localRevision > syncedRevision ? "Saving newer changes…" : "Saved to Supabase.";
     return true;
-  } catch (error) {
-    console.error("Supabase save failed; local copy retained:", error);
-    if (syncStatus) syncStatus.textContent = "Saved locally. Retrying cloud sync…";
-    return false;
   } finally {
     supabaseSaveInFlight = false;
+    // Only chain another write after a successful save. If Supabase is offline,
+    // keep the newer local state dirty and let the next edit/online event retry it.
     if (saveSucceeded && (supabaseSaveQueued || localRevision > syncedRevision)) queueSupabaseSave(0);
-    else if (!saveSucceeded && localRevision > syncedRevision) retrySupabaseSave();
   }
 }
 
@@ -1147,7 +1131,7 @@ function refreshLooksTaskRow(taskId) {
 }
 
 function refreshLooksProgressUI() {
-  const key = typeof lockedOsLooksKey === "function" ? lockedOsLooksKey() : getTodayKey();
+  const key = getTodayKey();
   const day = ensureDay(key);
   const total = getLooksTaskIds(key).length;
   const done = day.looksDone.length;
@@ -1204,9 +1188,7 @@ function setLooksStatus(task, status) {
   refreshLooksProgressUI();
   renderDayStreak();
   renderWater();
-  // Do not rebuild every Looksmaxxing row 420 ms after a click: that detached
-  // the next task's button while the user was tapping through a checklist.
-  // Status, progress, water and streak have all already updated above.
+  scheduleInteractionRender();
 }
 
 function saveLooksTaskEdit(task, nextTitle) {
@@ -1407,7 +1389,7 @@ function startInlineTaskAdd(row, menu, section, afterTaskId, onAdd) {
 
   const close = () => {
     row.classList.remove("adding");
-    row.draggable = window.matchMedia("(pointer: fine)").matches;
+    row.draggable = true;
     editor.remove();
   };
   const save = () => {
@@ -1479,8 +1461,7 @@ function createTaskRow(task, done, skipped, theme, onToggle, onSkip, onEdit, con
       editButton.addEventListener("click", event => {
         event.stopPropagation();
         menu.open = false;
-        if (controls.onEditDetails) controls.onEditDetails();
-        else startInlineTaskEdit(row, main, menu, task, onEdit);
+        startInlineTaskEdit(row, main, menu, task, onEdit);
       });
       popover.appendChild(editButton);
     }
@@ -1595,7 +1576,7 @@ function renderLooksTaskList(element, tasks, day, section) {
     );
 
     row.dataset.taskId = task.id;
-    row.draggable = window.matchMedia("(pointer: fine)").matches;
+    row.draggable = true;
     row.setAttribute("aria-grabbed", "false");
     row.addEventListener("dragstart", event => {
       if (row.classList.contains("editing") || row.classList.contains("adding")) {
@@ -2886,15 +2867,15 @@ setupTabs();
 if (normalizeState()) saveLocalState();
 showLogin();
 
-/* ===== 2026-09-22: PERMISSIVE SAVE + COMPLETE WORKOUT ===== */
+/* ===== 2026-09-22: PERMISSIVE SAVE WORKOUT ===== */
 (() => {
   "use strict";
 
-  const FLAG = "__lockedOsPermissiveWorkoutComplete20260922";
+  const FLAG = "__lockedOsPermissiveWorkoutSave20260922";
   if (window[FLAG]) return;
   window[FLAG] = true;
 
-  function selectedGymDayKeyPermissive() {
+  function selectedGymDayKeyForSave() {
     const selected =
       document.querySelector('#cleanGymWeekGrid .gym-strip-selected[data-gym-strip-date]') ||
       document.querySelector('#cleanGymWeekGrid .selected[data-gym-strip-date]') ||
@@ -2904,7 +2885,6 @@ showLogin();
 
     const label = document.getElementById("cleanGymDateLabel")?.textContent?.trim() || "";
     const parsed = new Date(label);
-
     if (!Number.isNaN(parsed.getTime())) {
       return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
     }
@@ -2912,7 +2892,7 @@ showLogin();
     return typeof getTodayKey === "function" ? getTodayKey() : "";
   }
 
-  function readGymNumber(input, round = false) {
+  function permissiveGymNumber(input, round = false) {
     const raw = String(input?.value ?? "").trim();
     if (!raw) return 0;
 
@@ -2923,8 +2903,15 @@ showLogin();
     return round ? Math.round(nonNegative) : nonNegative;
   }
 
-  function collectGymFormPermissively() {
-    return [...document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise")]
+  function saveWorkoutNoMatterWhat() {
+    const dayKey = selectedGymDayKeyForSave();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return;
+
+    const workout =
+      document.getElementById("cleanGymWorkoutTitle")?.textContent?.trim() ||
+      "Workout";
+
+    const exercises = [...document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise")]
       .map(row => ({
         name: String(
           row.dataset.exercise ||
@@ -2932,29 +2919,16 @@ showLogin();
           ""
         ).trim(),
         sets: [0, 1].map(index => ({
-          weight: readGymNumber(
+          weight: permissiveGymNumber(
             row.querySelector(`[data-set="${index}"][data-field="weight"]`)
           ),
-          reps: readGymNumber(
+          reps: permissiveGymNumber(
             row.querySelector(`[data-set="${index}"][data-field="reps"]`),
             true
           )
         }))
       }))
-      .filter(exercise => exercise.name && exercise.name !== "Romanian Deadlift");
-  }
-
-  function saveGymPermissively(markComplete) {
-    if (typeof state === "undefined" || !state || typeof state !== "object") return;
-
-    const dayKey = selectedGymDayKeyPermissive();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return;
-
-    const workout =
-      document.getElementById("cleanGymWorkoutTitle")?.textContent?.trim() ||
-      "Workout";
-
-    const exercises = collectGymFormPermissively();
+      .filter(exercise => exercise.name);
 
     state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
     state.meta.gymClean =
@@ -2981,81 +2955,121 @@ showLogin();
 
     session.workout = workout;
     session.exercises = exercises;
-    if (markComplete) session.completed = true;
     session.updatedAt = new Date().toISOString();
-    if (markComplete) {
-      const day = ensureDay(dayKey);
-      day.looksDone = [...new Set([...(day.looksDone || []), "gym"])];
-      day.looksSkipped = (day.looksSkipped || []).filter(id => id !== "gym");
-    }
-    document.dispatchEvent(new CustomEvent("locked-os-workout-saved"));
 
-    try {
-      if (typeof saveState === "function") saveState();
-    } catch (error) {
-      console.error("LOCKED OS: permissive workout save failed.", error);
-      return;
-    }
+    saveState();
 
     const status = document.getElementById("cleanGymSaveStatus");
-    if (status) {
-      status.textContent = markComplete
-        ? "Workout saved and completed."
-        : "Workout saved.";
-    }
+    if (status) status.textContent = "Workout saved.";
 
-    if (typeof toast === "function") {
-      toast(markComplete ? "Workout completed." : "Workout saved.");
-    }
-
-    // Refresh whatever gym/history UI is available without requiring every
-    // exercise/set to have both values.
-    try {
-      if (typeof renderWeeklyReview === "function") renderWeeklyReview();
-    } catch (_) {}
+    if (typeof toast === "function") toast("Workout saved.");
   }
 
   document.addEventListener(
     "click",
     event => {
       const saveButton = event.target.closest?.("#cleanGymSave");
-      const completeButton = event.target.closest?.("#cleanGymComplete");
-      if (!saveButton && !completeButton) return;
+      if (!saveButton) return;
 
       event.preventDefault();
       event.stopImmediatePropagation();
-
-      saveGymPermissively(Boolean(completeButton));
+      saveWorkoutNoMatterWhat();
     },
     true
   );
 })();
 
-/* ===== 2026-09-22: HIDE ROMANIAN DEADLIFTS FROM GYM FORM ===== */
+/* ===== 2026-09-22: HARD LOCK TRETINOIN 2X SCHEDULE ===== */
 (() => {
   "use strict";
-  const FLAG = "__lockedOsNoRomanianDeadlifts20260922";
-  if (window[FLAG]) return;
-  window[FLAG] = true;
 
-  function removeRomanianDeadliftRows() {
-    document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise").forEach(row => {
-      const name = String(row.dataset.exercise || row.querySelector(".clean-gym-exercise-name strong")?.textContent || "").trim();
-      if (name === "Romanian Deadlift") row.remove();
-    });
+  const FLAG = "__lockedOsTret2xMonFriFix20260922";
+
+  function installTret2xFix() {
+    if (window[FLAG]) return;
+    window[FLAG] = true;
+
+    let changed = false;
+
+    // Disable the older "every other day" override so it cannot create a
+    // Tuesday dose immediately after Monday.
+    if (typeof state !== "undefined" && state && typeof state === "object") {
+      state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
+
+      if (state.meta.tretinoinEveryOtherDayV1?.enabled) {
+        state.meta.tretinoinEveryOtherDayV1 = {
+          ...state.meta.tretinoinEveryOtherDayV1,
+          enabled: false
+        };
+        changed = true;
+      }
+
+      // Monday 9/21 was the actual most recent tretinoin night.
+      if (typeof ensureDay === "function") {
+        const monday = ensureDay("2026-09-21");
+        if (!monday.looksDone.includes("tretinoin")) {
+          monday.looksDone.push("tretinoin");
+          changed = true;
+        }
+        monday.looksSkipped = monday.looksSkipped.filter(id => id !== "tretinoin");
+
+        // Tuesday 9/22 is NOT a tretinoin night.
+        const tuesday = ensureDay("2026-09-22");
+        const beforeDone = tuesday.looksDone.length;
+        const beforeSkipped = tuesday.looksSkipped.length;
+        tuesday.looksDone = tuesday.looksDone.filter(id => id !== "tretinoin");
+        tuesday.looksSkipped = tuesday.looksSkipped.filter(id => id !== "tretinoin");
+        if (tuesday.looksDone.length !== beforeDone || tuesday.looksSkipped.length !== beforeSkipped) {
+          changed = true;
+        }
+      }
+    }
+
+    // ghk-cu.js previously wrapped getTretinoinDays() for an every-other-day mode.
+    // This wrapper runs after all scripts load and guarantees that whenever the
+    // active schedule is 2 nights/week, the only nights are Monday + Friday.
+    if (
+      typeof getTretinoinDays === "function" &&
+      !getTretinoinDays.__lockedOsTwoNightMonFri
+    ) {
+      const previousGetTretinoinDays = getTretinoinDays;
+
+      const wrapped = function(dayKey = (typeof getTodayKey === "function" ? getTodayKey() : "")) {
+        try {
+          if (
+            typeof getTretinoinFrequency === "function" &&
+            getTretinoinFrequency(dayKey) === 2
+          ) {
+            const dayName = typeof getRoutineDayName === "function"
+              ? getRoutineDayName(dayKey)
+              : "";
+            return dayName === "Monday" || dayName === "Friday" ? [dayName] : [];
+          }
+        } catch (_) {}
+
+        return previousGetTretinoinDays(dayKey);
+      };
+
+      wrapped.__lockedOsTwoNightMonFri = true;
+      getTretinoinDays = wrapped;
+    }
+
+    if (changed) {
+      try {
+        if (typeof saveState === "function") saveState();
+      } catch (_) {}
+    }
+
+    try {
+      if (typeof render === "function") render();
+    } catch (_) {}
   }
 
-  function watchGymForm() {
-    const gymPage = document.getElementById("gymPage");
-    if (!gymPage) return;
-    removeRomanianDeadliftRows();
-    const observer = new MutationObserver(() => removeRomanianDeadliftRows());
-    observer.observe(gymPage, { childList: true, subtree: true });
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", watchGymForm, { once: true });
+  // app.js loads before ghk-cu.js, so wait until the full page has loaded,
+  // then apply this fix after ghk-cu.js has installed its older wrapper.
+  if (document.readyState === "complete") {
+    setTimeout(installTret2xFix, 0);
   } else {
-    watchGymForm();
+    window.addEventListener("load", () => setTimeout(installTret2xFix, 0), { once: true });
   }
 })();
