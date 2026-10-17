@@ -2633,6 +2633,8 @@
     }
   }
 
+  window.lockedOsBackupGymSessions = () => writeVaultSessions(state.meta?.gymClean?.sessions || []);
+
   function localRecoverySessions() {
     const sessions = [];
 
@@ -2888,15 +2890,6 @@
       scheduleStripRefresh(25);
     }
 
-    if (
-      event.target.closest("#cleanGymSave") ||
-      event.target.closest("#cleanGymComplete")
-    ) {
-      setTimeout(() => {
-        reconcileRecoveredSessions();
-        writeVaultSessions(state.meta?.gymClean?.sessions || []);
-      }, 30);
-    }
   });
 
   /*
@@ -3918,50 +3911,31 @@
   }
 
   function saveWorkout(markComplete) {
-    const workout = workoutFor(uiSelectedDate);
     const status = document.getElementById("cleanGymSaveStatus");
-    if (!workout) return;
-
+    const workout = workoutFor(uiSelectedDate);
+    if (!workout) { if (status) status.textContent = "Select a workout first."; return false; }
     const collected = collectForm();
-
-    if (collected.invalid) {
-      if (status) status.textContent = "Each entered set needs both weight and reps.";
-      return;
+    if (markComplete && (collected.invalid || collected.exercises.some(ex => ex.sets.some(set => !(set.weight > 0 && set.reps > 0))))) {
+      if (status) status.textContent = "Fill in weight and reps for both sets of every exercise before completing.";
+      return false;
     }
-
-    if (markComplete) {
-      const missing = collected.exercises.some(exercise =>
-        exercise.sets.some(set => !(set.weight > 0 && set.reps > 0))
-      );
-
-      if (missing) {
-        if (status) status.textContent = "Fill both sets for every exercise before completing.";
-        return;
-      }
-    }
-
     const session = sessionForWrite(uiSelectedDate);
     session.workout = workout;
     session.exercises = collected.exercises;
     if (markComplete) session.completed = true;
     session.updatedAt = new Date().toISOString();
-
-    saveState();
-
-    if (status) {
-      status.textContent = markComplete
-        ? "Workout saved and completed."
-        : "Workout saved.";
-    }
-
-    if (typeof toast === "function") {
-      toast(markComplete ? "Workout completed." : "Workout saved.");
-    }
-
+    const saved = saveState();
+    if (saved === false) { if (status) status.textContent = "Local storage full; workout not safely saved."; return false; }
+    try { window.lockedOsBackupGymSessions?.(); } catch (error) { console.warn(error); }
+    window.lockedOsGymDraftDirty = false;
+    if (status) status.textContent = markComplete ? "Workout saved and completed." : "Workout saved locally. Cloud sync pending.";
+    document.dispatchEvent(new Event("locked-os-workout-saved"));
+    if (typeof toast === "function") toast(markComplete ? "Workout completed." : "Workout saved.");
     renderStableStrip({ scroll: false });
     renderHistory();
-    try { renderWeeklyReview(); } catch (_) {}
+    return true;
   }
+  window.lockedOsSaveGymWorkout = saveWorkout;
 
   function openWorkoutLog(dayKey) {
     const session = sessionFor(dayKey);
@@ -7507,8 +7481,13 @@
       return;
     }
 
-    gymObserver = new MutationObserver(() => queueGymDomPatch());
-    gymObserver.observe(gymPage, { childList: true, subtree: true, characterData: true });
+    gymObserver = new MutationObserver(changes => {
+      if (changes.some(change => {
+        const target = change.target.nodeType === 1 ? change.target : change.target.parentElement;
+        return target?.id === "cleanGymWorkoutBody" || target?.closest?.("#cleanGymWorkoutBody");
+      })) queueGymDomPatch();
+    });
+    gymObserver.observe(gymPage, { childList: true, subtree: true });
 
     ["cleanGymPrev", "cleanGymToday", "cleanGymNext"].forEach(id => {
       document.getElementById(id)?.addEventListener("click", () => setTimeout(queueGymDomPatch, 0));
@@ -7761,9 +7740,9 @@
     saveState = function() {
       localRevision++;
       localStorage.setItem(DIRTY_KEY,'1');
-      persist();
+      if (!persist()) return false;
       queueSupabaseSave();
-      window.lockedOsRenderGymProgress?.();
+      return true;
     };
     queueSupabaseSave = function(delay = 180) {
       clearTimeout(saveTimer);
@@ -7806,7 +7785,7 @@
       refresh();
       if(deferredRender)repaint();
     }
-  },30000);
+  },120000);
 
   const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && formatDateKey(keyToLocalDate(value))===value;
@@ -8190,7 +8169,7 @@
   }
   window.lockedOsGymProgressData=progressData;
   function renderProgress(){
-    const page=document.getElementById('gymPage');if(!page)return;
+    const page=document.getElementById('gymPage');if(!page || !page.classList.contains('active'))return;
     let panel=document.getElementById('gymProgressV3');
     if(!panel){panel=document.createElement('section');panel.id='gymProgressV3';panel.className='clean-gym-panel gym-progress-v3';panel.innerHTML=`<h3>Exercise progress</h3><p>Compare your saved working sets over time. Incomplete sets are excluded.</p><div class="gym-progress-controls"><label>Exercise<select id="gymProgressExercise"></select></label><label>Metric<select id="gymProgressMetric"><option value="weight">Heaviest working set (lb)</option><option value="volume">Total volume (lb × reps)</option></select></label><label>Range<select id="gymProgressRange"><option value="30">30 days</option><option value="90">90 days</option><option value="all">All time</option></select></label></div><p id="gymProgressSummary" aria-live="polite"></p><div class="weight-chart" id="gymProgressChart"></div><details><summary>View data</summary><div id="gymProgressTable"></div></details>`;page.append(panel);panel.querySelectorAll('select').forEach(s=>s.onchange=renderProgress);}
     const selector=document.getElementById('gymProgressExercise');
@@ -8924,3 +8903,19 @@
   paint();
 })();
 
+
+/* One authoritative handler for Save workout and Save + complete. */
+(() => {
+  document.addEventListener("click", event => {
+    const button = event.target.closest?.("#cleanGymSave, #cleanGymComplete");
+    if (!button || !document.getElementById("gymPage")?.contains(button)) return;
+    if (typeof window.lockedOsSaveGymWorkout !== "function") return;
+    event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+    try { window.lockedOsSaveGymWorkout(button.id === "cleanGymComplete"); }
+    catch (error) {
+      console.error("Workout save failed:",error);
+      const status=document.getElementById("cleanGymSaveStatus");
+      if (status) status.textContent="Workout save failed. Try again.";
+    }
+  },true);
+})();
