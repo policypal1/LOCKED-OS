@@ -479,6 +479,7 @@
 .los-map-stage{display:grid;place-items:center;overflow:hidden;min-height:455px;perspective:900px;border:1px solid rgba(37,132,184,.14);border-radius:20px;background:radial-gradient(ellipse,rgba(37,132,184,.12),transparent 72%),linear-gradient(120deg,rgba(255,255,255,.5),rgba(207,193,174,.17))}
 .los-body-rotator{width:246px;height:435px;position:relative;transform-style:preserve-3d;transform:rotateY(-10deg);transition:transform .6s cubic-bezier(.2,.8,.22,1)}
 .los-body-rotator.back{transform:rotateY(170deg)}
+.los-body-rotator.dragging{transition:none;cursor:grabbing}
 .los-body-front,.los-body-back{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;filter:drop-shadow(12px 15px 11px rgba(25,28,26,.24))}
 .los-body-back{transform:rotateY(180deg)}
 .los-body-svg{width:100%;height:100%;overflow:visible}
@@ -522,3 +523,13 @@
 @media(max-width:680px){#losGymSwitch{width:100%}#losGymSwitch button{flex:1;padding:10px;font-size:.75rem}.los-studio-hero{flex-direction:column;align-items:flex-start}#losBodyStudio .card{padding:16px}.los-measure-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.los-measure-grid label.los-notes{grid-column:1/-1}.los-muscle-row{grid-template-columns:10px minmax(0,1fr)}.los-muscle-row small{grid-column:2}.los-map-stage{min-height:410px}.los-body-rotator{width:220px;height:390px}}
 @media(prefers-reduced-motion:reduce){.los-body-rotator{transition:none}}
 
+
+/* Recovery & Body v2: drag-to-rotate model. */
+.los-map-stage{position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:grab}
+.los-map-stage:has(.dragging){cursor:grabbing;touch-action:none}
+.los-body-rotator{will-change:transform}
+.los-body-rotator.dragging{transition:none}
+.los-map-help{position:absolute;bottom:10px;left:8px;right:8px;margin:0;text-align:center;font-size:.7rem;font-weight:800;color:var(--muted);pointer-events:none}
+.los-flip-actions{flex-wrap:wrap;justify-content:end}
+.los-flip-actions #losAutoSpin.active{background:var(--blue-dark);color:#fff}
+@media(max-width:620px){.los-flip-actions button{padding:9px}.los-map-stage{min-height:440px}}

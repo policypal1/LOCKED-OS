@@ -259,6 +259,9 @@ function makeMidday(dayKey) {
     { id: "gym", title: `Gym: ${getWorkoutName(dayKey)}` },
     { id: "creatine", title: "Take creatine" }
   ];
+  if (["Monday", "Friday", "Saturday", "Sunday"].includes(dayName)) {
+    tasks.push({ id: "ghk-cu-midday", title: "GHK-Cu midday check-in", subtitle: "Personal schedule tracker." });
+  }
 
   if (SHEET_WASH_DAYS.has(dayName)) tasks.push({ id: "wash-bed-sheets", title: "Wash bed sheets" });
 
@@ -2731,14 +2734,18 @@ function toast(message) {
 function render() {
   renderedDayKey = getTodayKey();
   ensureDay();
-  renderTaskLists();
-  renderProgress();
-  renderPhoneLock();
-  renderDayStreak();
-  renderLooks();
-  renderWeeklyReview();
-  renderMk677();
-  renderAdmin();
+  const active = document.querySelector('.page.active')?.id || 'looksPage';
+  if (active === 'looksPage') {
+    renderDayStreak();
+    renderLooks();
+  } else if (active === 'adminPage') {
+    renderAdmin();
+    if (document.getElementById('weeklyPage')?.classList.contains('active')) renderWeeklyReview();
+  } else if (active === 'mk677Page') {
+    renderMk677();
+  } else if (active === 'checklistPage' && !document.getElementById('lockedOsOriginalDailyRoot')?.hidden) {
+    renderTaskLists(); renderProgress(); renderPhoneLock(); renderDayStreak();
+  }
 }
 
 function showApp() {
@@ -2786,23 +2793,7 @@ passwordInput.addEventListener("keydown", event => {
   if (event.key === "Enter") unlock();
 });
 
-document.querySelectorAll("[data-water-add]").forEach(button => {
-  button.addEventListener("click", () => setWaterOz(ensureDay().waterOz + Number(button.dataset.waterAdd)));
-});
-
-$("resetWaterBtn").addEventListener("click", () => setWaterOz(0));
-$("addCustomWaterBtn").addEventListener("click", () => {
-  const amount = Number($("waterCustomInput").value);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    $("waterCustomInput").focus();
-    return;
-  }
-  setWaterOz(ensureDay().waterOz + amount);
-  $("waterCustomInput").value = "";
-});
-$("waterCustomInput").addEventListener("keydown", event => {
-  if (event.key === "Enter") $("addCustomWaterBtn").click();
-});
+// Water controls are owned by a single delegated handler in index.html.
 
 $("workoutPrevBtn")?.addEventListener("click", () => shiftWorkoutDraft(-1));
 $("workoutNextBtn")?.addEventListener("click", () => shiftWorkoutDraft(1));

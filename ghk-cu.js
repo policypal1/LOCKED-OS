@@ -224,17 +224,17 @@
   function highlightGhkToday() {
     const day = new Date().getDay();
     // Calendar display only. Wednesday is the one rest day.
-    const scheduled = new Set([0, 1, 2, 4, 5, 6]);
+    const scheduled = new Set([0, 1, 5, 6]);
     document.querySelectorAll("[data-ghk-day]").forEach(el => {
       const weekday = Number(el.dataset.ghkDay);
       const active = scheduled.has(weekday);
       el.classList.toggle("today", weekday === day);
       el.classList.toggle("off", !active);
       const label = el.querySelector("span");
-      if (label) label.textContent = active ? "Morning" : "Rest day";
+      if (label) label.textContent = active ? "Midday" : "Off day";
     });
     const badge = document.getElementById("ghkTodayBadge");
-    if (badge) badge.textContent = scheduled.has(day) ? "Today · morning" : "Today · rest day";
+    if (badge) badge.textContent = scheduled.has(day) ? "Today · midday check-in" : "Today · off";
   }
 
   function ghkVialDateLabel(dateKey) {
@@ -1099,7 +1099,7 @@
   window.addEventListener("DOMContentLoaded",()=>{
     if(typeof state==="undefined")return;
     injectStyles();ensureFeatureState();installMeaningfulStateSupport();installMainTab();installGymTab();installAppointmentsPanel();installHandlers();installGymHandlers();installRotationCalendarDeletionFix();installRenderWrapper();highlightGhkToday();installGhkVialTracker();
-    if(typeof saveLocalState==="function")saveLocalState();renderAppointments();renderForums();renderGym();
+    if(typeof saveLocalState==="function")saveLocalState(); // Admin and Gym panels render when opened.
   });
 })();
 
@@ -2006,7 +2006,7 @@
 
   function renderCleanGymHistory() {
     const list = document.getElementById("cleanGymHistory");
-    if (!list) return;
+    if (!list || !document.getElementById("gymPage")?.classList.contains("active")) return;
     ensureGymClean();
     const sessions = [...state.meta.gymClean.sessions]
       .filter(session => validDateKey(session?.date))
@@ -3203,7 +3203,7 @@
         </div>
         <div class="clean-gym-previous">
           <span>Previous</span>
-          <strong>${escapeHtml(setText(previous?.sets?.[0]))}<br>${escapeHtml(setText(previous?.sets?.[1]))}</strong>
+          <strong>${previous ? `${escapeHtml(setText(previous?.sets?.[0]))}<br>${escapeHtml(setText(previous?.sets?.[1]))}` : "First logged workout"}</strong>
         </div>
         ${[0,1].map(index => {
           const set = current.sets?.[index] || {};
@@ -3228,7 +3228,7 @@
 
   function renderHistory() {
     const list = document.getElementById("cleanGymHistory");
-    if (!list) return;
+    if (!list || !document.getElementById("gymPage")?.classList.contains("active")) return;
 
     ensureGym();
     const sessions = [...state.meta.gymClean.sessions]
@@ -3644,15 +3644,22 @@
 
   function previousExercise(name, beforeDate) {
     ensureGym();
-    const sessions = [...state.meta.gymClean.sessions]
+    const aliases = {
+      'Reverse Pec Deck': ['Face Pulls'],
+      'Face Pulls': ['Reverse Pec Deck'],
+      'Cable Fly / Pec Deck': ['Cable Fly', 'Pec Deck'],
+      'Cable Crunch / Ab Machine': ['Cable Crunch', 'Ab Machine']
+    };
+    const acceptable = new Set([name, ...(aliases[name] || [])]);
+    const sessions = state.meta.gymClean.sessions
       .filter(session => validDateKey(session?.date) && session.date < beforeDate)
       .sort((a, b) => b.date.localeCompare(a.date));
-
     for (const session of sessions) {
-      const match = Array.isArray(session.exercises)
-        ? session.exercises.find(exercise => exercise?.name === name)
-        : null;
-      if (match) return match;
+      for(const candidate of session.exercises || []) {
+        if(!acceptable.has(candidate?.name))continue;
+        const sets = Array.isArray(candidate.sets) ? candidate.sets : [];
+        if(sets.some(s => Number(s?.weight) > 0 && Number(s?.reps) > 0)) return candidate;
+      }
     }
     return null;
   }
@@ -3806,7 +3813,7 @@
         </div>
         <div class="clean-gym-previous">
           <span>Previous</span>
-          <strong>${escapeHtml(setText(previous?.sets?.[0]))}<br>${escapeHtml(setText(previous?.sets?.[1]))}</strong>
+          <strong>${previous ? `${escapeHtml(setText(previous?.sets?.[0]))}<br>${escapeHtml(setText(previous?.sets?.[1]))}` : "First logged workout"}</strong>
         </div>
         ${[0, 1].map(index => {
           const set = current.sets?.[index] || {};
@@ -3834,7 +3841,7 @@
 
   function renderHistory() {
     const list = document.getElementById("cleanGymHistory");
-    if (!list) return;
+    if (!list || !document.getElementById("gymPage")?.classList.contains("active")) return;
 
     ensureGym();
     const sessions = [...state.meta.gymClean.sessions]
@@ -4303,7 +4310,7 @@
     installStyles();
     installControls();
     keepLooksGymReadOnly();
-    renderGymUi();
+    if (document.getElementById('gymPage')?.classList.contains('active')) renderGymUi();
 
     document.querySelectorAll('[data-tab="gymPage"],[data-tab="looksPage"]').forEach(button => {
       if (button.dataset.gymLogNavFixBound === "true") return;
@@ -8213,10 +8220,7 @@
     const oldRender=render;
     render=function(){
       const active=document.querySelector('.page.active')?.id;
-      if(active==='checklistPage') {
-        window.lockedOsRenderBusinessFocus?.();
-        return;
-      }
+      if(active==='checklistPage') return;
       if(active==='looksPage') {
         try { renderLooks(); renderDayStreak(); }
         catch(error) { console.error('LOCKED OS Looks redraw:',error); }
@@ -8775,161 +8779,6 @@
 })();
 
 
-/* ===== FOCUS WORKSPACE: BUILT INTO ghk-cu.js ===== */
-/* LOCKED OS | lightweight Focus workspace.
- * Uses the existing state/saveState pipeline so tasks sync with Supabase.
- * Does not touch or delete the legacy daily checklist or its history.
- */
-(() => {
-  'use strict';
-  const root = document.getElementById('lockedBusinessFocus');
-  if (!root) return;
-  const KEY = 'businessFocusV1';
-  const defaults = [
-    { id: 'focus-prospects', title: 'Contact new potential clients' },
-    { id: 'focus-followups', title: 'Follow up with interested prospects' },
-    { id: 'focus-proof', title: 'Share a result or case study' }
-  ];
-  const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[char]);
-  const today = () => typeof getTodayKey === 'function'
-    ? getTodayKey()
-    : new Date().toLocaleDateString('en-CA');
-  const getModel = (forEdit = false) => {
-    if (typeof state === 'undefined' || !state || typeof state !== 'object') return null;
-    // Rendering must never silently change application state. This matters
-    // during first cloud reconciliation and avoids accidental sync conflicts.
-    const meta = state.meta && typeof state.meta === 'object' ? state.meta : {};
-    let model = meta[KEY];
-    if (!model || typeof model !== 'object' || Array.isArray(model)) {
-      model = { tasks: defaults.map(item => ({ ...item })), days: {} };
-      if (forEdit) {
-        state.meta = meta;
-        meta[KEY] = model;
-      }
-    }
-    if (!Array.isArray(model.tasks)) model.tasks = defaults.map(item => ({ ...item }));
-    if (!model.days || typeof model.days !== 'object') model.days = {};
-    return model;
-  };
-  const save = () => {
-    if (typeof saveState === 'function') saveState();
-    else if (typeof saveLocalState === 'function') saveLocalState();
-  };
-  function paint() {
-    // The active tab alone owns its work; no background DOM rebuilding.
-    if (!document.getElementById('checklistPage')?.classList.contains('active')) return;
-    const model = getModel();
-    if (!model) return;
-    const day = today();
-    const tasks = model.tasks.filter(task => task && typeof task.id === 'string' && typeof task.title === 'string');
-    const completed = new Set(Array.isArray(model.days[day]) ? model.days[day] : []);
-    const done = tasks.filter(task => completed.has(task.id)).length;
-    const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
-    root.innerHTML = `
-      <div class="focus-workspace">
-        <section class="card focus-board">
-          <div class="focus-heading"><div><p class="focus-eyebrow">TODAY'S WORK</p><h2>Business Focus</h2><p class="focus-subtitle">One useful action at a time.</p></div>
-            <div class="focus-counter" aria-label="${done} of ${tasks.length} tasks completed"><strong>${done}<span> / ${tasks.length}</span></strong><small>completed</small></div></div>
-          <div class="focus-meter" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Focus progress"><span style="width:${pct}%"></span></div>
-          <div class="focus-task-list">${tasks.map(task => `
-            <div class="focus-task ${completed.has(task.id) ? 'is-complete' : ''}" data-focus-row="${escape(task.id)}">
-              <button type="button" class="focus-check" data-focus-check="${escape(task.id)}" aria-label="${completed.has(task.id) ? 'Mark incomplete' : 'Complete task'}" aria-pressed="${completed.has(task.id)}">${completed.has(task.id) ? '✓' : ''}</button>
-              <span class="focus-task-label">${escape(task.title)}</span>
-              <button type="button" class="focus-small-button" data-focus-edit="${escape(task.id)}" aria-label="Edit task">Edit</button>
-              <button type="button" class="focus-small-button" data-focus-remove="${escape(task.id)}" aria-label="Remove task">×</button>
-            </div>`).join('')}</div>
-          ${tasks.length ? '' : '<p class="focus-empty">No tasks yet. Add one concrete priority to get started.</p>'}
-          <form class="focus-add-form" id="focusAddForm"><input aria-label="New business focus task" id="focusNewTask" type="text" maxlength="140" placeholder="Add a priority…" autocomplete="off" required /><button class="focus-add" type="submit">Add task</button></form>
-          <p class="focus-footnote">Your progress saves automatically and resets each day. Your previous days are preserved.</p>
-        </section>
-      </div>`;
-  }
-  function changeTask(id, operation, title = '') {
-    const model = getModel(true);
-    if (!model) return;
-    const task = model.tasks.find(item => item.id === id);
-    if (!task) return;
-    if (operation === 'check') {
-      const done = new Set(Array.isArray(model.days[today()]) ? model.days[today()] : []);
-      if (done.has(id)) done.delete(id); else done.add(id);
-      model.days[today()] = [...done];
-    } else if (operation === 'remove') {
-      model.tasks = model.tasks.filter(item => item.id !== id);
-      // Keep historic completion records for a removed task.
-    } else if (operation === 'edit') {
-      if (!title.trim()) return;
-      task.title = title.trim().slice(0, 140);
-    }
-    save(); paint();
-  }
-  function editTask(id) {
-    const model = getModel();
-    const task = model?.tasks?.find(item => item.id === id);
-    const row = [...root.querySelectorAll('[data-focus-row]')].find(item => item.dataset.focusRow === id);
-    const label = row?.querySelector('.focus-task-label');
-    if (!task || !label) return;
-    const input = document.createElement('input');
-    input.className = 'focus-edit-input';
-    input.type = 'text'; input.maxLength = 140; input.value = task.title;
-    label.replaceWith(input); input.focus(); input.select();
-    let done = false;
-    const commit = (cancel = false) => {
-      if (done) return;
-      done = true;
-      if (cancel || !input.value.trim()) { paint(); return; }
-      changeTask(id, 'edit', input.value);
-    };
-    input.addEventListener('keydown', event => {
-      if (event.key === 'Enter') { event.preventDefault(); commit(); }
-      if (event.key === 'Escape') { event.preventDefault(); commit(true); }
-    });
-    input.addEventListener('blur', () => commit());
-  }
-  root.addEventListener('click', event => {
-    const btn = event.target.closest('button');
-    if (!btn || !root.contains(btn)) return;
-    if (btn.dataset.focusCheck) changeTask(btn.dataset.focusCheck, 'check');
-    else if (btn.dataset.focusEdit) editTask(btn.dataset.focusEdit);
-    else if (btn.dataset.focusRemove) changeTask(btn.dataset.focusRemove, 'remove');
-  });
-  root.addEventListener('submit', event => {
-    if (event.target.id !== 'focusAddForm') return;
-    event.preventDefault();
-    const title = root.querySelector('#focusNewTask')?.value.trim();
-    if (!title) return;
-    const model = getModel(true);
-    if (!model) return;
-    const id = `focus-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    model.tasks.push({ id, title: title.slice(0, 140) });
-    save(); paint(); root.querySelector('#focusNewTask')?.focus();
-  });
-  window.lockedOsRenderBusinessFocus = paint;
-  document.querySelector('.tab[data-tab="checklistPage"]')?.addEventListener('click', () => requestAnimationFrame(paint));
-  document.addEventListener('DOMContentLoaded', paint, { once: true });
-  // The data can arrive later from Supabase; core render() handles that case.
-  paint();
-})();
-
-
-/* One authoritative handler for Save workout and Save + complete. */
-(() => {
-  document.addEventListener("click", event => {
-    const button = event.target.closest?.("#cleanGymSave, #cleanGymComplete");
-    if (!button || !document.getElementById("gymPage")?.contains(button)) return;
-    if (typeof window.lockedOsSaveGymWorkout !== "function") return;
-    event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
-    try { window.lockedOsSaveGymWorkout(button.id === "cleanGymComplete"); }
-    catch (error) {
-      console.error("Workout save failed:",error);
-      const status=document.getElementById("cleanGymSaveStatus");
-      if (status) status.textContent="Workout save failed. Try again.";
-    }
-  },true);
-})();
-
-
 /* Gym → Recovery & Body. Integrated into existing ghk-cu.js. */
 /* LOCKED OS • Gym body studio and GHK-Cu weekday planner.
    Additive extension: does not replace existing Gym save handlers or Supabase sync. */
@@ -8943,7 +8792,7 @@
     ['arms', 'Arms'], ['quads', 'Quads'], ['hamstrings', 'Hamstrings'],
     ['calves', 'Calves'], ['core', 'Core']
   ];
-  const ACTIVE_GHK_DAYS = new Set([0, 1, 2, 4, 5, 6]);
+  const ACTIVE_GHK_DAYS = new Set([0, 1, 5, 6]);
   const $ = id => document.getElementById(id);
   const sanitize = s => String(s ?? '').replace(/[&<>"']/g, ch => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -8967,10 +8816,10 @@
       dayEl.classList.toggle('off', !ACTIVE_GHK_DAYS.has(day));
       dayEl.classList.toggle('today', today === day);
       const label = dayEl.querySelector('span');
-      if (label) label.textContent = ACTIVE_GHK_DAYS.has(day) ? 'Morning' : 'Rest day';
+      if (label) label.textContent = ACTIVE_GHK_DAYS.has(day) ? 'Midday' : 'Off day';
     });
     const badge = $('ghkTodayBadge');
-    if (badge) badge.textContent = ACTIVE_GHK_DAYS.has(today) ? 'Today · morning' : 'Today · rest day';
+    if (badge) badge.textContent = ACTIVE_GHK_DAYS.has(today) ? 'Today · midday' : 'Today · off day';
   }
   function muscleFromSession(session) {
     const found = new Set();
@@ -9055,12 +8904,12 @@
     panel.id = 'losBodyStudio';
     panel.hidden = true;
     panel.innerHTML = `
-      <section class="card los-studio-hero"><div><p class="eyebrow blue">Training intelligence</p><h2>Recovery &amp; Body</h2><p>Explore muscle groups and save body measurements.</p></div><span id="losRecoverySummary">Reading your workout history…</span></section>
+      <section class="card los-studio-hero"><div><p class="eyebrow blue">Training intelligence</p><h2>Recovery &amp; Body</h2><p>Explore training history and rotate the interactive muscle map.</p></div><span id="losRecoverySummary">Reading your workout history…</span></section>
       <div class="los-studio-layout">
-        <section class="card los-studio-anatomy"><div class="los-map-header"><div><p class="eyebrow blue">Interactive body map</p><h3>Muscle groups</h3></div><div class="los-flip-actions"><button id="losFront" class="active" type="button">Front</button><button id="losBack" type="button">Back</button></div></div><div class="los-map-stage"><div class="los-body-rotator" id="losBodyRotator"><div class="los-body-front">${svgBody('front')}</div><div class="los-body-back">${svgBody('back')}</div></div></div><div class="los-key"><span class="recent">Recently trained</span><span class="transition">Nearly rested</span><span class="ready">Time-rested</span><span class="unknown">No data</span></div><p class="los-disclaimer">Color estimates time since your logged training: under 48 hours, 48–72 hours, or over 72 hours. It does not measure actual muscle recovery or injury healing.</p></section>
+        <section class="card los-studio-anatomy"><div class="los-map-header"><div><p class="eyebrow blue">Interactive body map</p><h3>Muscle groups</h3></div><div class="los-flip-actions"><button id="losFront" class="active" type="button">Front</button><button id="losBack" type="button">Back</button><button id="losAutoSpin" type="button" aria-label="Spin body model">Spin ↻</button></div></div><div class="los-map-stage" aria-label="Drag sideways to rotate the muscle map"><div class="los-body-rotator" id="losBodyRotator"><div class="los-body-front">${svgBody('front')}</div><div class="los-body-back">${svgBody('back')}</div></div><p class="los-map-help">Drag to rotate · tap a muscle · press Spin for auto-rotation</p></div><div class="los-key"><span class="recent">Recently trained</span><span class="transition">Nearly rested</span><span class="ready">Time-rested</span><span class="unknown">No data</span></div><p class="los-disclaimer">Color estimates time since your logged training: under 48 hours, 48–72 hours, or over 72 hours. It does not measure actual muscle recovery or injury healing.</p></section>
         <section class="card los-studio-status"><p class="eyebrow blue">Last trained</p><h3>Recovery overview</h3><div id="losMuscleList"></div><div id="losMuscleDetails" aria-live="polite"></div></section>
       </div>
-      <section class="card los-studio-progress"><div class="panel-title"><div><p class="eyebrow blue">Body progress</p><h3>Measurement check-ins</h3></div></div><form id="losMeasureForm"><div class="los-measure-grid"><label>Date<input id="losMeasureDate" type="date" required/></label><label>Weight (lb)<input id="losMeasureWeight" type="number" step="0.1" min="0" max="1000" placeholder="Optional"/></label><label>Waist (in)<input id="losMeasureWaist" type="number" step="0.1" min="0" max="100" placeholder="Optional"/></label><label>Chest (in)<input id="losMeasureChest" type="number" step="0.1" min="0" max="100" placeholder="Optional"/></label><label>Arm (in)<input id="losMeasureArm" type="number" step="0.1" min="0" max="60" placeholder="Optional"/></label><label class="los-notes">Notes<input id="losMeasureNotes" type="text" maxlength="300" placeholder="Optional progress notes"/></label></div><div class="los-save-row"><button type="submit" class="btn blue">Save check-in</button><span id="losSaveStatus" role="status"></span></div></form><div id="losMeasureHistory"></div></section>`;
+`;
     page.append(panel);
     const toggle = next => {
       activeView = next;
@@ -9072,13 +8921,71 @@
     };
     $('losLogTab').onclick = () => toggle('log');
     $('losBodyTab').onclick = () => toggle('body');
-    const flip = back => {
-      $('losBodyRotator').classList.toggle('back', back);
-      $('losFront').classList.toggle('active', !back);
-      $('losBack').classList.toggle('active', back);
+    const rotator = $('losBodyRotator');
+    const stage = rotator.closest('.los-map-stage');
+    let angle = -10, pitch = 0, dragging = false, moved = false, pointer = null;
+    let beginX = 0, beginY = 0, fromAngle = 0, fromPitch = 0;
+    let frame = 0, spinTimer = 0;
+    const paintRotation = () => {
+      frame = 0;
+      rotator.style.transform = `rotateX(${pitch}deg) rotateY(${angle}deg)`;
+      const facingBack = ((angle % 360) + 360) % 360 > 90 && ((angle % 360) + 360) % 360 < 270;
+      $('losFront').classList.toggle('active', !facingBack);
+      $('losBack').classList.toggle('active', facingBack);
     };
+    const queueRotation = () => { if (!frame) frame = requestAnimationFrame(paintRotation); };
+    const stopSpin = () => { if (spinTimer) cancelAnimationFrame(spinTimer); spinTimer = 0; $('losAutoSpin')?.classList.remove('active'); };
+    const flip = back => { stopSpin(); angle = (Math.round(angle / 360) * 360) + (back ? 180 : 0); pitch = 0; queueRotation(); };
     $('losFront').onclick = () => flip(false);
     $('losBack').onclick = () => flip(true);
+    const spinButton = $('losAutoSpin');
+    const spin = () => {
+      spinTimer = 0;
+      if (document.hidden || !$('gymPage')?.classList.contains('active') || activeView !== 'body') { stopSpin(); return; }
+      angle += 0.75;
+      queueRotation();
+      spinTimer = requestAnimationFrame(spin);
+    };
+    spinButton.onclick = () => {
+      if(spinTimer){stopSpin();return;}
+      if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){ angle+=180;queueRotation();return; }
+      spinButton.classList.add('active');
+      spinTimer = requestAnimationFrame(spin);
+    };
+    stage.addEventListener('pointerdown', e => {
+      if(e.button!==0 || e.target.closest('button')) return;
+      stopSpin();pointer=e.pointerId;dragging=true;moved=false;
+      beginX=e.clientX;beginY=e.clientY;fromAngle=angle;fromPitch=pitch;
+      // Do not capture on a tap; allow native muscle click selection to work.
+      rotator.classList.add('dragging');
+    });
+    stage.addEventListener('pointermove', e => {
+      if(!dragging || e.pointerId!==pointer)return;
+      const dx=e.clientX-beginX,dy=e.clientY-beginY;
+      if(Math.abs(dx)+Math.abs(dy)>7 && !moved){
+        moved=true;
+        stage.setPointerCapture?.(e.pointerId);
+      }
+      if(!moved)return;
+      angle=fromAngle + dx*.65;
+      pitch=Math.max(-28,Math.min(28,fromPitch-dy*.22));
+      queueRotation();
+    });
+    const finish = e => {
+      if(!dragging || e.pointerId!==pointer)return;
+      dragging=false;pointer=null;
+      rotator.classList.remove('dragging');
+      if(moved){stage.dataset.suppressTap='true';setTimeout(()=>delete stage.dataset.suppressTap,60);}
+    };
+    stage.addEventListener('pointerup',finish);
+    stage.addEventListener('pointercancel',finish);
+    stage.addEventListener('click',e=>{
+      if(stage.dataset.suppressTap==='true'){
+        e.preventDefault();e.stopImmediatePropagation();
+      }
+    },true);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)stopSpin();});
+    document.addEventListener('click',e=>{if(e.target.closest?.('[data-tab]') && !e.target.closest('[data-tab="gymPage"]'))stopSpin();});
     page.addEventListener('click', e => {
       const btn = e.target.closest('[data-muscle-key]');
       if (btn) choose(btn.dataset.muscleKey);
@@ -9088,13 +8995,6 @@
       const shape = e.target.closest('.los-muscle-regions [data-muscle-key]');
       if (shape) { e.preventDefault(); choose(shape.dataset.muscleKey); }
     });
-    $('losMeasureDate').value = [new Date().getFullYear(), String(new Date().getMonth() + 1).padStart(2, '0'), String(new Date().getDate()).padStart(2, '0')].join('-');
-    $('losMeasureForm').addEventListener('submit', storeMeasurement);
-    $('losMeasureHistory').addEventListener('click', e => {
-      const btn = e.target.closest('[data-checkin]');
-      if (btn) loadMeasurement(btn.dataset.checkin);
-    });
-    drawMeasurements();
     toggle('log');
   }
   function choose(id) {
@@ -9120,43 +9020,6 @@
     });
     $('losRecoverySummary').textContent = `${next.filter(g => g.status === 'ready').length} of ${next.length} groups time-rested`;
     choose(selected);
-  }
-  function measurements() {
-    const source = currentState()?.meta?.gymBodyLogV1;
-    return Array.isArray(source) ? source : [];
-  }
-  function drawMeasurements() {
-    if (!$('losMeasureHistory')) return;
-    const rows = [...measurements()].filter(x => x?.date).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
-    $('losMeasureHistory').innerHTML = rows.length ? `<h4>Recent check-ins</h4>${rows.map(row => `<button type="button" class="los-checkin" data-checkin="${sanitize(row.date)}"><strong>${sanitize(dateText(row.date))}</strong><span>${sanitize(['weight','waist','chest','arm'].filter(k => Number(row[k]) > 0).map(k => `${k}: ${row[k]}`).join(' · ') || 'Notes only')}</span></button>`).join('')}` : '<p class="los-empty">No measurements saved yet.</p>';
-  }
-  function loadMeasurement(day) {
-    const row = measurements().find(x => x.date === day);
-    if (!row) return;
-    $('losMeasureDate').value = row.date;
-    for (const k of ['Weight','Waist','Chest','Arm']) $('losMeasure'+k).value = row[k.toLowerCase()] ?? '';
-    $('losMeasureNotes').value = row.notes || '';
-    $('losSaveStatus').textContent = 'Loaded. Edit and save to update.';
-  }
-  function storeMeasurement(e) {
-    e.preventDefault();
-    const stateNow = currentState(), date = $('losMeasureDate')?.value;
-    if (!stateNow || !Number.isFinite(dateMs(date))) return;
-    const row = { date, notes: $('losMeasureNotes').value.trim(), updatedAt: new Date().toISOString() };
-    for (const k of ['Weight','Waist','Chest','Arm']) {
-      const input = $('losMeasure'+k);
-      const v = input.value.trim();
-      row[k.toLowerCase()] = v === '' ? '' : Math.max(0, Math.min(Number(input.max) || 1000, Number(v) || 0));
-    }
-    if (!row.notes && ['weight','waist','chest','arm'].every(k => row[k] === '')) {
-      $('losSaveStatus').textContent = 'Enter a measurement or a note.';
-      return;
-    }
-    stateNow.meta ||= {};
-    stateNow.meta.gymBodyLogV1 = [...measurements().filter(x => x.date !== date), row].sort((a, b) => a.date.localeCompare(b.date));
-    const result = typeof saveState === 'function' ? saveState() : false;
-    $('losSaveStatus').textContent = result === false ? 'Storage unavailable. Please try again.' : 'Check-in saved locally. Cloud sync queued.';
-    drawMeasurements();
   }
   function start() {
     ghkCalendar();

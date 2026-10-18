@@ -7,8 +7,8 @@
 <title>Locked OS</title>
 <link href="favicon.png" rel="icon" type="image/png" sizes="512x512"/>
 <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
-<link href="styles.css?v=20261010optimized" rel="stylesheet"/>
-<link href="ghk-cu.css?v=20261018body" rel="stylesheet"/>
+<link href="styles.css?v=20261018studio2" rel="stylesheet"/>
+<link href="ghk-cu.css?v=20261018studio2" rel="stylesheet"/>
 <style id="lockedOsInlinePatchStyles">
 /* LOCKED OS - 2026-08-29 requested UI fixes */
 
@@ -323,8 +323,8 @@
 
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script defer src="app.js?v=20261017savefix1"></script>
-<script defer src="ghk-cu.js?v=20261018body"></script>
+<script defer src="app.js?v=20261018studio2"></script>
+<script defer src="ghk-cu.js?v=20261018studio2"></script>
 </head>
 <body>
 <main class="app">
@@ -346,8 +346,7 @@
 <header class="top">
 <div><h1>Locked OS</h1></div>
 <nav aria-label="App tabs" class="tabs">
-<button class="tab active" data-tab="checklistPage" type="button">Focus</button>
-<button class="tab" data-tab="looksPage" type="button">Looksmaxxing</button>
+<button class="tab active" data-tab="looksPage" type="button">Looksmaxxing</button>
 <button class="tab ghk-tab" data-tab="ghkCuPage" type="button">GHK-Cu</button>
 <button class="tab content-tab" data-tab="contentPage" type="button">Content</button>
 <button class="tab admin-tab" data-tab="adminPage" type="button">Admin</button>
@@ -355,7 +354,7 @@
 </header>
 
 
-<section class="page active" id="checklistPage" aria-label="Focus">
+<section class="page" id="checklistPage" aria-label="Legacy daily checklist" hidden>
 <!-- Daily Checklist IS now the business work surface. The old checklist nodes remain
      hidden solely for backward-compatible state and existing event handlers. -->
 <div id="lockedBusinessFocus" aria-label="Business daily work mode">
@@ -376,7 +375,7 @@
 </section>
 
 
-<section class="page" id="looksPage">
+<section class="page active" id="looksPage">
 <div class="looks-hero">
 <section class="card looks-title-card"><h2 id="looksDayName">Today</h2><p id="looksDateText">Today</p><div class="looks-streak-line">Looksmaxxing streak: <strong id="looksStreak">0</strong></div></section>
 <section class="card summary"><div class="circle looks-circle" id="looksProgressCircle"><div class="circle-inner"><div class="percent" id="looksPercent">0%</div><div class="done-count" id="looksDoneCount">0 / 0</div></div></div><div><p class="quote">Build it daily.</p><p class="tasks-left" id="looksTasksLeft">Your routine is loading.</p></div></section>
@@ -391,11 +390,11 @@
 <section class="card water-card" id="waterCard">
 <div class="panel-title"><h3>Water tracker</h3><span class="badge blue" id="waterBadge">0%</span></div>
 <p class="water-amount" id="waterAmount">0 <span>oz / 100 oz</span></p>
-<div class="water-track"><span class="water-fill" id="waterFill"></span><span aria-hidden="true" class="water-minimum-marker"></span></div>
+<div class="water-track" id="waterTrack" role="progressbar" aria-label="Water target progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="water-fill" id="waterFill"></span><span aria-hidden="true" class="water-minimum-marker"></span></div>
 <div class="water-labels"><span>0</span><span>80 minimum</span><span>100 target</span></div>
 <p class="water-status" id="waterStatus">80 oz until the daily minimum.</p>
-<div class="water-controls"><button class="btn blue compact" data-water-add="8" type="button">+8 oz</button><button class="btn blue compact" data-water-add="16" type="button">+16 oz</button><button class="btn secondary compact" data-water-add="-8" type="button">−8 oz</button><button class="btn secondary compact" id="resetWaterBtn" type="button">Reset</button></div>
-<div class="water-custom-row"><input class="water-input" id="waterCustomInput" inputmode="numeric" max="240" min="1" placeholder="Custom ounces" type="number"/><button class="btn blue" id="addCustomWaterBtn" type="button">Add</button></div>
+<div class="water-controls"><button class="btn blue compact" data-water-add="8" type="button">+8 oz</button><button class="btn blue compact" data-water-add="16" type="button">+16 oz</button><button class="btn blue compact" data-water-add="32" type="button">+32 oz</button><button class="btn secondary compact" data-water-add="-8" type="button">−8 oz</button><button class="btn secondary compact" id="waterUndoBtn" type="button" disabled>Undo</button><button class="btn secondary compact" id="resetWaterBtn" type="button">Reset</button></div>
+<div class="water-custom-row"><input class="water-input" id="waterCustomInput" inputmode="numeric" max="240" min="1" placeholder="Custom ounces" type="number"/><button class="btn blue" id="addCustomWaterBtn" type="button">Add water</button></div><p class="water-action-status" id="waterActionStatus" aria-live="polite"></p>
 </section>
 <section class="card workout-card">
 <div class="panel-title"><h3>Today's gym</h3></div><h2 class="workout-name" id="workoutName">Loading…</h2>
@@ -409,7 +408,7 @@
 <section class="page" id="ghkCuPage">
 <div class="ghk-page">
 <section class="card ghk-hero-card"><div><p class="eyebrow blue">Reference + schedule</p><h2>GHK-Cu</h2><p>Keep supplies, storage checks, vial appearance guidance, and your clinician-directed schedule in one place.</p></div><div class="ghk-hero-badge">Copper peptide</div></section>
-<section class="card ghk-schedule-card"><div class="panel-title ghk-schedule-heading"><div><p class="eyebrow blue">Weekday planner</p><h3>Morning check-in</h3></div><span class="badge blue" id="ghkTodayBadge">Weekday plan</span></div><div aria-label="GHK-Cu weekday morning planner" class="ghk-week-schedule"><div class="ghk-day" data-ghk-day="1"><strong>Mon</strong><span>Morning</span></div><div class="ghk-day" data-ghk-day="2"><strong>Tue</strong><span>Morning</span></div><div class="ghk-day off" data-ghk-day="3"><strong>Wed</strong><span>Rest day</span></div><div class="ghk-day" data-ghk-day="4"><strong>Thu</strong><span>Morning</span></div><div class="ghk-day" data-ghk-day="5"><strong>Fri</strong><span>Morning</span></div><div class="ghk-day" data-ghk-day="6"><strong>Sat</strong><span>Morning</span></div><div class="ghk-day" data-ghk-day="0"><strong>Sun</strong><span>Morning</span></div></div><p class="ghk-fine-print">Planner only. Use the timing and frequency given by a licensed clinician or pharmacist for your specific product.</p></section>
+<section class="card ghk-schedule-card"><div class="panel-title ghk-schedule-heading"><div><p class="eyebrow blue">Weekday planner</p><h3>Midday check-in</h3></div><span class="badge blue" id="ghkTodayBadge">Weekday plan</span></div><div aria-label="GHK-Cu weekly midday planner" class="ghk-week-schedule"><div class="ghk-day" data-ghk-day="1"><strong>Mon</strong><span>Midday</span></div><div class="ghk-day off" data-ghk-day="2"><strong>Tue</strong><span>Off day</span></div><div class="ghk-day off" data-ghk-day="3"><strong>Wed</strong><span>Off day</span></div><div class="ghk-day off" data-ghk-day="4"><strong>Thu</strong><span>Off day</span></div><div class="ghk-day" data-ghk-day="5"><strong>Fri</strong><span>Midday</span></div><div class="ghk-day" data-ghk-day="6"><strong>Sat</strong><span>Midday</span></div><div class="ghk-day" data-ghk-day="0"><strong>Sun</strong><span>Midday</span></div></div><p class="ghk-fine-print">Planner only. Use the timing and frequency given by a licensed clinician or pharmacist for your specific product.</p></section>
 <div class="ghk-top-grid">
 <section class="card ghk-reference-card"><div class="panel-title"><div><p class="eyebrow blue">What you need</p><h3>Supplies</h3></div></div><div class="ghk-reference-list"><div><strong>Peptide vial</strong><span>Lyophilized (freeze-dried) GHK-Cu powder.</span></div><div><strong>Bacteriostatic water</strong><span>Sterile diluent containing benzyl alcohol for multi-dose vial use.</span></div><div><strong>Alcohol prep pads</strong><span>For disinfecting vial stoppers and skin when directed by a clinician.</span></div><div><strong>Sharps container</strong><span>For safe disposal of used needles and syringes.</span></div><div><strong>Syringes</strong><span>Use the exact syringe and needle sizes recommended by a pharmacist or clinician for your product.</span></div></div></section>
 <section class="card ghk-reference-card"><div class="panel-title"><div><p class="eyebrow blue">Storage</p><h3>Keep it stable</h3></div></div><div class="ghk-reference-list"><div><strong>Freeze-dried vial</strong><span>Follow the product label for room-temperature and refrigeration limits.</span></div><div><strong>Bacteriostatic water</strong><span>Store unopened as labeled, away from direct sunlight and excessive heat.</span></div><div><strong>After reconstitution</strong><span>Refrigerate if the product instructions require it and protect from light.</span></div><div><strong>28-day rule</strong><span>Multi-dose bacteriostatic-water vials are commonly discarded 28 days after first entry unless the manufacturer says otherwise. Peptide stability can be different.</span></div></div></section>
@@ -818,41 +817,59 @@ function lockedOsInstallLooksDayNav() {
 
 
 function lockedOsInstallWaterHistoryHandlers() {
-  document.querySelectorAll("[data-water-add]").forEach(button => {
-    button.addEventListener("click", event => {
-      event.stopImmediatePropagation();
-      const day = ensureDay(lockedOsLooksKey());
-      setWaterOz(day.waterOz + Number(button.dataset.waterAdd));
-    }, true);
-  });
-
-
-  document.getElementById("resetWaterBtn")?.addEventListener("click", event => {
+  if (window.__lockedOsWaterControlsV2) return;
+  window.__lockedOsWaterControlsV2 = true;
+  let undo = null;
+  const input = document.getElementById("waterCustomInput");
+  const report = document.getElementById("waterActionStatus");
+  const info = message => { if(report) report.textContent = message; };
+  const change = (amount, reset = false) => {
+    const day = ensureDay(lockedOsLooksKey());
+    const before = Math.round(Number(day.waterOz) || 0);
+    const next = Math.max(0, Math.min(WATER_MAX_OZ, Math.round(reset ? 0 : before + amount)));
+    if (next === before) { info(next === 0 ? "Already at zero." : "Maximum reached."); return; }
+    undo = { date: lockedOsLooksKey(), value: before };
+    setWaterOz(next);
+    info(`${next} oz saved. You can undo the last change.`);
+    const undoButton = document.getElementById('waterUndoBtn');
+    if (undoButton) undoButton.disabled = false;
+  };
+  document.addEventListener('click', event => {
+    const target = event.target.closest?.('#waterCard button');
+    if (!target) return;
+    if (!target.matches('[data-water-add], #resetWaterBtn, #addCustomWaterBtn, #waterUndoBtn')) return;
+    event.preventDefault();
+    event.stopPropagation();
     event.stopImmediatePropagation();
-    setWaterOz(0);
-  }, true);
-
-
-  document.getElementById("addCustomWaterBtn")?.addEventListener("click", event => {
-    event.stopImmediatePropagation();
-    const input = document.getElementById("waterCustomInput");
-    const amount = Number(input?.value);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      input?.focus();
+    if (target.id === 'waterUndoBtn') {
+      if (!undo || undo.date !== lockedOsLooksKey()) { info('No change to undo.'); return; }
+      const last = undo; undo = null;
+      setWaterOz(last.value);
+      target.disabled = true;
+      info(`Restored ${last.value} oz.`);
       return;
     }
-    const day = ensureDay(lockedOsLooksKey());
-    setWaterOz(day.waterOz + amount);
-    input.value = "";
+    if (target.id === 'resetWaterBtn') {
+      if (!window.confirm('Reset the water amount for this selected day?')) return;
+      change(0, true);
+      return;
+    }
+    if (target.id === 'addCustomWaterBtn') {
+      const amount = Number(input?.value);
+      if (!Number.isFinite(amount) || amount <= 0 || amount > WATER_MAX_OZ) {
+        info(`Enter between 1 and ${WATER_MAX_OZ} oz.`); input?.focus(); return;
+      }
+      change(amount);
+      if (input) input.value='';
+      return;
+    }
+    change(Number(target.dataset.waterAdd));
   }, true);
-
-
-  document.getElementById("waterCustomInput")?.addEventListener("keydown", event => {
-    if (event.key !== "Enter") return;
+  input?.addEventListener('keydown', event => {
+    if(event.key !== 'Enter') return;
     event.preventDefault();
-    event.stopImmediatePropagation();
-    document.getElementById("addCustomWaterBtn")?.click();
-  }, true);
+    document.getElementById('addCustomWaterBtn')?.click();
+  });
 }
 
 
@@ -1062,6 +1079,8 @@ window.addEventListener("DOMContentLoaded", () => {
     $("waterAmount").innerHTML = `${waterOz} <span>oz / ${WATER_TARGET_OZ} oz</span>`;
     $("waterBadge").textContent = `${displayPercent}%`;
     $("waterFill").style.width = `${Math.max(0, Math.min(100, displayPercent))}%`;
+    const waterTrack = $("waterTrack");
+    if (waterTrack) waterTrack.setAttribute('aria-valuenow', String(Math.min(100, displayPercent)));
     if (waterOz < WATER_MINIMUM_OZ) $("waterStatus").textContent = `${WATER_MINIMUM_OZ - waterOz} oz until the daily minimum.`;
     else if (waterOz < WATER_TARGET_OZ) $("waterStatus").textContent = `Minimum hit. ${WATER_TARGET_OZ - waterOz} oz until target.`;
     else $("waterStatus").textContent = waterOz === WATER_TARGET_OZ ? `${WATER_TARGET_OZ} oz target complete.` : `${waterOz - WATER_TARGET_OZ} oz above target.`;
@@ -1075,7 +1094,10 @@ window.addEventListener("DOMContentLoaded", () => {
     syncWaterTask(day, key);
     day.looksCompleted = new Set([...(day.looksDone || []), ...(day.looksSkipped || [])]).size === getLooksTaskIds(key).length;
     saveState();
-    renderLooks();
+    renderWater();
+    if (typeof refreshLooksTaskRow === 'function') refreshLooksTaskRow('water-through-day');
+    if (typeof refreshLooksProgressUI === 'function') refreshLooksProgressUI();
+    if (typeof renderDayStreak === 'function') renderDayStreak();
   };
 
 
@@ -2695,31 +2717,7 @@ window.addEventListener("DOMContentLoaded", () => {
 </script>
 
 
-<script id="lockedOsFocusDefaultTab">
-/* Select the Focus tab when the app opens. Preserve existing page IDs and state. */
-(() => {
-  const focusWhenAppOpens = () => {
-    const app = document.getElementById('mainApp');
-    const tab = app?.querySelector('.tab[data-tab="checklistPage"]');
-    const page = document.getElementById('checklistPage');
-    if (!app || app.classList.contains('hidden') || !tab || !page) return;
-    if (tab.classList.contains('active') && page.classList.contains('active')) return;
-    tab.click();
-  };
-  const install = () => {
-    const app = document.getElementById('mainApp');
-    if (!app) return;
-    const observer = new MutationObserver(() => {
-      if (!app.classList.contains('hidden')) focusWhenAppOpens();
-    });
-    observer.observe(app, { attributes: true, attributeFilter: ['class'] });
-    focusWhenAppOpens();
-  };
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', install, { once: true });
-  } else install();
-})();
-</script>
+
 
 </body>
 </html>

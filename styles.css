@@ -1521,3 +1521,14 @@ input, select, textarea { accent-color: var(--green); }
 .focus-empty{color:var(--muted,#827968);font-size:14px;padding:20px 0}
 .focus-footnote{margin:18px 0 0;color:var(--muted,#827968);font-size:12px;line-height:1.6}
 @media(max-width:540px){.focus-board{padding:18px}.focus-heading{gap:8px}.focus-counter strong{font-size:23px}.focus-task{gap:9px}.focus-add{padding:10px 12px}}
+
+/* Looks water tracker v2: compact reliable controls and clear feedback. */
+#waterCard .water-controls{display:flex;flex-wrap:wrap;gap:8px}
+#waterCard button{touch-action:manipulation}
+#waterCard #waterUndoBtn:disabled{opacity:.4;cursor:not-allowed}
+#waterCard .water-action-status{min-height:1.25em;font-size:.75rem;font-weight:800;color:var(--muted);margin:8px 0 0}
+#waterCard .water-track{overflow:hidden}
+#waterCard .water-fill{transition:width .18s ease-out}
+#waterCard .water-custom-row{gap:8px}
+#waterCard .water-custom-row input{min-width:0}
+@media(prefers-reduced-motion:reduce){#waterCard .water-fill{transition:none}}
