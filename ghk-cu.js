@@ -223,9 +223,18 @@
 
   function highlightGhkToday() {
     const day = new Date().getDay();
-    document.querySelectorAll("[data-ghk-day]").forEach(el => el.classList.toggle("today", Number(el.dataset.ghkDay) === day));
+    // Calendar display only. Wednesday is the one rest day.
+    const scheduled = new Set([0, 1, 2, 4, 5, 6]);
+    document.querySelectorAll("[data-ghk-day]").forEach(el => {
+      const weekday = Number(el.dataset.ghkDay);
+      const active = scheduled.has(weekday);
+      el.classList.toggle("today", weekday === day);
+      el.classList.toggle("off", !active);
+      const label = el.querySelector("span");
+      if (label) label.textContent = active ? "Morning" : "Rest day";
+    });
     const badge = document.getElementById("ghkTodayBadge");
-    if (badge) badge.textContent = day >= 1 && day <= 5 ? "Today · morning" : "Today · no reminder";
+    if (badge) badge.textContent = scheduled.has(day) ? "Today · morning" : "Today · rest day";
   }
 
   function ghkVialDateLabel(dateKey) {
@@ -8919,3 +8928,252 @@
     }
   },true);
 })();
+
+
+/* Gym → Recovery & Body. Integrated into existing ghk-cu.js. */
+/* LOCKED OS • Gym body studio and GHK-Cu weekday planner.
+   Additive extension: does not replace existing Gym save handlers or Supabase sync. */
+(() => {
+  'use strict';
+  const FLAG = '__lockedOsBodyStudio20261017';
+  if (window[FLAG]) return;
+  window[FLAG] = true;
+  const GROUPS = [
+    ['chest', 'Chest'], ['shoulders', 'Shoulders'], ['back', 'Back'],
+    ['arms', 'Arms'], ['quads', 'Quads'], ['hamstrings', 'Hamstrings'],
+    ['calves', 'Calves'], ['core', 'Core']
+  ];
+  const ACTIVE_GHK_DAYS = new Set([0, 1, 2, 4, 5, 6]);
+  const $ = id => document.getElementById(id);
+  const sanitize = s => String(s ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[ch]);
+  const dateMs = key => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key || ''))) return NaN;
+    const [y, m, d] = key.split('-').map(Number);
+    const t = new Date(y, m - 1, d, 12);
+    return (t.getFullYear() === y && t.getMonth() === m - 1 && t.getDate() === d)
+      ? t.getTime() : NaN;
+  };
+  const dateText = key => Number.isFinite(dateMs(key))
+    ? new Date(dateMs(key)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : 'Not logged';
+  function ghkCalendar() {
+    const page = $('ghkCuPage');
+    if (!page) return;
+    const today = new Date().getDay();
+    page.querySelectorAll('[data-ghk-day]').forEach(dayEl => {
+      const day = Number(dayEl.dataset.ghkDay);
+      dayEl.classList.toggle('off', !ACTIVE_GHK_DAYS.has(day));
+      dayEl.classList.toggle('today', today === day);
+      const label = dayEl.querySelector('span');
+      if (label) label.textContent = ACTIVE_GHK_DAYS.has(day) ? 'Morning' : 'Rest day';
+    });
+    const badge = $('ghkTodayBadge');
+    if (badge) badge.textContent = ACTIVE_GHK_DAYS.has(today) ? 'Today · morning' : 'Today · rest day';
+  }
+  function muscleFromSession(session) {
+    const found = new Set();
+    const exercises = Array.isArray(session.exercises) ? session.exercises : [];
+    let logged = Boolean(session.completed);
+    for (const e of exercises) {
+      const sets = Array.isArray(e?.sets) ? e.sets : [];
+      if (!sets.some(s => Number(s?.weight) > 0 || Number(s?.reps) > 0)) continue;
+      logged = true;
+      const name = String(e.name || '').toLowerCase();
+      if (/chest|bench|fly|pec deck|push.?up/.test(name)) found.add('chest');
+      if (/shoulder|delt|lateral|raise|press|face pull|reverse pec/.test(name)) found.add('shoulders');
+      if (/pull|row|lat|back|shrug/.test(name)) found.add('back');
+      if (/tricep|bicep|curl|pressdown|skullcrusher/.test(name)) found.add('arms');
+      if (/squat|lunge|leg extension|leg press|hack/.test(name)) found.add('quads');
+      if (/deadlift|leg curl|hamstring|rdl/.test(name)) found.add('hamstrings');
+      if (/calf|calves/.test(name)) found.add('calves');
+      if (/ab |abs|crunch|plank|core|oblique/.test(name)) found.add('core');
+    }
+    if (logged && found.size === 0) {
+      const workout = String(session.workout || '').toLowerCase();
+      if (/chest|push/.test(workout)) ['chest', 'shoulders', 'arms'].forEach(id => found.add(id));
+      if (/back|pull/.test(workout)) ['back', 'arms'].forEach(id => found.add(id));
+      if (/arm/.test(workout)) found.add('arms');
+      if (/leg/.test(workout)) ['quads', 'hamstrings', 'calves'].forEach(id => found.add(id));
+      if (/abs|core/.test(workout)) found.add('core');
+    }
+    return found;
+  }
+  function currentState() {
+    try { return typeof state !== 'undefined' && state ? state : null; }
+    catch { return null; }
+  }
+  function recoveryModel() {
+    const stateNow = currentState();
+    const sessions = Array.isArray(stateNow?.meta?.gymClean?.sessions) ? stateNow.meta.gymClean.sessions : [];
+    const last = new Map();
+    for (const session of sessions) {
+      const dt = dateMs(session?.date);
+      if (!Number.isFinite(dt) || dt > Date.now() + 86400000) continue;
+      for (const group of muscleFromSession(session)) {
+        if (!last.has(group) || session.date > last.get(group).date) last.set(group, session);
+      }
+    }
+    return GROUPS.map(([id, name]) => {
+      const session = last.get(id);
+      const days = session ? Math.max(0, Math.floor((Date.now() - dateMs(session.date)) / 86400000)) : null;
+      const hours = session ? Math.max(0, (Date.now() - dateMs(session.date)) / 3600000) : null;
+      return { id, name, session, days, status: hours === null ? 'unknown' : hours < 48 ? 'recent' : hours < 72 ? 'transition' : 'ready' };
+    });
+  }
+  const LABELS = { recent: 'Recently trained', transition: 'Nearly rested', ready: 'Time-rested', unknown: 'No history' };
+  const P = (id, d) => `<path data-muscle="${id}" d="${d}" tabindex="0" role="button" aria-label="${id}"/>`;
+  const bodyOutline = 'M100 36Q97 5 123 5Q151 5 147 34Q151 54 136 65L138 79Q175 87 188 108L214 167Q218 185 205 190Q193 195 185 169L173 145L175 193L160 246L162 315L170 407L165 452L145 452L130 321L119 321L105 451L76 451L74 407L81 315L85 245L70 194L71 146L58 170Q49 196 37 190Q26 184 34 165L58 107Q72 84 106 79L109 65Q96 54 100 36Z';
+  function svgBody(side) {
+    const front = [
+      P('shoulders','M89 86Q69 92 65 113L66 137L97 126L104 90Z'),P('shoulders','M154 86Q178 91 184 113L181 136L152 127L144 90Z'),
+      P('chest','M104 94Q120 87 121 100L121 144L89 144L82 121L92 100Z'),P('chest','M126 100Q129 87 151 94L157 102L166 122L157 144L126 144Z'),
+      P('arms','M59 129L74 138L53 181L40 187L38 172Z'),P('arms','M174 138L190 129L209 172L205 187L191 181Z'),
+      P('core','M92 152L154 152L159 202L144 230L101 230L87 202Z'),P('quads','M91 240L117 242L115 321L102 364L80 358L79 314Z'),
+      P('quads','M129 242L156 240L168 314L164 358L143 364L132 321Z'),P('calves','M79 369L103 375L99 421L93 446L76 445L74 408Z'),P('calves','M141 375L164 369L171 408L166 445L148 446L144 421Z')
+    ].join('');
+    const back = [
+      P('shoulders','M89 86L105 91L96 127L66 136L65 112Z'),P('shoulders','M153 86L142 91L152 127L182 136L183 112Z'),
+      P('back','M107 90L121 99L121 231L99 208L82 148L92 107Z'),P('back','M125 99L142 90L154 107L168 148L149 208L125 231Z'),
+      P('arms','M59 130L74 138L53 182L40 188L38 172Z'),P('arms','M174 138L190 130L209 172L205 188L191 182Z'),
+      P('hamstrings','M91 241L117 243L115 317L102 364L80 356L79 310Z'),P('hamstrings','M130 243L157 241L168 310L164 356L142 364L131 317Z'),
+      P('calves','M80 368L103 374L100 422L93 447L76 446L75 408Z'),P('calves','M141 374L164 368L170 408L167 446L148 447L144 422Z')
+    ].join('');
+    return `<svg viewBox="0 0 246 465" class="los-body-svg" role="img" aria-label="Interactive ${side} muscles"><path class="los-body-outline" d="${bodyOutline}"/><g class="los-muscle-regions">${side === 'front' ? front : back}</g></svg>`;
+  }
+  let activeView = 'log', selected = 'chest', previousSignature = '', cached = [];
+  function installStudio() {
+    const page = $('gymPage');
+    if (!page || $('losGymSwitch')) return;
+    const switches = document.createElement('div');
+    switches.id = 'losGymSwitch';
+    switches.className = 'los-gym-switch';
+    switches.innerHTML = '<button type="button" id="losLogTab" class="active">Workout log</button><button type="button" id="losBodyTab">Recovery &amp; Body</button>';
+    page.prepend(switches);
+    const panel = document.createElement('div');
+    panel.id = 'losBodyStudio';
+    panel.hidden = true;
+    panel.innerHTML = `
+      <section class="card los-studio-hero"><div><p class="eyebrow blue">Training intelligence</p><h2>Recovery &amp; Body</h2><p>Explore muscle groups and save body measurements.</p></div><span id="losRecoverySummary">Reading your workout history…</span></section>
+      <div class="los-studio-layout">
+        <section class="card los-studio-anatomy"><div class="los-map-header"><div><p class="eyebrow blue">Interactive body map</p><h3>Muscle groups</h3></div><div class="los-flip-actions"><button id="losFront" class="active" type="button">Front</button><button id="losBack" type="button">Back</button></div></div><div class="los-map-stage"><div class="los-body-rotator" id="losBodyRotator"><div class="los-body-front">${svgBody('front')}</div><div class="los-body-back">${svgBody('back')}</div></div></div><div class="los-key"><span class="recent">Recently trained</span><span class="transition">Nearly rested</span><span class="ready">Time-rested</span><span class="unknown">No data</span></div><p class="los-disclaimer">Color estimates time since your logged training: under 48 hours, 48–72 hours, or over 72 hours. It does not measure actual muscle recovery or injury healing.</p></section>
+        <section class="card los-studio-status"><p class="eyebrow blue">Last trained</p><h3>Recovery overview</h3><div id="losMuscleList"></div><div id="losMuscleDetails" aria-live="polite"></div></section>
+      </div>
+      <section class="card los-studio-progress"><div class="panel-title"><div><p class="eyebrow blue">Body progress</p><h3>Measurement check-ins</h3></div></div><form id="losMeasureForm"><div class="los-measure-grid"><label>Date<input id="losMeasureDate" type="date" required/></label><label>Weight (lb)<input id="losMeasureWeight" type="number" step="0.1" min="0" max="1000" placeholder="Optional"/></label><label>Waist (in)<input id="losMeasureWaist" type="number" step="0.1" min="0" max="100" placeholder="Optional"/></label><label>Chest (in)<input id="losMeasureChest" type="number" step="0.1" min="0" max="100" placeholder="Optional"/></label><label>Arm (in)<input id="losMeasureArm" type="number" step="0.1" min="0" max="60" placeholder="Optional"/></label><label class="los-notes">Notes<input id="losMeasureNotes" type="text" maxlength="300" placeholder="Optional progress notes"/></label></div><div class="los-save-row"><button type="submit" class="btn blue">Save check-in</button><span id="losSaveStatus" role="status"></span></div></form><div id="losMeasureHistory"></div></section>`;
+    page.append(panel);
+    const toggle = next => {
+      activeView = next;
+      panel.hidden = next !== 'body';
+      page.classList.toggle('los-show-body', next === 'body');
+      $('losLogTab').classList.toggle('active', next === 'log');
+      $('losBodyTab').classList.toggle('active', next === 'body');
+      if (next === 'body') update(true);
+    };
+    $('losLogTab').onclick = () => toggle('log');
+    $('losBodyTab').onclick = () => toggle('body');
+    const flip = back => {
+      $('losBodyRotator').classList.toggle('back', back);
+      $('losFront').classList.toggle('active', !back);
+      $('losBack').classList.toggle('active', back);
+    };
+    $('losFront').onclick = () => flip(false);
+    $('losBack').onclick = () => flip(true);
+    page.addEventListener('click', e => {
+      const btn = e.target.closest('[data-muscle-key]');
+      if (btn) choose(btn.dataset.muscleKey);
+    });
+    page.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const shape = e.target.closest('.los-muscle-regions [data-muscle-key]');
+      if (shape) { e.preventDefault(); choose(shape.dataset.muscleKey); }
+    });
+    $('losMeasureDate').value = [new Date().getFullYear(), String(new Date().getMonth() + 1).padStart(2, '0'), String(new Date().getDate()).padStart(2, '0')].join('-');
+    $('losMeasureForm').addEventListener('submit', storeMeasurement);
+    $('losMeasureHistory').addEventListener('click', e => {
+      const btn = e.target.closest('[data-checkin]');
+      if (btn) loadMeasurement(btn.dataset.checkin);
+    });
+    drawMeasurements();
+    toggle('log');
+  }
+  function choose(id) {
+    selected = id;
+    const group = cached.find(g => g.id === id);
+    if (!group) return;
+    document.querySelectorAll('.los-muscle-regions [data-muscle-key]').forEach(el => el.classList.toggle('selected', el.dataset.muscleKey === id));
+    document.querySelectorAll('#losMuscleList [data-muscle-key]').forEach(el => el.classList.toggle('selected', el.dataset.muscleKey === id));
+    $('losMuscleDetails').innerHTML = `<div><span class="los-dot ${group.status}"></span><strong>${sanitize(group.name)}</strong><small>${LABELS[group.status]}</small></div><p>${group.session ? `Last logged: ${sanitize(dateText(group.session.date))} · ${sanitize(group.session.workout || 'Workout')}` : 'No logged session for this group.'}</p><small>${group.days === null ? 'No time-based estimate available.' : `${group.days} day${group.days === 1 ? '' : 's'} since that session.`}</small>`;
+  }
+  function update(force) {
+    if (activeView !== 'body' || !$('gymPage')?.classList.contains('active')) return;
+    const next = recoveryModel();
+    const signature = next.map(g => `${g.id}:${g.session?.date || ''}:${g.status}`).join('|');
+    if (!force && signature === previousSignature) return;
+    cached = next;
+    previousSignature = signature;
+    $('losMuscleList').innerHTML = next.map(g => `<button type="button" class="los-muscle-row" data-muscle-key="${g.id}"><span class="los-dot ${g.status}"></span><strong>${sanitize(g.name)}</strong><small>${LABELS[g.status]}</small></button>`).join('');
+    document.querySelectorAll('.los-muscle-regions [data-muscle]').forEach(el => {
+      const group = next.find(g => g.id === el.dataset.muscle);
+      el.dataset.muscleKey = el.dataset.muscle;
+      el.setAttribute('class', `status-${group?.status || 'unknown'}`);
+    });
+    $('losRecoverySummary').textContent = `${next.filter(g => g.status === 'ready').length} of ${next.length} groups time-rested`;
+    choose(selected);
+  }
+  function measurements() {
+    const source = currentState()?.meta?.gymBodyLogV1;
+    return Array.isArray(source) ? source : [];
+  }
+  function drawMeasurements() {
+    if (!$('losMeasureHistory')) return;
+    const rows = [...measurements()].filter(x => x?.date).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+    $('losMeasureHistory').innerHTML = rows.length ? `<h4>Recent check-ins</h4>${rows.map(row => `<button type="button" class="los-checkin" data-checkin="${sanitize(row.date)}"><strong>${sanitize(dateText(row.date))}</strong><span>${sanitize(['weight','waist','chest','arm'].filter(k => Number(row[k]) > 0).map(k => `${k}: ${row[k]}`).join(' · ') || 'Notes only')}</span></button>`).join('')}` : '<p class="los-empty">No measurements saved yet.</p>';
+  }
+  function loadMeasurement(day) {
+    const row = measurements().find(x => x.date === day);
+    if (!row) return;
+    $('losMeasureDate').value = row.date;
+    for (const k of ['Weight','Waist','Chest','Arm']) $('losMeasure'+k).value = row[k.toLowerCase()] ?? '';
+    $('losMeasureNotes').value = row.notes || '';
+    $('losSaveStatus').textContent = 'Loaded. Edit and save to update.';
+  }
+  function storeMeasurement(e) {
+    e.preventDefault();
+    const stateNow = currentState(), date = $('losMeasureDate')?.value;
+    if (!stateNow || !Number.isFinite(dateMs(date))) return;
+    const row = { date, notes: $('losMeasureNotes').value.trim(), updatedAt: new Date().toISOString() };
+    for (const k of ['Weight','Waist','Chest','Arm']) {
+      const input = $('losMeasure'+k);
+      const v = input.value.trim();
+      row[k.toLowerCase()] = v === '' ? '' : Math.max(0, Math.min(Number(input.max) || 1000, Number(v) || 0));
+    }
+    if (!row.notes && ['weight','waist','chest','arm'].every(k => row[k] === '')) {
+      $('losSaveStatus').textContent = 'Enter a measurement or a note.';
+      return;
+    }
+    stateNow.meta ||= {};
+    stateNow.meta.gymBodyLogV1 = [...measurements().filter(x => x.date !== date), row].sort((a, b) => a.date.localeCompare(b.date));
+    const result = typeof saveState === 'function' ? saveState() : false;
+    $('losSaveStatus').textContent = result === false ? 'Storage unavailable. Please try again.' : 'Check-in saved locally. Cloud sync queued.';
+    drawMeasurements();
+  }
+  function start() {
+    ghkCalendar();
+    installStudio();
+    document.addEventListener('locked-os-workout-saved', () => { previousSignature = ''; update(true); });
+    document.addEventListener('click', e => {
+      if (e.target.closest?.('[data-tab="ghkCuPage"]')) requestAnimationFrame(ghkCalendar);
+      if (e.target.closest?.('[data-tab="gymPage"]')) requestAnimationFrame(() => update(true));
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        if ($('ghkCuPage')?.classList.contains('active')) ghkCalendar();
+        if ($('gymPage')?.classList.contains('active')) update(true);
+      }
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(start, 750), { once: true });
+  else setTimeout(start, 750);
+})();
+

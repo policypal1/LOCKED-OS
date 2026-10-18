@@ -456,3 +456,69 @@
 .locked-midday-supplement-times {display:flex;gap:5px 14px;flex-wrap:wrap;margin:1px 9px 4px;padding:6px 9px;border-radius:8px;background:rgba(42,30,18,.045);font-size:.71rem;line-height:1.35;color:var(--muted,#666);}
 .locked-midday-supplement-times b {color:var(--text,#282828);font-weight:760;}
 @media(max-width:760px) {#looksPage .looks-hero {grid-template-columns:1fr!important;}#looksPage .looks-title-card,#looksPage .looks-hero > .summary {min-height:140px!important;}}
+
+
+/* LOCKED OS • Recovery & Body studio. Scoped and additive. */
+#losGymSwitch{display:flex;gap:7px;padding:6px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.60);width:max-content;max-width:100%;margin-bottom:17px}
+#losGymSwitch button{border:0;border-radius:12px;padding:12px 18px;min-height:41px;background:transparent;color:var(--muted);font:inherit;font-weight:900;font-size:.86rem;cursor:pointer}
+#losGymSwitch button.active{background:var(--text);color:var(--card);box-shadow:0 4px 15px rgba(10,25,36,.14)}
+#losBodyStudio[hidden]{display:none!important}
+#gymPage.los-show-body > :not(#losGymSwitch):not(#losBodyStudio){display:none!important}
+#losBodyStudio{display:grid;gap:17px}
+#losBodyStudio .card{padding:22px}
+.los-studio-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;background:radial-gradient(circle at top right,rgba(37,132,184,.17),transparent 65%),var(--card)}
+.los-studio-hero h2{font-size:clamp(1.65rem,3vw,2.6rem);margin:4px 0 8px;letter-spacing:-.04em}
+.los-studio-hero p:not(.eyebrow){margin:0;color:var(--muted);font-size:.9rem}
+#losRecoverySummary{padding:10px 14px;border-radius:999px;background:var(--blue-soft);color:var(--blue-dark);font-size:.77rem;font-weight:900;white-space:nowrap}
+.los-studio-layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:17px}
+.los-map-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.los-map-header h3,.los-studio-status h3,.los-studio-progress h3{margin:4px 0 13px;font-size:1.28rem;letter-spacing:-.025em}
+.los-flip-actions{display:flex;gap:4px;padding:4px;border-radius:50px;background:rgba(37,132,184,.08)}
+.los-flip-actions button{border:0;border-radius:40px;background:transparent;padding:9px 12px;font:inherit;font-size:.76rem;font-weight:900;color:var(--muted);cursor:pointer}
+.los-flip-actions button.active{background:var(--card);color:var(--blue-dark);box-shadow:0 4px 14px rgba(5,22,38,.09)}
+.los-map-stage{display:grid;place-items:center;overflow:hidden;min-height:455px;perspective:900px;border:1px solid rgba(37,132,184,.14);border-radius:20px;background:radial-gradient(ellipse,rgba(37,132,184,.12),transparent 72%),linear-gradient(120deg,rgba(255,255,255,.5),rgba(207,193,174,.17))}
+.los-body-rotator{width:246px;height:435px;position:relative;transform-style:preserve-3d;transform:rotateY(-10deg);transition:transform .6s cubic-bezier(.2,.8,.22,1)}
+.los-body-rotator.back{transform:rotateY(170deg)}
+.los-body-front,.los-body-back{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;filter:drop-shadow(12px 15px 11px rgba(25,28,26,.24))}
+.los-body-back{transform:rotateY(180deg)}
+.los-body-svg{width:100%;height:100%;overflow:visible}
+.los-body-outline{fill:#b8aa96;stroke:#867767;stroke-width:1.5;stroke-linejoin:round}
+.los-muscle-regions path{stroke:rgba(56,52,45,.40);stroke-width:1.5;stroke-linejoin:round;cursor:pointer;outline:none;transition:fill .17s,stroke-width .17s}
+.los-muscle-regions path.selected,.los-muscle-regions path:hover,.los-muscle-regions path:focus-visible{stroke:#14283c;stroke-width:3.5;filter:brightness(1.05)}
+.los-muscle-regions .status-recent{fill:#c98264}
+.los-muscle-regions .status-transition{fill:#e4bc6d}
+.los-muscle-regions .status-ready{fill:#6daa94}
+.los-muscle-regions .status-unknown{fill:#b3b0ab}
+.los-key{display:flex;flex-wrap:wrap;gap:9px 14px;margin:17px 0 12px}
+.los-key span{font-size:.74rem;font-weight:800;color:var(--muted)}
+.los-key span:before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.los-key .recent:before,.los-dot.recent{background:#c98264}
+.los-key .transition:before,.los-dot.transition{background:#e4bc6d}
+.los-key .ready:before,.los-dot.ready{background:#6daa94}
+.los-key .unknown:before,.los-dot.unknown{background:#b3b0ab}
+.los-disclaimer{font-size:.76rem;line-height:1.6;margin:0;color:var(--muted)}
+#losMuscleList{display:grid;gap:7px;margin:16px 0}
+.los-muscle-row{width:100%;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.43);padding:12px;display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:11px;cursor:pointer;text-align:left;color:var(--text);font:inherit}
+.los-muscle-row strong{font-size:.83rem;font-weight:900}.los-muscle-row small{font-size:.7rem;color:var(--muted);font-weight:850}
+.los-muscle-row:hover,.los-muscle-row.selected{border-color:rgba(37,132,184,.42);background:rgba(37,132,184,.07)}
+.los-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+#losMuscleDetails{padding:16px;border-radius:15px;background:var(--blue-soft)}
+#losMuscleDetails>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#losMuscleDetails>div strong{font-weight:900}
+#losMuscleDetails small{color:var(--muted);font-weight:850}
+#losMuscleDetails>p{font-size:.84rem;margin:9px 0;line-height:1.5}
+#losMuscleDetails>div small{color:var(--blue-dark)}
+.los-measure-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.los-measure-grid label{display:grid;gap:7px;font-size:.79rem;color:var(--muted);font-weight:850}
+.los-measure-grid input{width:100%;min-width:0;height:43px;border:1px solid var(--line);border-radius:12px;padding:0 12px;background:rgba(255,255,255,.75);color:var(--text);font:inherit;font-size:.87rem}
+.los-measure-grid input:focus{outline:2px solid rgba(37,132,184,.35)}
+.los-measure-grid label.los-notes{grid-column:span 2}
+.los-save-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:17px 0}
+#losSaveStatus{color:var(--muted);font-size:.78rem;font-weight:800}
+#losMeasureHistory h4{font-size:.86rem;margin:18px 0 8px}
+.los-checkin{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;margin:6px 0;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.42);cursor:pointer;color:var(--text);font:inherit;text-align:left}
+.los-checkin span{font-size:.8rem;color:var(--muted)}.los-empty{font-size:.85rem;color:var(--muted)}
+@media(max-width:950px){.los-studio-layout{grid-template-columns:1fr}}
+@media(max-width:680px){#losGymSwitch{width:100%}#losGymSwitch button{flex:1;padding:10px;font-size:.75rem}.los-studio-hero{flex-direction:column;align-items:flex-start}#losBodyStudio .card{padding:16px}.los-measure-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.los-measure-grid label.los-notes{grid-column:1/-1}.los-muscle-row{grid-template-columns:10px minmax(0,1fr)}.los-muscle-row small{grid-column:2}.los-map-stage{min-height:410px}.los-body-rotator{width:220px;height:390px}}
+@media(prefers-reduced-motion:reduce){.los-body-rotator{transition:none}}
+
