@@ -7951,6 +7951,23 @@
       if(state.meta.taskTombstones)delete state.meta.taskTombstones.tretinoin;
       if(state.meta.taskDetailsV3)delete state.meta.taskDetailsV3.tretinoin;
     }
+    // One-time, date-anchored schedule change. Existing completion logs and
+    // historical phases are untouched; no retroactive changes before Oct 19.
+    const start = '2026-10-19';
+    if (!state.meta.lockedOsTretEodOct19V1) {
+      const plan = state.meta.tretinoinPlanV4;
+      const oldPhases = Array.isArray(plan.phases) ? plan.phases : [];
+      plan.phases = [
+        ...oldPhases.filter(phase => typeof phase?.start === 'string' && phase.start < start),
+        { id: 'tret-every-other-2026-10-19', start, type: 'everyOtherDay', days: [] }
+      ];
+      plan.reviewDate = '2026-11-02';
+      state.meta.looksDeletedTaskIds = (state.meta.looksDeletedTaskIds || []).filter(id => id !== 'tretinoin');
+      state.meta.looksDeletedTaskTitles = (state.meta.looksDeletedTaskTitles || []).filter(title => !['tretinoin','apply tretinoin'].includes(String(title).trim().toLowerCase()));
+      if (state.meta.taskTombstones) delete state.meta.taskTombstones.tretinoin;
+      state.meta.lockedOsTretEodOct19V1 = true;
+      window.lockedOsTretOct19NeedsSave = true;
+    }
     return state.meta.tretinoinPlanV4;
   }
   function activeTretPhase(dayKey) {
@@ -8244,6 +8261,17 @@
       try {oldRender();}catch(error){console.error('LOCKED OS panel render:',error);}
     };
     repaint();refresh();
+    setTimeout(() => {
+      if (typeof state === 'undefined') return;
+      ensureTretPlan();
+      if (window.lockedOsTretOct19NeedsSave) {
+        window.lockedOsTretOct19NeedsSave = false;
+        saveState();
+        if (document.getElementById('looksPage')?.classList.contains('active')) {
+          try { renderLooks(); } catch (error) { console.warn('Tret schedule refresh:', error); }
+        }
+      }
+    }, 300);
   },350);
 })();
 
@@ -8904,88 +8932,257 @@
     panel.id = 'losBodyStudio';
     panel.hidden = true;
     panel.innerHTML = `
-      <section class="card los-studio-hero"><div><p class="eyebrow blue">Training intelligence</p><h2>Recovery &amp; Body</h2><p>Explore training history and rotate the interactive muscle map.</p></div><span id="losRecoverySummary">Reading your workout history…</span></section>
+      <section class="card los-studio-hero"><div><p class="eyebrow blue">Training intelligence</p><h2>Recovery &amp; Body</h2><p>Detailed 3D anatomy, always rotating, with your training history highlighted.</p></div><span id="losRecoverySummary">Reading your workout history…</span></section>
       <div class="los-studio-layout">
-        <section class="card los-studio-anatomy"><div class="los-map-header"><div><p class="eyebrow blue">Interactive body map</p><h3>Muscle groups</h3></div><div class="los-flip-actions"><button id="losFront" class="active" type="button">Front</button><button id="losBack" type="button">Back</button><button id="losAutoSpin" type="button" aria-label="Spin body model">Spin ↻</button></div></div><div class="los-map-stage" aria-label="Drag sideways to rotate the muscle map"><div class="los-body-rotator" id="losBodyRotator"><div class="los-body-front">${svgBody('front')}</div><div class="los-body-back">${svgBody('back')}</div></div><p class="los-map-help">Drag to rotate · tap a muscle · press Spin for auto-rotation</p></div><div class="los-key"><span class="recent">Recently trained</span><span class="transition">Nearly rested</span><span class="ready">Time-rested</span><span class="unknown">No data</span></div><p class="los-disclaimer">Color estimates time since your logged training: under 48 hours, 48–72 hours, or over 72 hours. It does not measure actual muscle recovery or injury healing.</p></section>
+        <section class="card los-studio-anatomy"><div class="los-map-header"><div><p class="eyebrow blue">Interactive body map</p><h3>Muscle groups</h3></div><span class="los-live-rotation"><span class="los-live-dot"></span> LIVE 3D · AUTO ROTATE</span></div><div class="los-map-stage los-3d-stage" aria-label="Spinning interactive 3D human muscle anatomy"><div class="los-3d-frame" id="los3DFrame"></div><div id="los3DLoading" class="los-3d-loading"><span class="los-3d-loader"></span> Loading detailed anatomy…</div><div class="los-body-rotator los-fallback-model" id="losBodyRotator" hidden><div class="los-body-front">${svgBody('front')}</div><div class="los-body-back">${svgBody('back')}</div></div><p class="los-map-help">Rotates automatically · drag to examine · tap a muscle to explore</p></div><div class="los-key"><span class="recent">Recently trained</span><span class="transition">Nearly rested</span><span class="ready">Time-rested</span><span class="unknown">No data</span></div><p class="los-disclaimer">Colors indicate time since your last logged training: under 48 hours, 48–72 hours, or over 72 hours. They do not measure recovery or injury healing.</p><p class="los-model-credit">3D anatomy: <a href="https://github.com/slfresh/fitmitwith-anatomy-atlas" target="_blank" rel="noopener noreferrer">Fit Mit With / Z-Anatomy / BodyParts3D</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a> · Colors adapted for LOCKED-OS.</p></section>
         <section class="card los-studio-status"><p class="eyebrow blue">Last trained</p><h3>Recovery overview</h3><div id="losMuscleList"></div><div id="losMuscleDetails" aria-live="polite"></div></section>
       </div>
 `;
     page.append(panel);
+    let startViewer = () => {}, stopViewer = () => {}, recolorViewer = () => {};
     const toggle = next => {
       activeView = next;
       panel.hidden = next !== 'body';
       page.classList.toggle('los-show-body', next === 'body');
       $('losLogTab').classList.toggle('active', next === 'log');
       $('losBodyTab').classList.toggle('active', next === 'body');
-      if (next === 'body') update(true);
+      if (next === 'body') { update(true); startViewer(); }
+      else stopViewer();
     };
     $('losLogTab').onclick = () => toggle('log');
     $('losBodyTab').onclick = () => toggle('body');
-    const rotator = $('losBodyRotator');
-    const stage = rotator.closest('.los-map-stage');
-    let angle = -10, pitch = 0, dragging = false, moved = false, pointer = null;
-    let beginX = 0, beginY = 0, fromAngle = 0, fromPitch = 0;
-    let frame = 0, spinTimer = 0;
-    const paintRotation = () => {
-      frame = 0;
-      rotator.style.transform = `rotateX(${pitch}deg) rotateY(${angle}deg)`;
-      const facingBack = ((angle % 360) + 360) % 360 > 90 && ((angle % 360) + 360) % 360 < 270;
-      $('losFront').classList.toggle('active', !facingBack);
-      $('losBack').classList.toggle('active', facingBack);
-    };
-    const queueRotation = () => { if (!frame) frame = requestAnimationFrame(paintRotation); };
-    const stopSpin = () => { if (spinTimer) cancelAnimationFrame(spinTimer); spinTimer = 0; $('losAutoSpin')?.classList.remove('active'); };
-    const flip = back => { stopSpin(); angle = (Math.round(angle / 360) * 360) + (back ? 180 : 0); pitch = 0; queueRotation(); };
-    $('losFront').onclick = () => flip(false);
-    $('losBack').onclick = () => flip(true);
-    const spinButton = $('losAutoSpin');
-    const spin = () => {
-      spinTimer = 0;
-      if (document.hidden || !$('gymPage')?.classList.contains('active') || activeView !== 'body') { stopSpin(); return; }
-      angle += 0.75;
-      queueRotation();
-      spinTimer = requestAnimationFrame(spin);
-    };
-    spinButton.onclick = () => {
-      if(spinTimer){stopSpin();return;}
-      if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){ angle+=180;queueRotation();return; }
-      spinButton.classList.add('active');
-      spinTimer = requestAnimationFrame(spin);
-    };
-    stage.addEventListener('pointerdown', e => {
-      if(e.button!==0 || e.target.closest('button')) return;
-      stopSpin();pointer=e.pointerId;dragging=true;moved=false;
-      beginX=e.clientX;beginY=e.clientY;fromAngle=angle;fromPitch=pitch;
-      // Do not capture on a tap; allow native muscle click selection to work.
-      rotator.classList.add('dragging');
-    });
-    stage.addEventListener('pointermove', e => {
-      if(!dragging || e.pointerId!==pointer)return;
-      const dx=e.clientX-beginX,dy=e.clientY-beginY;
-      if(Math.abs(dx)+Math.abs(dy)>7 && !moved){
-        moved=true;
-        stage.setPointerCapture?.(e.pointerId);
+    // A real, segmented anatomical GLB replaces the former two-sided SVG.
+    // Lazily import WebGL and model files on first visit to Recovery & Body.
+    // The Looks checklist stays fast; no renderer runs in background tabs.
+    const stage = $('los3DFrame').closest('.los-map-stage');
+    const viewport = $('los3DFrame');
+    const loading = $('los3DLoading');
+    const fallback = $('losBodyRotator');
+    let loaded = false, initializing = false, failed = false;
+    let renderFrame = 0, lastFrame = 0, dragging = false, pointerId = null;
+    let dragX = 0, dragY = 0, dragMoved = false, dragTime = 0;
+    let THREE, renderer, scene, camera, figure, raycaster, pointerVector;
+    let modelMeshes = [], isInViewport = true;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const isVisible = () => activeView === 'body' &&
+      $('gymPage')?.classList.contains('active') &&
+      !document.hidden && isInViewport;
+    function statusForMesh(obj) {
+      const data = obj?.userData || {};
+      const group = String(data.group || '').toLowerCase();
+      const label = [group, data.label, data.name, data.sourceName, obj?.name].filter(Boolean).join(' ').toLowerCase();
+      if (/pectoralis|chest|serratus anterior/.test(label)) return 'chest';
+      if (/deltoid|supraspinatus|infraspinatus|subscapularis|teres minor|shoulder/.test(label)) return 'shoulders';
+      if (/trapezius|latissimus|rhomboid|teres major|back|erector spinae|multifidus/.test(label)) return 'back';
+      if (/biceps|triceps|brachialis|brachioradialis|forearm|flexor carpi|extensor carpi/.test(label)) return 'arms';
+      if (/quadriceps|rectus femoris|vastus|adductor|sartorius|gluteus|tensor fascia|quads/.test(label)) return 'quads';
+      if (/hamstring|biceps femoris|semitendinosus|semimembranosus|gastrocnemius caput/.test(label)) return 'hamstrings';
+      if (/gastrocnemius|soleus|tibialis|peroneus|fibularis|calf/.test(label)) return 'calves';
+      if (/rectus abdominis|oblique|transversus abdominis|core|abdominal/.test(label)) return 'core';
+      return null;
+    }
+    const tints = { recent:'#db7d68', transition:'#d5a775', ready:'#82b09e', unknown:'#bc8883' };
+    function updateMaterialColors() {
+      if (!loaded || !THREE) return;
+      const statusMap = new Map(cached.map(m => [m.id,m.status]));
+      for (const mesh of modelMeshes) {
+        const id = mesh.userData.lockedOsGroup;
+        const material = mesh.material;
+        if (!material?.color) continue;
+        // Keep a natural muscle tone while adding a readable recovery tint.
+        const base = new THREE.Color('#a85e58');
+        const tint = new THREE.Color(tints[statusMap.get(id) || 'unknown']);
+        const selectedMesh = id && id === selected;
+        material.color.copy(base.lerp(tint, id ? (selectedMesh ? .86 : .53) : .22));
+        material.emissive.set(selectedMesh ? '#4a334a' : '#080705');
+        material.emissiveIntensity = selectedMesh ? .27 : .075;
+        material.needsUpdate = true;
       }
-      if(!moved)return;
-      angle=fromAngle + dx*.65;
-      pitch=Math.max(-28,Math.min(28,fromPitch-dy*.22));
-      queueRotation();
-    });
-    const finish = e => {
-      if(!dragging || e.pointerId!==pointer)return;
-      dragging=false;pointer=null;
-      rotator.classList.remove('dragging');
-      if(moved){stage.dataset.suppressTap='true';setTimeout(()=>delete stage.dataset.suppressTap,60);}
-    };
-    stage.addEventListener('pointerup',finish);
-    stage.addEventListener('pointercancel',finish);
-    stage.addEventListener('click',e=>{
-      if(stage.dataset.suppressTap==='true'){
-        e.preventDefault();e.stopImmediatePropagation();
+    }
+    recolorViewer = updateMaterialColors;
+    window.lockedOsRecolor3D = updateMaterialColors;
+    function renderLoop(time) {
+      renderFrame = 0;
+      if (!isVisible() || !loaded || !renderer || !figure) return;
+      const delta = lastFrame ? Math.min((time - lastFrame) / 1000, .08) : 0;
+      lastFrame = time;
+      if (!dragging && !reducedMotion.matches) {
+        figure.rotation.y += .33 * delta;
       }
-    },true);
-    document.addEventListener('visibilitychange',()=>{if(document.hidden)stopSpin();});
-    document.addEventListener('click',e=>{if(e.target.closest?.('[data-tab]') && !e.target.closest('[data-tab="gymPage"]'))stopSpin();});
+      renderer.render(scene,camera);
+      renderFrame = requestAnimationFrame(renderLoop);
+    }
+    function stopAnimation() {
+      if (renderFrame) cancelAnimationFrame(renderFrame);
+      renderFrame = 0; lastFrame = 0;
+      fallback.classList.remove('los-fallback-spinning');
+    }
+    stopViewer = stopAnimation;
+    function beginAnimation() {
+      if (!isVisible() || renderFrame) return;
+      if (failed) { fallback.classList.add('los-fallback-spinning'); return; }
+      if (loaded) renderFrame = requestAnimationFrame(renderLoop);
+    }
+    function showFallback(message) {
+      failed = true;
+      initializing = false;
+      fallback.hidden = false;
+      if (isVisible()) fallback.classList.add('los-fallback-spinning');
+      viewport.hidden = true;
+      loading.textContent = message || '3D unavailable. Showing simplified rotating muscle map.';
+      loading.classList.add('los-3d-notice');
+    }
+    async function boot3D() {
+      if (loaded || initializing || failed) return;
+      initializing = true;
+      try {
+        const modules = await Promise.all([
+          import('three'),
+          import('three/addons/loaders/GLTFLoader.js')
+        ]);
+        THREE = modules[0];
+        const GLTFLoader = modules[1].GLTFLoader;
+        if (!viewport.isConnected) return;
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(34,1,.1,100);
+        camera.position.set(0,.08,5.55);
+        camera.lookAt(0,0,0);
+        renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true, powerPreference:'low-power' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.65));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.55;
+        const canvas = renderer.domElement;
+        canvas.setAttribute('aria-label','Animated anatomically detailed 3D muscle model');
+        viewport.appendChild(canvas);
+        scene.add(new THREE.HemisphereLight('#fff4e9','#4d5862',2.15));
+        const key = new THREE.DirectionalLight('#fff3e6',3.45);key.position.set(-3,5,6);scene.add(key);
+        const fill = new THREE.DirectionalLight('#a2c5ee',1.45);fill.position.set(4,1,2);scene.add(fill);
+        const rim = new THREE.DirectionalLight('#c5e8ff',3.15);rim.position.set(3,3,-4);scene.add(rim);
+        const back = new THREE.DirectionalLight('#fbaea0',.85);back.position.set(-4,-1,-2);scene.add(back);
+        const loader = new GLTFLoader();
+        // CDN primary, GitHub Raw fallback; no asset fetch until Body view opens.
+        const models = [
+          'https://cdn.jsdelivr.net/gh/slfresh/fitmitwith-anatomy-atlas@master/models/full-body-male-mobile.glb',
+          'https://raw.githubusercontent.com/slfresh/fitmitwith-anatomy-atlas/master/models/full-body-male-mobile.glb'
+        ];
+        let gltf = null;
+        for (const url of models) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 12000);
+          try {
+            const response = await fetch(url, { signal: controller.signal, mode:'cors' });
+            if (!response.ok) throw new Error(`Anatomy model HTTP ${response.status}`);
+            const bytes = await response.arrayBuffer();
+            gltf = await new Promise((resolve,reject) => loader.parse(bytes, url.slice(0,url.lastIndexOf('/') + 1),resolve,reject));
+            break;
+          } catch (error) { console.warn('Anatomy mirror unavailable:',error); }
+          finally { clearTimeout(timer); }
+        }
+        if (!gltf?.scene) throw new Error('Could not load the anatomy model.');
+        figure = new THREE.Group();
+        figure.add(gltf.scene);
+        scene.add(figure);
+        gltf.scene.traverse(o => {
+          if (!o.isMesh) return;
+          const layer = String(o.userData.layer || '').toLowerCase();
+          // Prefer exposed, recognizable muscular surface instead of skeleton.
+          if (/skeleton|bone|cartilage|connective/.test(layer) || /skeleton|bone/.test(String(o.name).toLowerCase())) {
+            o.visible = false;return;
+          }
+          const group = statusForMesh(o);
+          o.userData.lockedOsGroup = group;
+          if (o.material?.dispose) o.material.dispose();
+          o.material = new THREE.MeshPhysicalMaterial({
+            color:'#bd8883',roughness:.56,metalness:0,clearcoat:.16,clearcoatRoughness:.58,
+            side:THREE.DoubleSide,depthWrite:true
+          });
+          if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+          modelMeshes.push(o);
+        });
+        // A normalized, centred human figure: fits both desktop and mobile.
+        const bounds = new THREE.Box3().setFromObject(gltf.scene);
+        const centre = bounds.getCenter(new THREE.Vector3());
+        const size = bounds.getSize(new THREE.Vector3());
+        if (!(size.y > 0)) throw new Error('Invalid model bounds.');
+        const scale = 3.05 / size.y;
+        gltf.scene.scale.multiplyScalar(scale);
+        gltf.scene.position.set(-centre.x*scale,-centre.y*scale,-centre.z*scale);
+        raycaster = new THREE.Raycaster();
+        pointerVector = new THREE.Vector2();
+        loaded = true;initializing = false;
+        viewport.hidden = false;loading.hidden = true;fallback.hidden = true;
+        updateMaterialColors();
+        resizeViewer();
+        beginAnimation();
+      } catch (error) {
+        console.warn('LOCKED-OS detailed anatomy unavailable:',error);
+        showFallback('Detailed 3D needs internet/WebGL. Showing the rotating fallback.');
+      }
+    }
+    function resizeViewer() {
+      if (!renderer || !camera || !viewport.isConnected) return;
+      const width = Math.max(1,viewport.clientWidth),height=Math.max(1,viewport.clientHeight);
+      renderer.setSize(width,height,false);
+      camera.aspect = width/height;
+      camera.updateProjectionMatrix();
+      if (loaded && isVisible()) renderer.render(scene,camera);
+    }
+    startViewer = () => {
+      if (!isVisible()) return;
+      if (!loaded && !failed) boot3D();
+      else beginAnimation();
+    };
+    const resizeObserver = new ResizeObserver(() => { if (loaded) resizeViewer(); });
+    resizeObserver.observe(viewport);
+    const intersection = new IntersectionObserver(entries => {
+      isInViewport = !!entries[0]?.isIntersecting;
+      if (isInViewport) startViewer();else stopAnimation();
+    }, { threshold:.025 });
+    intersection.observe(stage);
+    // Stop rendering when hidden, resume automatic spin on the next visit.
+    document.addEventListener('visibilitychange',() => { if (document.hidden)stopAnimation();else startViewer(); });
+    document.addEventListener('click',event => {
+      if (!event.target.closest?.('[data-tab]')) return;
+      if (!event.target.closest('[data-tab="gymPage"]')) stopAnimation();
+      else requestAnimationFrame(startViewer);
+    });
+    function pointerEventPoint(e) {
+      const box = viewport.getBoundingClientRect();
+      pointerVector.set((e.clientX-box.left)/box.width*2-1,-((e.clientY-box.top)/box.height)*2+1);
+      return pointerVector;
+    }
+    stage.addEventListener('pointerdown',event => {
+      if (!loaded || !figure || event.button !== 0 || !isVisible()) return;
+      dragging = true;pointerId=event.pointerId;
+      dragX=event.clientX;dragY=event.clientY;dragMoved=false;dragTime=Date.now();
+      stage.setPointerCapture?.(event.pointerId);
+    });
+    stage.addEventListener('pointermove',event => {
+      if (!dragging || event.pointerId!==pointerId || !figure) return;
+      const dx=event.clientX-dragX,dy=event.clientY-dragY;
+      if(Math.abs(dx)+Math.abs(dy)>4)dragMoved=true;
+      if (!dragMoved) return;
+      figure.rotation.y += dx*.009;
+      figure.rotation.x = Math.max(-.23,Math.min(.23,figure.rotation.x+dy*.004));
+      dragX=event.clientX;dragY=event.clientY;
+    });
+    const finishDrag=event => {
+      if (!dragging || event.pointerId!==pointerId) return;
+      dragging=false;pointerId=null;
+      if (!dragMoved && Date.now()-dragTime<450 && loaded) {
+        raycaster.setFromCamera(pointerEventPoint(event),camera);
+        const meshes=raycaster.intersectObjects(modelMeshes.filter(m=>m.visible),false);
+        const group=meshes.find(x=>x.object.userData.lockedOsGroup)?.object.userData.lockedOsGroup;
+        if (group) choose(group);
+      }
+      // There is no stopped spin mode. Auto-rotation resumes immediately.
+    };
+    stage.addEventListener('pointerup',finishDrag);
+    stage.addEventListener('pointercancel',finishDrag);
+    viewport.addEventListener('webglcontextlost', event => {
+      event.preventDefault();stopAnimation();showFallback('3D graphics context unavailable. Rotating fallback shown.');
+    });
     page.addEventListener('click', e => {
       const btn = e.target.closest('[data-muscle-key]');
       if (btn) choose(btn.dataset.muscleKey);
@@ -9004,6 +9201,7 @@
     document.querySelectorAll('.los-muscle-regions [data-muscle-key]').forEach(el => el.classList.toggle('selected', el.dataset.muscleKey === id));
     document.querySelectorAll('#losMuscleList [data-muscle-key]').forEach(el => el.classList.toggle('selected', el.dataset.muscleKey === id));
     $('losMuscleDetails').innerHTML = `<div><span class="los-dot ${group.status}"></span><strong>${sanitize(group.name)}</strong><small>${LABELS[group.status]}</small></div><p>${group.session ? `Last logged: ${sanitize(dateText(group.session.date))} · ${sanitize(group.session.workout || 'Workout')}` : 'No logged session for this group.'}</p><small>${group.days === null ? 'No time-based estimate available.' : `${group.days} day${group.days === 1 ? '' : 's'} since that session.`}</small>`;
+    window.lockedOsRecolor3D?.();
   }
   function update(force) {
     if (activeView !== 'body' || !$('gymPage')?.classList.contains('active')) return;
@@ -9020,6 +9218,7 @@
     });
     $('losRecoverySummary').textContent = `${next.filter(g => g.status === 'ready').length} of ${next.length} groups time-rested`;
     choose(selected);
+    window.lockedOsRecolor3D?.();
   }
   function start() {
     ghkCalendar();
