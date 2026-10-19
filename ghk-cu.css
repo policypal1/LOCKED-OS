@@ -567,3 +567,6 @@
 .los-model-credit a{color:var(--blue-dark);text-decoration:underline;text-underline-offset:2px}
 @media(max-width:680px){.los-3d-stage{min-height:490px}.los-live-rotation{font-size:.62rem}.los-map-header{flex-wrap:wrap}.los-3d-stage .los-map-help{padding:0 9px}}
 @media(prefers-reduced-motion:reduce){.los-fallback-spinning{animation:none}}
+
+/* Noninteractive legacy Gym teaser hidden without DOM observers. */
+#looksPage .workout-card { display:none !important; }

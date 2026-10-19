@@ -511,7 +511,7 @@
   function installGymTab() {
     if (document.getElementById("gymPage")) return;
     const nav = document.querySelector(".tabs");
-    const anchorTab = [...(nav?.querySelectorAll(".tab") || [])].find(item => item.dataset.tab === "ghkCuPage");
+    const anchorTab = [...(nav?.querySelectorAll(".tab") || [])].find(item => ["ghkCuPage", "adminPage"].includes(item.dataset.tab));
     const anchorPage = document.getElementById("ghkCuPage") || document.getElementById("contentPage") || document.getElementById("adminPage");
     if (!nav || !anchorPage) return;
 
@@ -2634,9 +2634,16 @@
     }
   }
 
+  let lastVaultSignature = null;
   function writeVaultSessions(sessions) {
+    const list = safeArray(sessions);
+    // Sessions are dated, and the editor updates updatedAt whenever sets change.
+    // This inexpensive fingerprint skips redundant backup writes from non-Gym saves.
+    const signature = list.map(s => `${s?.date || ''}:${s?.updatedAt || ''}:${s?.completed ? 1 : 0}`).join('|');
+    if (signature === lastVaultSignature) return;
     try {
-      localStorage.setItem(VAULT_KEY, JSON.stringify(mergeSessionCollection(sessions)));
+      localStorage.setItem(VAULT_KEY, JSON.stringify(mergeSessionCollection(list)));
+      lastVaultSignature = signature;
     } catch (error) {
       console.warn("LOCKED OS: gym vault write failed.", error);
     }
@@ -2644,6 +2651,7 @@
 
   window.lockedOsBackupGymSessions = () => writeVaultSessions(state.meta?.gymClean?.sessions || []);
 
+  let archivedGymRecoveryCache = null;
   function localRecoverySessions() {
     const sessions = [];
 
@@ -2664,22 +2672,25 @@
       - older recovery-snapshot formats
       - gym-safe backups from the previous patch
     */
-    try {
-      for (let index = 0; index < localStorage.length; index += 1) {
-        const key = localStorage.key(index);
-        if (!key || !key.toLowerCase().includes("locked_os")) continue;
-
-        let raw = "";
-        try { raw = localStorage.getItem(key) || ""; } catch (_) {}
-        if (!raw) continue;
-
-        inspectPossibleSnapshot(raw, sessions);
+    if (archivedGymRecoveryCache === null) {
+      // Legacy backup keys never change during normal operation. Scan once,
+      // instead of parsing every historic JSON snapshot on each cloud refresh.
+      const archived = [];
+      try {
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (!key || !key.toLowerCase().includes("locked_os")) continue;
+          let raw = "";
+          try { raw = localStorage.getItem(key) || ""; } catch (_) {}
+          if (!raw) continue;
+          inspectPossibleSnapshot(raw, archived);
+        }
+      } catch (error) {
+        console.warn("LOCKED OS: local workout recovery scan failed.", error);
       }
-    } catch (error) {
-      console.warn("LOCKED OS: local workout recovery scan failed.", error);
+      archivedGymRecoveryCache = mergeSessionCollection(archived);
     }
-
-    return mergeSessionCollection(sessions);
+    return mergeSessionCollection(sessions, archivedGymRecoveryCache);
   }
 
   function ensureGymCleanState() {
@@ -2927,6 +2938,8 @@
 
   async function recoverFromSupabaseBackups() {
     if (!supabaseClient || typeof state === "undefined") return;
+    // Optional disaster recovery only. Existing history is already in state/vault.
+    if (Array.isArray(state.meta?.gymClean?.sessions) && state.meta.gymClean.sessions.length > 0) return;
 
     try {
       const { data, error } = await supabaseClient
@@ -5325,14 +5338,8 @@
       Looksmaxxing can re-render its cards after task changes. Watch only this
       page and re-hide the one standalone card if it is recreated.
     */
-    const observer = new MutationObserver(() => {
-      hideTodaysGymCard();
-    });
-
-    observer.observe(looksPage, {
-      childList: true,
-      subtree: true
-    });
+    // This card is hidden by a stable CSS selector. Avoid observing every
+    // Looks task mutation and rescanning the entire page on each check-off.
 
     document.querySelector('[data-tab="looksPage"]')?.addEventListener("click", () => {
       requestAnimationFrame(hideTodaysGymCard);
@@ -7732,8 +7739,14 @@
       if (success && pending()) queueSupabaseSave(0);
     }
   }
+  let lastBackgroundRefresh = 0;
   async function refresh() {
-    if (!ready || refreshing || busy || mainApp.classList.contains('hidden')) return false;
+    if (!ready || refreshing || busy || mainApp.classList.contains('hidden') || document.hidden) return false;
+    // Focus/visibility/periodic listeners often fire together. Fetch at most
+    // once per 20 seconds unless the user explicitly presses Sync now.
+    const now = Date.now();
+    if (now - lastBackgroundRefresh < 20000) return false;
+    lastBackgroundRefresh = now;
     refreshing = true;
     try {
       const row = await fetchRow();
@@ -8232,7 +8245,7 @@
       const strip = document.createElement("div"); strip.className = "sync-strip-v3";
       syncStatus.setAttribute("role", "status");
       const retryButton = document.createElement("button"); retryButton.type = "button"; retryButton.textContent = "Sync now";
-      retryButton.onclick = refresh; strip.append(syncStatus, retryButton); header.insertAdjacentElement("afterend", strip);
+      retryButton.onclick = () => { lastBackgroundRefresh = 0; refresh(); }; strip.append(syncStatus, retryButton); header.insertAdjacentElement("afterend", strip);
     }
     const oldRender=render;
     render=function(){
@@ -8276,119 +8289,7 @@
 })();
 
 
-/* ===== CONTENT ROUTINE TAB — PRODUCTION ONLY ===== */
-"use strict";
-
-(() => {
-  const STORAGE_KEY = "locked_os_content_routine_v1";
-  const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-  const WEEKLY_ROUTINE = {
-    Monday: [
-      { id: "mon-post", label: "Post to TikTok + YouTube Shorts", post: true },
-      { id: "mon-script", label: "Write Wednesday's script" }
-    ],
-    Tuesday: [
-      { id: "tue-film", label: "Film Wednesday's video" },
-      { id: "tue-edit", label: "Edit Wednesday's video" },
-      { id: "tue-thu-script", label: "Write Thursday's script" }
-    ],
-    Wednesday: [
-      { id: "wed-post", label: "Post to TikTok + YouTube Shorts", post: true },
-      { id: "wed-film", label: "Film Thursday's video" },
-      { id: "wed-edit", label: "Edit Thursday's video" }
-    ],
-    Thursday: [
-      { id: "thu-post", label: "Post to TikTok + YouTube Shorts", post: true },
-      { id: "thu-script", label: "Write next Monday's script" }
-    ],
-    Friday: [
-      { id: "fri-film", label: "Film next Monday's video" }
-    ],
-    Saturday: [
-      { id: "sat-edit", label: "Edit and finalize Monday's video" }
-    ],
-    Sunday: [
-      { id: "sun-review", label: "Review this week's posts and save 3 ideas for next week" }
-    ]
-  };
-
-  function getWeekKey(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + diff);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-
-  function defaultState() {
-    return { weekKey: getWeekKey(new Date()), weeklyDone: {} };
-  }
-
-  function loadState() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-      const next = {
-        ...defaultState(),
-        ...(parsed && typeof parsed === "object" ? parsed : {}),
-        weeklyDone: parsed?.weeklyDone && typeof parsed.weeklyDone === "object" ? parsed.weeklyDone : {}
-      };
-      const currentWeek = getWeekKey(new Date());
-      if (next.weekKey !== currentWeek) {
-        next.weekKey = currentWeek;
-        next.weeklyDone = {};
-      }
-      return next;
-    } catch (_) {
-      return defaultState();
-    }
-  }
-
-  function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }
-
-  function renderWeek() {
-    const list = document.getElementById("contentWeekList");
-    if (!list) return;
-
-    const today = DAY_NAMES[new Date().getDay()];
-    const order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
-    list.innerHTML = order.map(day => {
-      const tasks = WEEKLY_ROUTINE[day] || [];
-      const taskHtml = tasks.map(task => {
-        const done = Boolean(state.weeklyDone[task.id]);
-        return `<button type="button" class="content-task ${done ? "done" : ""} ${task.post ? "content-task-post" : ""}" data-content-week-task="${task.id}">
-          <span class="content-task-box">${done ? "✓" : ""}</span>
-          <span class="content-task-copy">${task.label}</span>
-        </button>`;
-      }).join("");
-
-      return `<div class="content-day-row ${day === today ? "is-today" : ""}">
-        <div class="content-day-name">${day}</div>
-        <div class="content-day-tasks">${taskHtml}</div>
-      </div>`;
-    }).join("");
-
-    list.querySelectorAll("[data-content-week-task]").forEach(button => {
-      button.addEventListener("click", () => {
-        const id = button.dataset.contentWeekTask;
-        state.weeklyDone[id] = !state.weeklyDone[id];
-        saveState();
-        renderWeek();
-      });
-    });
-  }
-
-  function init() {
-    renderWeek();
-  }
-
-  let state = loadState();
-  window.addEventListener("DOMContentLoaded", init);
-})();
+/* Content tab retired for a lighter Looks + Gym interface. Existing content storage remains untouched. */
 
 /* LOCKED OS: focused recurring reminders, carryover, and supplement timing.
    Keeps original trackers and Supabase state intact. */
@@ -8793,15 +8694,38 @@
     removePreviousAutoTasks();
     paint();maybeNotify();
   }
+  let lastReminderDay = today();
   const boot=()=>{
     install();
-    setInterval(()=>{install();},30*1000);
-    window.addEventListener('focus',install);
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')install();});
-    document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>setTimeout(install,150)));
-    // Original code rebuilds the checklist dynamically; only watch child additions.
+    // Notification times still get checked every minute, but the expensive
+    // 14-day reminder/card renderer is event-driven, not a background timer.
+    setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      maybeNotify();
+      if (document.getElementById('looksPage')?.classList.contains('active')) {
+        const key = today();
+        if (key !== lastReminderDay) { lastReminderDay = key; install(); }
+      }
+    },60*1000);
+    window.addEventListener('focus',()=>{
+      if (document.getElementById('looksPage')?.classList.contains('active')) install();
+      else maybeNotify();
+    });
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState==='visible' && document.getElementById('looksPage')?.classList.contains('active')) install();
+    });
+    document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{
+      if (tab.dataset.tab==='looksPage') setTimeout(install,100);
+    }));
+    // Update only after actual checklist interactions, not every mutation to
+    // a whole page of charts, badges, water values, or animated elements.
     const page=document.getElementById('looksPage');
-    if(page){const mo=new MutationObserver(mutations=>{const external=mutations.some(m=>{const el=m.target.nodeType===1?m.target:m.target.parentElement;return el&&!el.closest('#locked-reminder-center');});if(external&&!busy){busy=true;setTimeout(()=>{busy=false;lastPaint='';paint();},100);}});mo.observe(page,{subtree:true,childList:true});}
+    if (page) page.addEventListener('click', e => {
+      if (!e.target.closest('.looks-task,.task-menu-action,.task-editor-save,.looks-day-nav-btn,.looks-today-btn')) return;
+      if (busy) return;
+      busy = true;
+      setTimeout(() => { busy = false; if (!page.classList.contains('active')) return; lastPaint = ''; paint(); },150);
+    });
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,450));else setTimeout(boot,450);
 })();
@@ -8996,21 +8920,40 @@
         material.color.copy(base.lerp(tint, id ? (selectedMesh ? .86 : .53) : .22));
         material.emissive.set(selectedMesh ? '#4a334a' : '#080705');
         material.emissiveIntensity = selectedMesh ? .27 : .075;
-        material.needsUpdate = true;
+        // Uniform changes do not require shader recompilation.
       }
     }
     recolorViewer = updateMaterialColors;
     window.lockedOsRecolor3D = updateMaterialColors;
+    let slow3DFrames = 0, reduced3DResolution = false;
     function renderLoop(time) {
       renderFrame = 0;
       if (!isVisible() || !loaded || !renderer || !figure) return;
-      const delta = lastFrame ? Math.min((time - lastFrame) / 1000, .08) : 0;
-      lastFrame = time;
-      if (!dragging && !reducedMotion.matches) {
-        figure.rotation.y += .33 * delta;
-      }
-      renderer.render(scene,camera);
+      // The detailed muscle model only needs 30 FPS for smooth rotation.
       renderFrame = requestAnimationFrame(renderLoop);
+      if (lastFrame && time - lastFrame < 1000 / 30) return;
+      const frameMs = lastFrame ? time - lastFrame : 0;
+      const delta = lastFrame ? Math.min(frameMs / 1000, .12) : 0;
+      lastFrame = time;
+      if (!dragging && !reducedMotion.matches) figure.rotation.y += .33 * delta;
+      try {
+        renderer.render(scene,camera);
+        // If the GPU cannot keep up for multiple frames, lower pixel density
+        // once rather than letting the whole application become unresponsive.
+        if (!reduced3DResolution) {
+          slow3DFrames = frameMs > 95 ? slow3DFrames + 1 : Math.max(0,slow3DFrames - 1);
+          if (slow3DFrames >= 12) {
+            reduced3DResolution = true;
+            renderer.setPixelRatio(1);
+            previousCanvasWidth = 0; previousCanvasHeight = 0;
+            resizeViewer();
+          }
+        }
+      } catch (error) {
+        console.warn('LOCKED-OS 3D renderer stopped after a graphics error:',error);
+        stopAnimation();
+        showFallback('Detailed model paused after a graphics issue. Simplified rotation is available.');
+      }
     }
     function stopAnimation() {
       if (renderFrame) cancelAnimationFrame(renderFrame);
@@ -9047,8 +8990,8 @@
         camera = new THREE.PerspectiveCamera(34,1,.1,100);
         camera.position.set(0,.08,5.55);
         camera.lookAt(0,0,0);
-        renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true, powerPreference:'low-power' });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.65));
+        renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true, powerPreference:'high-performance' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.25));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.55;
@@ -9093,8 +9036,10 @@
           const group = statusForMesh(o);
           o.userData.lockedOsGroup = group;
           if (o.material?.dispose) o.material.dispose();
-          o.material = new THREE.MeshPhysicalMaterial({
-            color:'#bd8883',roughness:.56,metalness:0,clearcoat:.16,clearcoatRoughness:.58,
+          // Standard material is substantially cheaper than per-muscle
+          // physical clearcoat shaders, while retaining realistic lighting.
+          o.material = new THREE.MeshStandardMaterial({
+            color:'#bd8883',roughness:.57,metalness:0,
             side:THREE.DoubleSide,depthWrite:true
           });
           if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
@@ -9120,9 +9065,12 @@
         showFallback('Detailed 3D needs internet/WebGL. Showing the rotating fallback.');
       }
     }
+    let previousCanvasWidth = 0, previousCanvasHeight = 0;
     function resizeViewer() {
       if (!renderer || !camera || !viewport.isConnected) return;
       const width = Math.max(1,viewport.clientWidth),height=Math.max(1,viewport.clientHeight);
+      if (width === previousCanvasWidth && height === previousCanvasHeight) return;
+      previousCanvasWidth = width; previousCanvasHeight = height;
       renderer.setSize(width,height,false);
       camera.aspect = width/height;
       camera.updateProjectionMatrix();

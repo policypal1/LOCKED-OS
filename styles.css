@@ -1532,3 +1532,6 @@ input, select, textarea { accent-color: var(--green); }
 #waterCard .water-custom-row{gap:8px}
 #waterCard .water-custom-row input{min-width:0}
 @media(prefers-reduced-motion:reduce){#waterCard .water-fill{transition:none}}
+
+/* Hidden modules do not participate in layout or painting. */
+.page:not(.active){content-visibility:hidden;}
