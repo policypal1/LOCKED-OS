@@ -570,3 +570,22 @@
 
 /* Noninteractive legacy Gym teaser hidden without DOM observers. */
 #looksPage .workout-card { display:none !important; }
+
+/* Training data only: inactive anatomy and never-logged muscle groups are gray. */
+.los-body-outline{fill:#929aa3;stroke:#6e7782}
+.los-muscle-regions .status-unknown{fill:#929aa3}
+.los-key .unknown:before,.los-dot.unknown{background:#929aa3}
+/* Floating recovery status card. Raycasts run only on mouse movement (10Hz max). */
+.los-anatomy-hover{
+  position:absolute;z-index:8;width:min(232px,calc(100% - 24px));
+  pointer-events:none;display:flex;flex-direction:column;gap:7px;
+  padding:14px 15px;border-radius:15px;
+  border:1px solid rgba(168,195,216,.24);
+  background:rgba(16,26,38,.95);box-shadow:0 15px 37px rgba(0,0,0,.33);
+  color:#f4f8fc;text-align:left;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+}
+.los-anatomy-hover[hidden]{display:none!important}
+.los-hover-eyebrow{font-size:.58rem;letter-spacing:.14em;font-weight:900;color:#9bb2c6}
+.los-anatomy-hover strong{font-size:1.04rem;line-height:1.1;font-weight:900}
+.los-hover-status{display:flex;align-items:center;gap:7px;font-size:.8rem;font-weight:850;color:#e3ebf3}
+.los-anatomy-hover small{font-size:.71rem;line-height:1.5;color:#b4c5d3;font-weight:650}

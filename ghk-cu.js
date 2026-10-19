@@ -8882,11 +8882,17 @@
     const viewport = $('los3DFrame');
     const loading = $('los3DLoading');
     const fallback = $('losBodyRotator');
+    const tooltip = document.createElement('div');
+    tooltip.id = 'losAnatomyHoverCard';
+    tooltip.className = 'los-anatomy-hover';
+    tooltip.setAttribute('role','tooltip');
+    tooltip.hidden = true;
+    stage.appendChild(tooltip);
     let loaded = false, initializing = false, failed = false;
     let renderFrame = 0, lastFrame = 0, dragging = false, pointerId = null;
     let dragX = 0, dragY = 0, dragMoved = false, dragTime = 0;
     let THREE, renderer, scene, camera, figure, raycaster, pointerVector;
-    let modelMeshes = [], isInViewport = true;
+    let modelMeshes = [], raycastMeshes = [], isInViewport = true;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const isVisible = () => activeView === 'body' &&
       $('gymPage')?.classList.contains('active') &&
@@ -8895,17 +8901,22 @@
       const data = obj?.userData || {};
       const group = String(data.group || '').toLowerCase();
       const label = [group, data.label, data.name, data.sourceName, obj?.name].filter(Boolean).join(' ').toLowerCase();
+      // These areas are not part of the user's Gym training groups. Exclude
+      // them before any broad arm/back/leg expression can assign a color.
+      // Avoid "face" matching within "surface" by using word boundaries.
+      if (/\b(head|face|facial|scalp|skull|jaw|neck|tongue|eye|eyelid|nose|ear|lip|mouth|foot|feet|toe|toes|ankle|hand|fingers|finger)\b|cranial|mandibul|masseter|temporalis|zygomatic|frontalis|orbicularis|buccinator|mentalis|nasalis|platysma|sternocleidomastoid|hyoid|auricular|hallucis|metatars|tarsal|plantar|lumbrical|interossei|pollicis|digiti minimi/.test(label)) return null;
       if (/pectoralis|chest|serratus anterior/.test(label)) return 'chest';
       if (/deltoid|supraspinatus|infraspinatus|subscapularis|teres minor|shoulder/.test(label)) return 'shoulders';
       if (/trapezius|latissimus|rhomboid|teres major|back|erector spinae|multifidus/.test(label)) return 'back';
+      // Biceps femoris belongs to hamstrings, not the arm muscle group.
+      if (/hamstring|biceps femoris|semitendinosus|semimembranosus/.test(label)) return 'hamstrings';
       if (/biceps|triceps|brachialis|brachioradialis|forearm|flexor carpi|extensor carpi/.test(label)) return 'arms';
       if (/quadriceps|rectus femoris|vastus|adductor|sartorius|gluteus|tensor fascia|quads/.test(label)) return 'quads';
-      if (/hamstring|biceps femoris|semitendinosus|semimembranosus|gastrocnemius caput/.test(label)) return 'hamstrings';
-      if (/gastrocnemius|soleus|tibialis|peroneus|fibularis|calf/.test(label)) return 'calves';
+      if (/gastrocnemius|soleus|calf/.test(label)) return 'calves';
       if (/rectus abdominis|oblique|transversus abdominis|core|abdominal/.test(label)) return 'core';
       return null;
     }
-    const tints = { recent:'#db7d68', transition:'#d5a775', ready:'#82b09e', unknown:'#bc8883' };
+    const tints = { recent:'#c77864', transition:'#e0b67b', ready:'#77ae99', unknown:'#929aa3' };
     function updateMaterialColors() {
       if (!loaded || !THREE) return;
       const statusMap = new Map(cached.map(m => [m.id,m.status]));
@@ -8913,18 +8924,49 @@
         const id = mesh.userData.lockedOsGroup;
         const material = mesh.material;
         if (!material?.color) continue;
-        // Keep a natural muscle tone while adding a readable recovery tint.
-        const base = new THREE.Color('#a85e58');
-        const tint = new THREE.Color(tints[statusMap.get(id) || 'unknown']);
-        const selectedMesh = id && id === selected;
-        material.color.copy(base.lerp(tint, id ? (selectedMesh ? .86 : .53) : .22));
-        material.emissive.set(selectedMesh ? '#4a334a' : '#080705');
-        material.emissiveIntensity = selectedMesh ? .27 : .075;
+        // No training data or no recognized training group means gray, not red.
+        // Keep realistic WebGL lighting and depth while using non-red material
+        // colors. Never color heads, hands, feet or unmatched anatomy as trained.
+        const status = id ? statusMap.get(id) : null;
+        const trained = Boolean(status && status !== 'unknown');
+        const selectedMesh = Boolean(id && id === selected);
+        const tint = new THREE.Color(trained ? tints[status] : '#919ba4');
+        if (selectedMesh) tint.lerp(new THREE.Color(trained ? '#e1e7e7' : '#c1c9d0'), .18);
+        material.color.copy(tint);
+        material.emissive.set(selectedMesh ? '#223443' : '#080d11');
+        material.emissiveIntensity = selectedMesh ? .16 : .028;
         // Uniform changes do not require shader recompilation.
       }
     }
     recolorViewer = updateMaterialColors;
     window.lockedOsRecolor3D = updateMaterialColors;
+    let hoverTime = 0, hoverKey = '', hoverPoint = null;
+    function hideHover() { tooltip.hidden = true; hoverKey = ''; }
+    function displayHover(groupId, meshName, x, y) {
+      const item = cached.find(m => m.id === groupId);
+      // Be explicit that a recovery estimate is not an actual measurement
+      // of pain, health, fitness, soreness or tissue condition.
+      const knownGroup = Boolean(item);
+      const key = `${groupId || 'excluded'}:${item?.status || 'not-tracked'}:${item?.session?.date || ''}`;
+      if (hoverKey !== key) {
+        hoverKey = key;
+        const title = knownGroup ? item.name : (/head|scalp|face|cranial|skull|jaw|neck|temporal|masseter/i.test(meshName) ? 'Head & neck' : /foot|feet|toe|tars|halluc|ankle|plantar/i.test(meshName) ? 'Feet & ankles' : 'Untracked anatomy');
+        const label = knownGroup ? LABELS[item.status] : 'Not tracked';
+        const detail = !knownGroup ? 'Not part of your workout recovery tracker.'
+          : item.session ? `Last logged ${dateText(item.session.date)} · ${item.days} day${item.days === 1 ? '' : 's'} ago`
+          : 'No saved workout found for this muscle group.';
+        tooltip.innerHTML = `<span class="los-hover-eyebrow">WORKOUT RECOVERY ESTIMATE</span><strong>${sanitize(title)}</strong><span class="los-hover-status"><i class="los-dot ${knownGroup ? item.status : 'unknown'}"></i>${sanitize(label)}</span><small>${sanitize(detail)}</small>`;
+      }
+      tooltip.hidden = false;
+      const rect = stage.getBoundingClientRect();
+      const width = tooltip.offsetWidth || 215;
+      const height = tooltip.offsetHeight || 118;
+      const left = Math.max(10, Math.min(rect.width - width - 10, x - rect.left + 18));
+      const top = Math.max(10, Math.min(rect.height - height - 10, y - rect.top + 17));
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${top}px`;
+      tooltip.hidden = false;
+    }
     let slow3DFrames = 0, reduced3DResolution = false;
     function renderLoop(time) {
       renderFrame = 0;
@@ -8959,6 +9001,7 @@
       if (renderFrame) cancelAnimationFrame(renderFrame);
       renderFrame = 0; lastFrame = 0;
       fallback.classList.remove('los-fallback-spinning');
+      hideHover();
     }
     stopViewer = stopAnimation;
     function beginAnimation() {
@@ -9039,12 +9082,14 @@
           // Standard material is substantially cheaper than per-muscle
           // physical clearcoat shaders, while retaining realistic lighting.
           o.material = new THREE.MeshStandardMaterial({
-            color:'#bd8883',roughness:.57,metalness:0,
+            color:'#929ca6',roughness:.62,metalness:0,
             side:THREE.DoubleSide,depthWrite:true
           });
           if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
           modelMeshes.push(o);
         });
+        // Cache raycast targets once; do not allocate mesh arrays on each hover.
+        raycastMeshes = modelMeshes.filter(m => m.visible);
         // A normalized, centred human figure: fits both desktop and mobile.
         const bounds = new THREE.Box3().setFromObject(gltf.scene);
         const centre = bounds.getCenter(new THREE.Vector3());
@@ -9103,6 +9148,7 @@
     stage.addEventListener('pointerdown',event => {
       if (!loaded || !figure || event.button !== 0 || !isVisible()) return;
       dragging = true;pointerId=event.pointerId;
+      hideHover();
       dragX=event.clientX;dragY=event.clientY;dragMoved=false;dragTime=Date.now();
       stage.setPointerCapture?.(event.pointerId);
     });
@@ -9115,12 +9161,36 @@
       figure.rotation.x = Math.max(-.23,Math.min(.23,figure.rotation.x+dy*.004));
       dragX=event.clientX;dragY=event.clientY;
     });
+    // Hover raycasting is deliberately throttled. It never runs on the
+    // animation frame loop and therefore adds negligible idle GPU/CPU cost.
+    stage.addEventListener('pointermove', event => {
+      if (event.pointerType === 'touch' || dragging || !loaded || !isVisible() || !figure) return;
+      if (event.target.closest?.('.los-anatomy-hover')) return;
+      const now = performance.now();
+      if (now - hoverTime < 100) {
+        if (!tooltip.hidden) displayHover(hoverPoint?.group, hoverPoint?.name || '', event.clientX, event.clientY);
+        return;
+      }
+      hoverTime = now;
+      if (!raycaster || !camera || !pointerVector || !THREE) return;
+      const bounds = viewport.getBoundingClientRect();
+      if (bounds.width === 0 || bounds.height === 0 || event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) {hideHover();return;}
+      pointerVector.set((event.clientX-bounds.left)/bounds.width*2-1,-((event.clientY-bounds.top)/bounds.height)*2+1);
+      raycaster.setFromCamera(pointerVector,camera);
+      const hits = raycaster.intersectObjects(raycastMeshes,false);
+      if (!hits.length) { hideHover();return; }
+      const mesh = hits[0].object;
+      const group = mesh.userData.lockedOsGroup || null;
+      hoverPoint = {group,name:mesh.name || ''};
+      displayHover(group,mesh.name || '',event.clientX,event.clientY);
+    });
+    stage.addEventListener('pointerleave',hideHover);
     const finishDrag=event => {
       if (!dragging || event.pointerId!==pointerId) return;
       dragging=false;pointerId=null;
       if (!dragMoved && Date.now()-dragTime<450 && loaded) {
         raycaster.setFromCamera(pointerEventPoint(event),camera);
-        const meshes=raycaster.intersectObjects(modelMeshes.filter(m=>m.visible),false);
+        const meshes=raycaster.intersectObjects(raycastMeshes,false);
         const group=meshes.find(x=>x.object.userData.lockedOsGroup)?.object.userData.lockedOsGroup;
         if (group) choose(group);
       }
@@ -9131,6 +9201,12 @@
     viewport.addEventListener('webglcontextlost', event => {
       event.preventDefault();stopAnimation();showFallback('3D graphics context unavailable. Rotating fallback shown.');
     });
+    fallback.addEventListener('pointermove',e => {
+      const region = e.target.closest?.('[data-muscle]');
+      if (!region || e.pointerType === 'touch') {hideHover();return;}
+      displayHover(region.dataset.muscle, region.dataset.muscle,e.clientX,e.clientY);
+    });
+    fallback.addEventListener('pointerleave',hideHover);
     page.addEventListener('click', e => {
       const btn = e.target.closest('[data-muscle-key]');
       if (btn) choose(btn.dataset.muscleKey);
