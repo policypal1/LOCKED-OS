@@ -28,7 +28,6 @@
     ],
     "Legs + Abs": [
       "Hack Squat",
-      "Romanian Deadlift",
       "Leg Extension",
       "Leg Curl",
       "Calf Raise",
@@ -1155,7 +1154,6 @@
     ],
     "Legs + Abs": [
       "Hack Squat",
-      "Romanian Deadlift",
       "Leg Extension",
       "Leg Curl",
       "Calf Raise",
@@ -2977,11 +2975,19 @@
     }
   }
 
+  let recoveryStarted = false;
+  const runRecovery = () => {
+    if (recoveryStarted) return;
+    recoveryStarted = true;
+    installAnchorAndRecover();
+    recoverFromSupabaseBackups();
+  };
   const start = () => {
-    setTimeout(() => {
-      installAnchorAndRecover();
-      recoverFromSupabaseBackups();
-    }, 80);
+    // Old localStorage snapshots can be large. Let the login view paint first;
+    // opening Gym still triggers recovery immediately if it has not run yet.
+    document.querySelector('[data-tab="gymPage"]')?.addEventListener('click', runRecovery, { once: true });
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(runRecovery, { timeout: 1800 });
+    else setTimeout(runRecovery, 600);
   };
 
   if (document.readyState === "loading") {
@@ -3028,7 +3034,6 @@
     ],
     "Legs + Abs": [
       "Hack Squat",
-      "Romanian Deadlift",
       "Leg Extension",
       "Leg Curl",
       "Calf Raise",
@@ -3545,7 +3550,6 @@
     ],
     "Legs + Abs": [
       "Hack Squat",
-      "Romanian Deadlift",
       "Leg Extension",
       "Leg Curl",
       "Calf Raise",
@@ -3657,25 +3661,37 @@
 
   function previousExercise(name, beforeDate) {
     ensureGym();
-    const aliases = {
-      'Reverse Pec Deck': ['Face Pulls'],
-      'Face Pulls': ['Reverse Pec Deck'],
-      'Cable Fly / Pec Deck': ['Cable Fly', 'Pec Deck'],
-      'Cable Crunch / Ab Machine': ['Cable Crunch', 'Ab Machine']
+    // A skipped exercise (or set) should not erase an older, valid result.
+    // Past versions of the gym tracker also used slightly different names.
+    const exerciseKey = value => {
+      const normalized = String(value || '').toLowerCase().trim().replace(/[-_/,+]/g, ' ').replace(/\s+/g, ' ');
+      if (/calf.*rais/.test(normalized)) return 'calf raise';
+      if (/^(face pulls?|reverse pec deck)$/.test(normalized)) return 'reverse pec deck';
+      if (/^(cable fly|cable flies|pec deck|cable fly pec deck)$/.test(normalized)) return 'cable fly pec deck';
+      if (/^(cable crunch|ab machine|cable crunch ab machine)$/.test(normalized)) return 'cable crunch ab machine';
+      if (/^seated cable rows?( both arms)?$/.test(normalized)) return 'seated cable row';
+      return normalized;
     };
-    const acceptable = new Set([name, ...(aliases[name] || [])]);
+    const desired = exerciseKey(name);
     const sessions = state.meta.gymClean.sessions
       .filter(session => validDateKey(session?.date) && session.date < beforeDate)
       .sort((a, b) => b.date.localeCompare(a.date));
+    const previousSets = [null, null];
     for (const session of sessions) {
       for(const candidate of session.exercises || []) {
-        if(!acceptable.has(candidate?.name))continue;
+        if(exerciseKey(candidate?.name) !== desired) continue;
         const sets = Array.isArray(candidate.sets) ? candidate.sets : [];
-        if(sets.some(s => Number(s?.weight) > 0 && Number(s?.reps) > 0)) return candidate;
+        for (let index = 0; index < previousSets.length; index++) {
+          const set = sets[index];
+          if (!previousSets[index] && Number(set?.weight) > 0 && Number(set?.reps) > 0)
+            previousSets[index] = set;
+        }
+        if (previousSets.every(Boolean)) return { sets: previousSets };
       }
     }
-    return null;
+    return previousSets.some(Boolean) ? { sets: previousSets } : null;
   }
+  window.lockedOsGymPreviousExercise = previousExercise;
 
   function setText(set) {
     return Number(set?.weight) > 0 && Number(set?.reps) > 0
@@ -3826,7 +3842,7 @@
         </div>
         <div class="clean-gym-previous">
           <span>Previous</span>
-          <strong>${previous ? `${escapeHtml(setText(previous?.sets?.[0]))}<br>${escapeHtml(setText(previous?.sets?.[1]))}` : "First logged workout"}</strong>
+          <strong>${previous ? `${escapeHtml(setText(previous?.sets?.[0]))}<br>${escapeHtml(setText(previous?.sets?.[1]))}` : "No earlier logged sets"}</strong>
         </div>
         ${[0, 1].map(index => {
           const set = current.sets?.[index] || {};
@@ -6299,6 +6315,9 @@
   }
 
   function renderRecentWorkoutLogs() {
+    // Historical backups can be large. Scan them only when the Gym tab opens,
+    // not during the initial login/first paint.
+    if (!document.getElementById('gymPage')?.classList.contains('active')) return;
     const list = ensureHistorySection();
     if (!list) return;
 
@@ -7423,11 +7442,13 @@
   }
 
   function previousExercise(dayKey, name) {
+    if (typeof window.lockedOsGymPreviousExercise === 'function')
+      return window.lockedOsGymPreviousExercise(name, dayKey);
     return [...primaryGymSessions()]
       .filter(session => validDateKey(session?.date) && session.date < dayKey)
       .sort((a, b) => b.date.localeCompare(a.date))
       .map(session => session?.exercises?.find(exercise => normalizeBackExerciseName(exercise?.name) === name))
-      .find(Boolean) || null;
+      .find(exercise => exercise?.sets?.some(set => Number(set?.weight) > 0 && Number(set?.reps) > 0)) || null;
   }
 
   function formatSet(set) {
@@ -8744,7 +8765,7 @@
     ['arms', 'Arms'], ['quads', 'Quads'], ['hamstrings', 'Hamstrings'],
     ['calves', 'Calves'], ['core', 'Core']
   ];
-  const ACTIVE_GHK_DAYS = new Set([0, 1, 5, 6]);
+  const ACTIVE_GHK_DAYS = new Set([0, 1, 4, 5, 6]);
   const $ = id => document.getElementById(id);
   const sanitize = s => String(s ?? '').replace(/[&<>"']/g, ch => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -8773,17 +8794,17 @@
     const badge = $('ghkTodayBadge');
     if (badge) badge.textContent = ACTIVE_GHK_DAYS.has(today) ? 'Today · midday' : 'Today · off day';
   }
-  function muscleFromSession(session) {
+  function muscleFromSession(session, scheduledWorkout = '') {
     const found = new Set();
-    const exercises = Array.isArray(session.exercises) ? session.exercises : [];
-    let logged = Boolean(session.completed);
+    const exercises = Array.isArray(session?.exercises) ? session.exercises : [];
+    let logged = Boolean(session?.completed);
     for (const e of exercises) {
       const sets = Array.isArray(e?.sets) ? e.sets : [];
       if (!sets.some(s => Number(s?.weight) > 0 || Number(s?.reps) > 0)) continue;
       logged = true;
-      const name = String(e.name || '').toLowerCase();
+      const name = String(e?.name || '').toLowerCase();
       if (/chest|bench|fly|pec deck|push.?up/.test(name)) found.add('chest');
-      if (/shoulder|delt|lateral|raise|press|face pull|reverse pec/.test(name)) found.add('shoulders');
+      if (/shoulder|delt|lateral raise|overhead press|face pull|reverse pec/.test(name)) found.add('shoulders');
       if (/pull|row|lat|back|shrug/.test(name)) found.add('back');
       if (/tricep|bicep|curl|pressdown|skullcrusher/.test(name)) found.add('arms');
       if (/squat|lunge|leg extension|leg press|hack/.test(name)) found.add('quads');
@@ -8791,10 +8812,12 @@
       if (/calf|calves/.test(name)) found.add('calves');
       if (/ab |abs|crunch|plank|core|oblique/.test(name)) found.add('core');
     }
-    if (logged && found.size === 0) {
-      const workout = String(session.workout || '').toLowerCase();
-      if (/chest|push/.test(workout)) ['chest', 'shoulders', 'arms'].forEach(id => found.add(id));
-      if (/back|pull/.test(workout)) ['back', 'arms'].forEach(id => found.add(id));
+    // Completed older workouts may have been stored as a checkmark without
+    // per-exercise data. Use their workout type to recover the muscle history.
+    if (logged && (session.completed || found.size === 0)) {
+      const workout = String(session.workout && session.workout !== 'Workout' ? session.workout : scheduledWorkout).toLowerCase();
+      if (/chest|push/.test(workout)) ['chest', 'shoulders'].forEach(id => found.add(id));
+      if (/back|pull/.test(workout)) ['back', 'shoulders'].forEach(id => found.add(id));
       if (/arm/.test(workout)) found.add('arms');
       if (/leg/.test(workout)) ['quads', 'hamstrings', 'calves'].forEach(id => found.add(id));
       if (/abs|core/.test(workout)) found.add('core');
@@ -8807,12 +8830,22 @@
   }
   function recoveryModel() {
     const stateNow = currentState();
-    const sessions = Array.isArray(stateNow?.meta?.gymClean?.sessions) ? stateNow.meta.gymClean.sessions : [];
+    const collections = [
+      stateNow?.meta?.gymClean?.sessions,
+      stateNow?.meta?.gymTrackerV2?.sessions,
+      stateNow?.meta?.gymTracker?.sessions
+    ];
+    // Preserve older logged sessions without changing any saved user data.
+    try { collections.push(JSON.parse(localStorage.getItem('locked_os_gym_sessions_vault_v2') || '[]')); }
+    catch (_) {}
+    const sessions = collections.flatMap(value => Array.isArray(value) ? value : []);
     const last = new Map();
     for (const session of sessions) {
       const dt = dateMs(session?.date);
       if (!Number.isFinite(dt) || dt > Date.now() + 86400000) continue;
-      for (const group of muscleFromSession(session)) {
+      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(dt).getDay()];
+      const scheduled = stateNow?.meta?.gymClean?.schedule?.[dayName] || '';
+      for (const group of muscleFromSession(session, scheduled)) {
         if (!last.has(group) || session.date > last.get(group).date) last.set(group, session);
       }
     }
@@ -8900,23 +8933,25 @@
     function statusForMesh(obj) {
       const data = obj?.userData || {};
       const group = String(data.group || '').toLowerCase();
+      const region = String(data.region || '').toLowerCase();
       const label = [group, data.label, data.name, data.sourceName, obj?.name].filter(Boolean).join(' ').toLowerCase();
-      // These areas are not part of the user's Gym training groups. Exclude
-      // them before any broad arm/back/leg expression can assign a color.
-      // Avoid "face" matching within "surface" by using word boundaries.
-      if (/\b(head|face|facial|scalp|skull|jaw|neck|tongue|eye|eyelid|nose|ear|lip|mouth|foot|feet|toe|toes|ankle|hand|fingers|finger)\b|cranial|mandibul|masseter|temporalis|zygomatic|frontalis|orbicularis|buccinator|mentalis|nasalis|platysma|sternocleidomastoid|hyoid|auricular|hallucis|metatars|tarsal|plantar|lumbrical|interossei|pollicis|digiti minimi/.test(label)) return null;
+      // Exclude entire non-training regions, not the word "head" in a muscle
+      // name (for example, the upper pectoralis or gastrocnemius lateral head).
+      if (/^(head|face|scalp|neck|hands?|feet|foot|ankles?|toes?)$/.test(region) ||
+          /^(head hands feet|skeleton|connective tissue|neck)$/.test(group) ||
+          /\b(scalp|skull|jaw|eyelid|nose|tongue)\b|cranial|mandibul|masseter|temporalis|zygomatic|frontalis|orbicularis|buccinator|mentalis|nasalis|platysma|sternocleidomastoid|hyoid|auricular/.test(label)) return null;
       if (/pectoralis|chest|serratus anterior/.test(label)) return 'chest';
       if (/deltoid|supraspinatus|infraspinatus|subscapularis|teres minor|shoulder/.test(label)) return 'shoulders';
-      if (/trapezius|latissimus|rhomboid|teres major|back|erector spinae|multifidus/.test(label)) return 'back';
+      if (/trapezius|latissimus|rhomboid|teres major|back|erector spinae|multifidus|spinal extensor|iliocostalis|longissimus|spinalis|serratus posterior|levator scapulae|quadratus lumborum/.test(label)) return 'back';
       // Biceps femoris belongs to hamstrings, not the arm muscle group.
       if (/hamstring|biceps femoris|semitendinosus|semimembranosus/.test(label)) return 'hamstrings';
       if (/biceps|triceps|brachialis|brachioradialis|forearm|flexor carpi|extensor carpi/.test(label)) return 'arms';
       if (/quadriceps|rectus femoris|vastus|adductor|sartorius|gluteus|tensor fascia|quads/.test(label)) return 'quads';
-      if (/gastrocnemius|soleus|calf/.test(label)) return 'calves';
+      if (/gastrocnemius|soleus|plantaris|calf|calves/.test(label)) return 'calves';
       if (/rectus abdominis|oblique|transversus abdominis|core|abdominal/.test(label)) return 'core';
       return null;
     }
-    const tints = { recent:'#c77864', transition:'#e0b67b', ready:'#77ae99', unknown:'#929aa3' };
+    const tints = { recent:'#c77864', transition:'#e0b67b', ready:'#21c579', unknown:'#929aa3' };
     function updateMaterialColors() {
       if (!loaded || !THREE) return;
       const statusMap = new Map(cached.map(m => [m.id,m.status]));
@@ -8931,10 +8966,10 @@
         const trained = Boolean(status && status !== 'unknown');
         const selectedMesh = Boolean(id && id === selected);
         const tint = new THREE.Color(trained ? tints[status] : '#919ba4');
-        if (selectedMesh) tint.lerp(new THREE.Color(trained ? '#e1e7e7' : '#c1c9d0'), .18);
+        if (selectedMesh) tint.lerp(new THREE.Color(trained ? '#e1e7e7' : '#c1c9d0'), .08);
         material.color.copy(tint);
-        material.emissive.set(selectedMesh ? '#223443' : '#080d11');
-        material.emissiveIntensity = selectedMesh ? .16 : .028;
+        material.emissive.set(status === 'ready' ? '#0d4229' : selectedMesh ? '#223443' : '#080d11');
+        material.emissiveIntensity = status === 'ready' ? .13 : selectedMesh ? .16 : .028;
         // Uniform changes do not require shader recompilation.
       }
     }

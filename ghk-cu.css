@@ -488,14 +488,14 @@
 .los-muscle-regions path.selected,.los-muscle-regions path:hover,.los-muscle-regions path:focus-visible{stroke:#14283c;stroke-width:3.5;filter:brightness(1.05)}
 .los-muscle-regions .status-recent{fill:#c98264}
 .los-muscle-regions .status-transition{fill:#e4bc6d}
-.los-muscle-regions .status-ready{fill:#6daa94}
+.los-muscle-regions .status-ready{fill:#21c579}
 .los-muscle-regions .status-unknown{fill:#b3b0ab}
 .los-key{display:flex;flex-wrap:wrap;gap:9px 14px;margin:17px 0 12px}
 .los-key span{font-size:.74rem;font-weight:800;color:var(--muted)}
 .los-key span:before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
 .los-key .recent:before,.los-dot.recent{background:#c98264}
 .los-key .transition:before,.los-dot.transition{background:#e4bc6d}
-.los-key .ready:before,.los-dot.ready{background:#6daa94}
+.los-key .ready:before,.los-dot.ready{background:#21c579}
 .los-key .unknown:before,.los-dot.unknown{background:#b3b0ab}
 .los-disclaimer{font-size:.76rem;line-height:1.6;margin:0;color:var(--muted)}
 #losMuscleList{display:grid;gap:7px;margin:16px 0}
