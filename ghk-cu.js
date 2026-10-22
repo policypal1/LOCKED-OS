@@ -9298,3 +9298,252 @@
   else setTimeout(start, 750);
 })();
 
+
+
+/* LOCKED OS · session-based gym rotation and personal roadmap · 2026-10-21 */
+(() => {
+  'use strict';
+  const ROTATION = ['Chest + side delts', 'Back + rear delts', 'Arms', 'Legs + Abs'];
+  const EXERCISES = {
+    'Chest + side delts': ['Incline Dumbbell Bench Press', 'Machine Chest Press', 'Cable Fly / Pec Deck', 'Cable Lateral Raise', 'Machine Lateral Raise'],
+    'Back + rear delts': ['Lat Pulldown', 'Chest-Supported Row', 'Seated Cable Row, both arms', 'Reverse Pec Deck', 'Shrugs'],
+    'Arms': ['Triceps Pressdown', 'Overhead Cable Triceps Extension', 'Cable Curl', 'Incline Dumbbell Curl'],
+    'Legs + Abs': ['Hack Squat', 'Leg Extension', 'Leg Curl', 'Calf Raise', 'Cable Crunch / Ab Machine']
+  };
+  const DEFAULT_DAYS = [1, 2, 4, 5]; // Monday, Tuesday, Thursday, Friday
+  const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const MILESTONES = [
+    { id: 'recomp', index: '01', tag: 'FITNESS', title: 'Body recomp + CJC-1295 review', start: '2026-11-04', summary: 'After vacation. Target 175–180 lb, train consistently, and review CJC-1295.', detail: 'Track weight trends, strength, and progress photos. CJC-1295 is not an established body-recomposition treatment, and should be evaluated with a qualified clinician rather than used as a dosing schedule.', checks: ['Return from vacation', 'Set baseline weight and measurements', 'Review strength trend', 'Review CJC-1295 evidence and risks'] },
+    { id: 'orthodontics', index: '02', tag: 'ORTHODONTICS', title: 'MARPE + reverse-pull facemask', start: '2027-01-01', summary: 'Tentative January milestone, contingent on your orthodontist’s plan.', detail: 'Confirm treatment sequencing, expansion expectations, asymmetry management, and follow-up with your orthodontist.', checks: ['Review orthodontist’s treatment plan', 'Confirm appointment and timeline', 'Document follow-up milestones'] },
+    { id: 'growth-review', index: '03', tag: 'RESEARCH', title: 'IGF-1 LR3 / HGH review', start: '2027-01-01', summary: 'Research and specialist discussion alongside orthodontic care.', detail: 'These are not proven ways to enhance MARPE or facemask outcomes. Do not treat this as a dosing or treatment protocol.', checks: ['Discuss potential risks with a qualified clinician', 'Review whether there is a medical indication'] },
+    { id: 'skin-hair', index: '04', tag: 'DERMATOLOGY', title: 'Skin + hair treatment review', start: '', summary: 'Later milestone: discuss isotretinoin and oral minoxidil.', detail: 'Timing, monitoring, and whether either prescription is appropriate require clinician review. No dose or start date is assumed.', checks: ['Dermatology consultation', 'Discuss isotretinoin risks and monitoring', 'Discuss oral minoxidil risks and alternatives'] }
+  ];
+  let selectedGymDay = '';
+  let manualWorkout = '';
+  let planZoom = 1;
+  let activeMilestone = 'recomp';
+  let gymMounted = false;
+  let planMounted = false;
+  const $ = id => document.getElementById(id);
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const validKey = key => /^\d{4}-\d{2}-\d{2}$/.test(String(key || '')) && !Number.isNaN(new Date(`${key}T12:00:00`).getTime());
+  const today = () => typeof getTodayKey === 'function' ? getTodayKey() : dateKey(new Date());
+  const dateKey = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  const dateFrom = key => new Date(`${key}T12:00:00`);
+  const addDay = (key,n) => { const d=dateFrom(key); d.setDate(d.getDate()+n); return dateKey(d); };
+  const niceDate = key => validKey(key) ? dateFrom(key).toLocaleDateString(undefined, {month:'short',day:'numeric',year:'numeric'}) : 'Date to be decided';
+  function meta() { if (typeof state === 'undefined' || !state) return null; if (!state.meta || typeof state.meta !== 'object') state.meta = {}; return state.meta; }
+  function ensureData() {
+    const m = meta(); if (!m) return false;
+    if (!m.gymClean || typeof m.gymClean !== 'object') m.gymClean = {version:1,schedule:{},sessions:[]};
+    if (!Array.isArray(m.gymClean.sessions)) m.gymClean.sessions = [];
+    if (!m.flexGym || typeof m.flexGym !== 'object') m.flexGym = {};
+    if (!Array.isArray(m.flexGym.preferredDays)) m.flexGym.preferredDays = [...DEFAULT_DAYS];
+    m.flexGym.preferredDays = [...new Set(m.flexGym.preferredDays.map(Number).filter(n => Number.isInteger(n) && n>=0 && n<=6))].sort();
+    if (!ROTATION.includes(m.flexGym.firstWorkout)) m.flexGym.firstWorkout = ROTATION[0];
+    if (!m.looksPlanV1 || typeof m.looksPlanV1 !== 'object') m.looksPlanV1 = {};
+    return true;
+  }
+  function sessions() { return meta()?.gymClean?.sessions || []; }
+  function sessionAt(key) { return [...sessions()].filter(s => s?.date === key).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0] || null; }
+  function completedBefore(key) {
+    return [...sessions()].filter(s => s?.completed && validKey(s.date) && s.date < key && ROTATION.includes(s.workout))
+      .sort((a,b)=>b.date.localeCompare(a.date) || String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0] || null;
+  }
+  function nextWorkout(key) {
+    const previous = completedBefore(key);
+    const index = previous ? (ROTATION.indexOf(previous.workout)+1)%ROTATION.length : ROTATION.indexOf(meta().flexGym.firstWorkout);
+    return ROTATION[index];
+  }
+  const chosenWorkout = () => manualWorkout || sessionAt(selectedGymDay)?.workout || nextWorkout(selectedGymDay);
+  function save() { if (typeof saveState === 'function') saveState(); else if (typeof saveLocalState === 'function') saveLocalState(); }
+  function broadcast() {
+    document.dispatchEvent(new Event('locked-os-workout-saved'));
+    try { if (typeof renderWeeklyReview === 'function') renderWeeklyReview(); } catch(e) { console.warn(e); }
+    try { if (typeof renderLooks === 'function') renderLooks(); } catch(e) { console.warn(e); }
+  }
+  function lastExercise(name, key) {
+    const alias = v => String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    for (const s of [...sessions()].filter(s=>validKey(s?.date) && s.date < key).sort((a,b)=>b.date.localeCompare(a.date))) {
+      const e = (s.exercises||[]).find(x => alias(x?.name)===alias(name));
+      if (e?.sets?.some(set=>Number(set.weight)>0 && Number(set.reps)>0)) return e;
+    }
+    return null;
+  }
+  function projectedDates() {
+    const preferred = new Set(meta().flexGym.preferredDays);
+    const start = today();
+    let offset=ROTATION.indexOf(nextWorkout(start)), result=[];
+    for (let i=0;i<36 && result.length<8;i++) {
+      const key=addDay(start,i), d=dateFrom(key).getDay(), saved=sessionAt(key);
+      if (saved?.completed && ROTATION.includes(saved.workout)) {
+        result.push({key,workout:saved.workout,done:true});
+        offset=(ROTATION.indexOf(saved.workout)+1)%ROTATION.length;
+        continue;
+      }
+      // A manually saved draft is visible even on an optional/rest day.
+      if (!preferred.has(d) && !saved) continue;
+      const planned=(saved && ROTATION.includes(saved.workout)) ? saved.workout : ROTATION[offset];
+      result.push({key,workout:planned,done:false});
+      offset=(ROTATION.indexOf(planned)+1)%ROTATION.length;
+    }
+    return result;
+  }
+  function gymMarkup() {
+    return `<section class="los-flex-gym" id="losFlexGym">
+      <div class="los-upgrade-header"><div><div class="los-kicker">LOCKED OS / TRAINING ENGINE V3</div><h2>Session-based rotation</h2><p>Your split follows the last workout you actually finished, not a rigid weekday assignment.</p></div><span class="los-pulse"><i></i> LIVE ROTATION</span></div>
+      <div class="los-gym-kpis"><article><span>NEXT WORKOUT</span><strong id="losNextWorkout">—</strong></article><article><span>COMPLETED</span><strong id="losGymCount">0</strong><small>all-time sessions</small></article><article><span>WEEKLY PREFERENCE</span><strong id="losGymPreferred">4 DAYS</strong><small>not mandatory</small></article></div>
+      <div class="los-flex-grid"><section class="los-upgrade-panel los-gym-editor"><div class="los-panel-head"><div><span>SESSION LOG</span><h3 id="losSessionTitle">Workout</h3></div><label class="los-date-field">DATE<input id="losGymDate" type="date"></label></div>
+       <div class="los-gym-controls"><button type="button" data-gym-shift="-1">← Previous day</button><button type="button" data-gym-today>Today</button><button type="button" data-gym-shift="1">Next day →</button></div>
+       <label class="los-field-label">WORKOUT FOR THIS SESSION<select id="losGymWorkout"></select></label><p class="los-help" id="losRotationReason"></p>
+       <div id="losGymExercises" class="los-gym-exercises"></div>
+       <label class="los-field-label">SESSION NOTES<textarea id="losGymNotes" rows="2" placeholder="How it felt, PRs, recovery, changes..."></textarea></label>
+       <p class="los-save-message" id="losGymMessage" aria-live="polite"></p><div class="los-gym-actions"><button type="button" class="los-btn-muted" id="losGymDraft">Save log</button><button type="button" class="los-btn-primary" id="losGymFinish">Complete workout →</button><button type="button" class="los-btn-danger" id="losGymUndo" hidden>Undo completion</button><button type="button" class="los-btn-danger" id="losGymDelete" hidden>Delete</button></div>
+      </section><aside class="los-upgrade-panel los-gym-sidebar"><div class="los-panel-head"><div><span>FORECAST</span><h3>Upcoming training days</h3></div></div><p class="los-help">Your preferred days are suggestions. Train Saturday or Sunday whenever you want; completing that session automatically advances the split.</p><div id="losGymForecast" class="los-forecast"></div>
+       <div class="los-pref-head"><strong>PREFERRED DAYS</strong><span>Editable</span></div><div class="los-weekdays" id="losGymDays"></div><div class="los-panel-head los-history-head"><div><span>ARCHIVE</span><h3>Recent sessions</h3></div></div><div id="losGymHistory" class="los-gym-history"></div>
+       </aside></div></section>`;
+  }
+  function renderGym() {
+    if (!$('losFlexGym') || !ensureData()) return;
+    if (!validKey(selectedGymDay)) selectedGymDay=today();
+    const entry=sessionAt(selectedGymDay), name=chosenWorkout(), completed=sessions().filter(s=>s?.completed).length;
+    $('losNextWorkout').textContent=nextWorkout(sessionAt(today())?.completed?addDay(today(),1):today());
+    $('losGymCount').textContent=String(completed);
+    $('losGymPreferred').textContent=`${meta().flexGym.preferredDays.length} DAYS`;
+    $('losGymDate').value=selectedGymDay;
+    $('losSessionTitle').textContent=`${name}${entry?.completed?' ✓':''}`;
+    $('losGymWorkout').innerHTML=ROTATION.map(w=>`<option value="${esc(w)}" ${w===name?'selected':''}>${esc(w)}</option>`).join('');
+    const prev=completedBefore(selectedGymDay);
+    $('losRotationReason').textContent=entry ? (entry.completed?'Completed and saved. The next session follows this workout.':'Saved draft. The rotation moves when you complete it.') : (prev?`Next after ${prev.workout} on ${niceDate(prev.date)}. You can train on any date.`:'First workout in your rotation. Choose another split to set a different starting point.');
+    $('losGymNotes').value=entry?.notes||'';
+    $('losGymFinish').textContent=entry?.completed?'Update completed workout':'Complete workout →';
+    $('losGymUndo').hidden=!entry?.completed; $('losGymDelete').hidden=!entry;
+    const setRow=(name,index,set,prior)=>`<div class="los-set"><span>SET ${index+1}${prior?.weight>0?` · LAST ${esc(prior.weight)} × ${esc(prior.reps)}`:''}</span><div><input type="number" min="0" max="2000" step="0.5" inputmode="decimal" data-field="weight" value="${Number(set?.weight)>0?Number(set.weight):''}" placeholder="lb" aria-label="${esc(name)} set ${index+1} weight in pounds"><input type="number" min="0" max="100" step="1" inputmode="numeric" data-field="reps" value="${Number(set?.reps)>0?Number(set.reps):''}" placeholder="reps" aria-label="${esc(name)} set ${index+1} repetitions"></div></div>`;
+    $('losGymExercises').innerHTML=(EXERCISES[name]||[]).map(ex=>{const data=entry?.workout===name?entry.exercises?.find(x=>x.name===ex):null;const prev=lastExercise(ex,selectedGymDay);return `<div class="los-exercise" data-exercise="${esc(ex)}"><div><strong>${esc(ex)}</strong><small>2 working sets</small></div><div class="los-set-grid">${[0,1].map(i=>setRow(ex,i,data?.sets?.[i],prev?.sets?.[i])).join('')}</div></div>`;}).join('');
+    $('losGymDays').innerHTML=DAYS.map((name,d)=>`<label><input type="checkbox" data-weekday="${d}" ${meta().flexGym.preferredDays.includes(d)?'checked':''}><span>${name}</span></label>`).join('');
+    $('losGymForecast').innerHTML=projectedDates().map((item,i)=>`<button type="button" class="los-forecast-item ${item.key===selectedGymDay?'active':''}" data-select-day="${item.key}"><span>${String(i+1).padStart(2,'0')}</span><div><strong>${esc(item.workout)}</strong><small>${niceDate(item.key)}${item.done?' · Completed':''}</small></div><b>${item.done?'✓':'↗'}</b></button>`).join('') || '<p class="los-help">Choose at least one preferred day to see a forecast.</p>';
+    $('losGymHistory').innerHTML=[...sessions()].filter(s=>validKey(s?.date)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8).map(s=>`<button type="button" data-select-day="${esc(s.date)}"><div><strong>${esc(s.workout||'Workout')}</strong><small>${niceDate(s.date)}</small></div><span>${s.completed?'DONE':'DRAFT'}</span></button>`).join('') || '<p class="los-help">Your completed sessions and saved drafts will appear here.</p>';
+  }
+  function saveGym(complete) {
+    if (!ensureData()) return;
+    const workout=chosenWorkout(), exercises=[]; let invalid=false;
+    $('losGymExercises').querySelectorAll('[data-exercise]').forEach(row=>{
+      const sets=[...row.querySelectorAll('.los-set')].map(cell=>{
+        const weight=Number(cell.querySelector('[data-field="weight"]').value||0),reps=Number(cell.querySelector('[data-field="reps"]').value||0);
+        if (!Number.isFinite(weight)||!Number.isFinite(reps)||weight<0||weight>2000||reps<0||reps>100||(weight>0)!==(reps>0)||!Number.isInteger(reps)) invalid=true;
+        return {weight,reps};
+      });
+      exercises.push({name:row.dataset.exercise,sets});
+    });
+    if (invalid) {$('losGymMessage').textContent='Enter valid weight and reps for each filled set.'; return;}
+    const priorEntry=sessionAt(selectedGymDay);
+    if (complete && selectedGymDay > today()) {
+      $('losGymMessage').textContent='You can plan future workouts, but only mark them complete after training.';
+      return;
+    }
+    if (complete && !priorEntry?.completed && exercises.some(ex=>ex.sets.some(set=>!(set.weight>0&&set.reps>0)))) {
+      $('losGymMessage').textContent='Fill in both working sets for each exercise before completing.';
+      return;
+    }
+    let entry=priorEntry;
+    if (!entry) {entry={id:`gym-flex-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,date:selectedGymDay,completed:false,exercises:[]};meta().gymClean.sessions.push(entry);}
+    Object.assign(entry,{workout,exercises,notes:$('losGymNotes').value.slice(0,1200),completed:complete||Boolean(entry.completed),updatedAt:new Date().toISOString()});
+    save(); manualWorkout=''; renderGym(); $('losGymMessage').textContent=complete?'Session completed. The next workout has advanced.':'Workout log saved.'; broadcast();
+  }
+  function mutateGym(action) {
+    const entry=sessionAt(selectedGymDay); if (!entry) return;
+    if (action==='delete') {if (!window.confirm(`Delete workout log for ${niceDate(selectedGymDay)}?`)) return;meta().gymClean.sessions=meta().gymClean.sessions.filter(s=>s!==entry);}
+    if (action==='undo') {entry.completed=false;entry.updatedAt=new Date().toISOString();}
+    manualWorkout='';save();renderGym();$('losGymMessage').textContent=action==='undo'?'Completion undone. Your next workout is recalculated.':'Workout log deleted.';broadcast();
+  }
+  function gymDate(key) { if (!validKey(key)) return;selectedGymDay=key;manualWorkout='';renderGym();$('losGymMessage').textContent=''; }
+  function mountGym() {
+    const page=$('gymPage');if (!page||!ensureData()) return;
+    if (!$('losFlexGym')) { const switcher=$('losGymSwitch'); if(switcher) switcher.insertAdjacentHTML('afterend',gymMarkup()); else page.insertAdjacentHTML('afterbegin',gymMarkup()); }
+    if (gymMounted) {renderGym();return;}gymMounted=true; selectedGymDay=today();
+    const root=$('losFlexGym');
+    root.addEventListener('click',e=>{
+      const day=e.target.closest('[data-select-day]');if(day){gymDate(day.dataset.selectDay);return;}
+      const step=e.target.closest('[data-gym-shift]');if(step){gymDate(addDay(selectedGymDay,Number(step.dataset.gymShift)));return;}
+      if(e.target.closest('[data-gym-today]')){gymDate(today());return;}
+      if(e.target.closest('#losGymDraft')){saveGym(false);return;}
+      if(e.target.closest('#losGymFinish')){saveGym(true);return;}
+      if(e.target.closest('#losGymUndo')){mutateGym('undo');return;}
+      if(e.target.closest('#losGymDelete')){mutateGym('delete');}
+    });
+    root.addEventListener('change',e=>{
+      if(e.target.id==='losGymDate')gymDate(e.target.value);
+      if(e.target.id==='losGymWorkout'){
+        const notes=$('losGymNotes').value;
+        manualWorkout=e.target.value;
+        renderGym();
+        $('losGymNotes').value=notes;
+      }
+      if(e.target.matches('[data-weekday]')){
+        // Do not wipe unsaved gym input just because a preferred weekday changed.
+        const draft=[...root.querySelectorAll('#losGymExercises input')].map(input=>input.value);
+        const notes=$('losGymNotes').value;
+        meta().flexGym.preferredDays=[...root.querySelectorAll('[data-weekday]:checked')].map(x=>Number(x.dataset.weekday));
+        save();renderGym();
+        [...root.querySelectorAll('#losGymExercises input')].forEach((input,i)=>{if(draft[i]!==undefined)input.value=draft[i];});
+        $('losGymNotes').value=notes;
+      }
+    });
+    renderGym();
+  }
+  function planEntry(id) {const all=meta().looksPlanV1;if(!all[id]||typeof all[id]!=='object')all[id]={};return all[id];}
+  function milestoneDate(item) {const changed=planEntry(item.id).start;return changed===undefined?item.start:changed;}
+  function checked(item,n) {return (planEntry(item.id).checks||[]).includes(n);}
+  function progress(item) {const n=item.checks.filter((_,i)=>checked(item,i)).length;return Math.round(n/item.checks.length*100);}
+  function renderPlan() {
+    if(!$('losPlanPage')||!ensureData())return;
+    const done=MILESTONES.filter(m=>progress(m)===100).length;
+    $('losPlanProgress').textContent=`${done} / ${MILESTONES.length}`;
+    $('losPlanBar').style.width=`${MILESTONES.reduce((n,m)=>n+progress(m),0)/MILESTONES.length}%`;
+    $('losPlanZoomValue').textContent=['COMPACT','STANDARD','EXPANDED'][planZoom];
+    $('losMilestoneTrack').style.setProperty('--los-node-width',[258,330,420][planZoom]+'px');
+    $('losMilestoneTrack').innerHTML=MILESTONES.map(item=>{
+      const value=planEntry(item.id),pct=progress(item),date=milestoneDate(item);
+      return `<button class="los-node ${activeMilestone===item.id?'selected':''}" data-milestone="${item.id}" type="button"><div class="los-node-top"><span>${item.index} / ${item.tag}</span><span>${pct}%</span></div><div class="los-node-dot"></div><strong>${esc(item.title)}</strong><small>${esc(niceDate(date))}</small><div class="los-node-bar"><i style="width:${pct}%"></i></div><p>${esc(item.summary)}</p></button>`;
+    }).join('');
+    const item=MILESTONES.find(m=>m.id===activeMilestone)||MILESTONES[0],data=planEntry(item.id);
+    $('losPlanDetails').innerHTML=`<div class="los-plan-detail-head"><div><span>${item.index} / ${item.tag}</span><h3>${esc(item.title)}</h3><p>${esc(item.detail)}</p></div><div class="los-plan-percent">${progress(item)}<small>% complete</small></div></div>
+    <label class="los-field-label">MILESTONE TARGET DATE <input type="date" id="losPlanDate" value="${esc(milestoneDate(item))}"></label><div class="los-plan-checks">${item.checks.map((check,i)=>`<label><input type="checkbox" data-check="${i}" ${checked(item,i)?'checked':''}><span>${esc(check)}</span></label>`).join('')}</div><label class="los-field-label">PERSONAL NOTES <textarea id="losPlanNotes" rows="3" placeholder="Notes, questions, outcomes, or changes to your plan...">${esc(data.notes||'')}</textarea></label><p class="los-help">Milestones are planning notes, not medical instructions or treatment schedules.</p>`;
+  }
+  function mountPlan() {
+    const nav=document.querySelector('.tabs'), existing=$('looksPage');if(!nav||!existing||!ensureData())return;
+    let tab=document.querySelector('[data-tab="losPlanPage"]');
+    if(!tab){tab=document.createElement('button');tab.className='tab los-plan-tab';tab.dataset.tab='losPlanPage';tab.type='button';tab.textContent='Looksmaxxing Plan';nav.insertBefore(tab,document.querySelector('.tab[data-tab="ghkCuPage"]')||null);}
+    if(!$('losPlanPage')){
+      const page=document.createElement('section');page.id='losPlanPage';page.className='page';page.innerHTML=`<div class="los-plan-shell"><div class="los-upgrade-header"><div><div class="los-kicker">LOCKED OS / PERSONAL ROADMAP</div><h2>Looksmaxxing plan</h2><p>A flexible milestone timeline for training, orthodontics, and future research.</p></div><span class="los-pulse"><i></i> ROADMAP ACTIVE</span></div><div class="los-plan-overview"><div><span>PHASE COMPLETION</span><strong id="losPlanProgress">0 / 4</strong></div><div class="los-plan-progress"><i id="losPlanBar"></i></div><div><span>SEQUENCE</span><strong>4 PHASES</strong></div></div><section class="los-upgrade-panel los-plan-track-panel"><div class="los-panel-head"><div><span>INTERACTIVE TIMELINE</span><h3>Milestone map</h3></div><div class="los-zoom"><button type="button" data-zoom="-1" aria-label="Zoom out">−</button><span id="losPlanZoomValue">STANDARD</span><button type="button" data-zoom="1" aria-label="Zoom in">+</button></div></div><p class="los-help">Scroll horizontally to explore the timeline. Select a phase to edit its details.</p><div class="los-track-scroll"><div class="los-milestone-track" id="losMilestoneTrack"></div></div></section><section class="los-upgrade-panel los-plan-details" id="losPlanDetails"></section></div>`;
+      existing.parentNode.insertBefore(page,existing.nextSibling);
+    }
+    if(planMounted){renderPlan();return;}planMounted=true;
+    tab.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));tab.classList.add('active');$('losPlanPage').classList.add('active');renderPlan();});
+    document.querySelector('.tabs').addEventListener('click',e=>{if(e.target.closest('.tab') && e.target.closest('.tab')!==tab){tab.classList.remove('active');$('losPlanPage').classList.remove('active');}});
+    $('losPlanPage').addEventListener('click',e=>{
+      const zoom=e.target.closest('[data-zoom]');if(zoom){planZoom=Math.max(0,Math.min(2,planZoom+Number(zoom.dataset.zoom)));renderPlan();return;}
+      const item=e.target.closest('[data-milestone]');if(item){activeMilestone=item.dataset.milestone;renderPlan();}
+    });
+    $('losPlanPage').addEventListener('change',e=>{
+      const item=MILESTONES.find(m=>m.id===activeMilestone);if(!item)return;
+      if(e.target.id==='losPlanDate'){planEntry(item.id).start=validKey(e.target.value)?e.target.value:'';save();renderPlan();}
+      if(e.target.matches('[data-check]')){const n=Number(e.target.dataset.check),list=new Set(planEntry(item.id).checks||[]);if(e.target.checked)list.add(n);else list.delete(n);planEntry(item.id).checks=[...list];save();renderPlan();}
+      if(e.target.id==='losPlanNotes'){planEntry(item.id).notes=e.target.value.slice(0,3000);save();}
+    });
+    renderPlan();
+  }
+  function mount() {if(!ensureData())return;mountGym();mountPlan();}
+  function init() {
+    mount();
+    document.addEventListener('click',e=>{if(e.target.closest('[data-tab="gymPage"]'))requestAnimationFrame(mountGym);if(e.target.closest('[data-tab="losPlanPage"]'))requestAnimationFrame(renderPlan);});
+    window.addEventListener('focus',()=>{
+      // Only refresh inactive inputs. Never discard a user's unsaved workout.
+      if($('gymPage')?.classList.contains('active') && !$('losFlexGym')?.contains(document.activeElement))renderGym();
+      if($('losPlanPage')?.classList.contains('active') && !$('losPlanDetails')?.contains(document.activeElement))renderPlan();
+    });
+    document.addEventListener('locked-os-workout-saved',()=>{if($('gymPage')?.classList.contains('active'))renderGym();});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,900),{once:true});else setTimeout(init,900);
+})();
+
