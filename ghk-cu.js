@@ -9405,9 +9405,9 @@
 (() => {
   'use strict';
   const PHASES = [
-    { id: 'recomp', number: '01', name: 'Body recomp + CJC-1295', when: 'After vacation', description: 'Work toward 165–170 lb while building muscle and staying consistent in the gym.' },
+    { id: 'recomp', number: '01', name: 'Body recomp + CJC-1295 + MK-677', when: 'After vacation', description: 'Goal: get lean at 165–170 lb without losing muscle. Prioritize plenty of protein and keep lifting. When this phase starts, give yourself permission to spend money at the grocery store so you have the food you need.' },
     { id: 'orthodontics', number: '02', name: 'MARPE + reverse-pull facemask', when: 'January 2027 · planned', description: 'Orthodontic phase. IGF-1 LR3 or HGH is also part of your stated plan during this period.' },
-    { id: 'skin-hair', number: '03', name: 'Isotretinoin + oral minoxidil', when: 'Following orthodontics', description: 'Skin and hair treatment phase.' }
+    { id: 'skin-hair', number: '03', name: 'Isotretinoin + oral minoxidil', when: 'Following orthodontics', description: 'Goals: a smaller-looking nose and fuller eyelashes and eyebrows. These are desired outcomes, not guaranteed effects of the medications.' }
   ];
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, chr=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[chr]));
