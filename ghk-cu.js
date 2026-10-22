@@ -5511,58 +5511,111 @@
     selected-day-aware transaction handler after every startup patch is done.
   */
   function qaInstallTaskTransactions() {
-    setLooksStatus = function(task, status) {
-      const dayKey = typeof lockedOsLooksKey === "function"
-        ? lockedOsLooksKey()
-        : getTodayKey();
+    // Fast-path for checklist taps. The old handler rebuilt every task card
+    // and synchronously serialized/merged the complete app state per tap.
+    // Keep the same selected-day semantics, task data, and cloud save owner.
+    let saveTimerForChecks = null;
+    let hasUnsavedCheck = false;
 
+    const flushCheckedTasks = () => {
+      if (saveTimerForChecks !== null) {
+        clearTimeout(saveTimerForChecks);
+        saveTimerForChecks = null;
+      }
+      if (!hasUnsavedCheck) return;
+      hasUnsavedCheck = false;
+      // The existing owner handles local persistence, task versions and
+      // debounced Supabase sync. Never bypass its conflict safeguards.
+      try { saveState(); }
+      catch (error) {
+        console.error('Could not save Looksmaxxing checkbox:', error);
+        hasUnsavedCheck = true;
+        return;
+      }
+      if (document.getElementById('looksPage')?.classList.contains('active')) {
+        try { renderDayStreak(); } catch (error) { console.warn('Streak refresh:', error); }
+      }
+    };
+
+    const scheduleCheckedSave = () => {
+      hasUnsavedCheck = true;
+      if (saveTimerForChecks !== null) clearTimeout(saveTimerForChecks);
+      // One save for an entire burst of taps, after the browser can paint.
+      saveTimerForChecks = setTimeout(flushCheckedTasks, 170);
+    };
+
+    const refreshCheckedRow = (taskId, done, skipped) => {
+      // Update existing DOM in place so checkbox handlers and scroll position
+      // are preserved instead of destroying all task rows on every click.
+      document.querySelectorAll('#looksPage .looks-task[data-task-id]').forEach(row => {
+        if (row.dataset.taskId !== taskId) return;
+        const isDone = done.has(taskId), isSkipped = skipped.has(taskId);
+        row.classList.toggle('done', isDone);
+        row.classList.toggle('skipped', isSkipped);
+        const box = row.querySelector('.task-box');
+        if (box) box.textContent = isDone ? '✓' : isSkipped ? '−' : '';
+        const copy = row.querySelector('.task-copy');
+        if (copy) {
+          let statusText = copy.querySelector('.task-status');
+          if (isSkipped && !statusText) {
+            statusText = document.createElement('div');
+            statusText.className = 'task-status';
+            copy.appendChild(statusText);
+          }
+          if (statusText) {
+            statusText.textContent = isSkipped ? 'Skipped today' : '';
+            statusText.hidden = !isSkipped;
+          }
+        }
+        const skipMenuItem = row.querySelector('.task-menu-popover > .task-menu-action');
+        if (skipMenuItem && /^(Skip this task|Unskip task)$/.test(skipMenuItem.textContent.trim())) {
+          skipMenuItem.textContent = isSkipped ? 'Unskip task' : 'Skip this task';
+        }
+      });
+    };
+
+    setLooksStatus = function(task, status) {
+      const dayKey = typeof lockedOsLooksKey === 'function'
+        ? lockedOsLooksKey() : getTodayKey();
       const day = ensureDay(dayKey);
       const done = new Set(day.looksDone || []);
       const skipped = new Set(day.looksSkipped || []);
 
-      if (status === "done") {
-        if (done.has(task.id)) {
-          done.delete(task.id);
-        } else {
-          done.add(task.id);
-          skipped.delete(task.id);
-        }
-      } else if (status === "skipped") {
-        if (skipped.has(task.id)) {
-          skipped.delete(task.id);
-        } else {
-          skipped.add(task.id);
-          done.delete(task.id);
-        }
-      } else {
-        return;
-      }
+      if (status === 'done') {
+        if (done.has(task.id)) done.delete(task.id);
+        else { done.add(task.id); skipped.delete(task.id); }
+      } else if (status === 'skipped') {
+        if (skipped.has(task.id)) skipped.delete(task.id);
+        else { skipped.add(task.id); done.delete(task.id); }
+      } else return;
 
-      if (
-        task.meta === "morningWater" &&
-        status === "done" &&
-        done.has(task.id) &&
-        day.waterOz < LOOKS_MORNING_WATER_OZ
-      ) {
+      if (task.meta === 'morningWater' && status === 'done' && done.has(task.id)
+        && day.waterOz < LOOKS_MORNING_WATER_OZ) {
         day.waterOz = LOOKS_MORNING_WATER_OZ;
       }
-
       day.looksDone = [...done];
       day.looksSkipped = [...skipped];
       syncWaterTask(day, dayKey);
-      day.looksCompleted =
-        new Set([...(day.looksDone || []), ...(day.looksSkipped || [])]).size ===
+      day.looksCompleted = new Set([...day.looksDone, ...day.looksSkipped]).size ===
         getLooksTaskIds(dayKey).length;
 
-      saveState();
-
-      /*
-        Immediate full Looks render avoids stale rows / double-click races while
-        preserving the selected historical day.
-      */
-      renderLooks();
-      renderDayStreak();
+      // The actual checkbox changes are visible immediately, even offline.
+      refreshCheckedRow(task.id, new Set(day.looksDone), new Set(day.looksSkipped));
+      if (task.meta === 'morningWater') {
+        refreshCheckedRow('water-through-day', new Set(day.looksDone), new Set(day.looksSkipped));
+        try { renderWater(); } catch (_) {}
+      }
+      try { refreshLooksProgressUI(); }
+      catch (error) { console.warn('Looks progress refresh:', error); }
+      scheduleCheckedSave();
     };
+
+    // Flush safely when leaving this page without depending on another tap.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushCheckedTasks();
+    });
+    window.addEventListener('pagehide', flushCheckedTasks);
+    window.lockedOsFlushChecklist = flushCheckedTasks;
   }
 
   /*
@@ -8626,6 +8679,11 @@
     // Intentionally collapsed by default, even when there are upcoming chores.
     card.innerHTML=`<summary class="locked-reminder-heading"><strong>Routine reminders</strong><span class="locked-reminder-count" id="locked-reminder-count">Checking…</span><span class="locked-reminder-chevron" aria-hidden="true">⌄</span></summary><div class="locked-reminder-content"><div id="locked-reminder-body"></div><details class="locked-supplement-guide"><summary>Supplement timing</summary><div class="locked-supplement-list">${TIMING_GUIDE.map(([name,time])=>`<div class="locked-supplement-line"><strong>${esc(name)}</strong><span>${esc(time)}</span></div>`).join('')}</div></details><details class="locked-reminder-settings"><summary>Notification settings</summary><p>Browser alerts work only while LOCKED OS is open. For alerts while closed, export and import calendar reminders.</p><div class="locked-reminder-actions"><button type="button" id="locked-enable-alerts">Enable browser alerts</button><button type="button" id="locked-export-calendar">Export calendar alerts</button></div><p id="locked-reminder-help" role="status"></p><div id="locked-reminder-time-editor"></div></details></div>`;
     const hero=page.querySelector('.looks-hero');if(hero)hero.insertAdjacentElement('afterend',card);else page.prepend(card);
+    // A closed reminder center should not rebuild its 14-day model on each checkbox tap.
+    // Refresh the model when the user actually expands this panel instead.
+    card.addEventListener('toggle', event => {
+      if (event.target === card && card.open) { lastPaint = ''; paint(); }
+    });
     card.querySelector('.locked-reminder-settings').addEventListener('toggle',event=>{if(event.target.open)drawTimes();});
     card.querySelector('#locked-enable-alerts').addEventListener('click',async()=>{
       const info=card.querySelector('#locked-reminder-help');
@@ -8778,14 +8836,19 @@
     document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{
       if (tab.dataset.tab==='looksPage') setTimeout(install,100);
     }));
-    // Update only after actual checklist interactions, not every mutation to
-    // a whole page of charts, badges, water values, or animated elements.
+    // Only refresh the expensive 14-day reminder model while it is open.
+    // Task checkboxes now remain responsive even on devices with long history.
     const page=document.getElementById('looksPage');
     if (page) page.addEventListener('click', e => {
       if (!e.target.closest('.looks-task,.task-menu-action,.task-editor-save,.looks-day-nav-btn,.looks-today-btn')) return;
-      if (busy) return;
+      const reminder = document.getElementById('locked-reminder-center');
+      if (!reminder?.open || busy) return;
       busy = true;
-      setTimeout(() => { busy = false; if (!page.classList.contains('active')) return; lastPaint = ''; paint(); },150);
+      setTimeout(() => {
+        busy = false;
+        if (!page.classList.contains('active') || !reminder.open) return;
+        lastPaint = ''; paint();
+      },320);
     });
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,450));else setTimeout(boot,450);
