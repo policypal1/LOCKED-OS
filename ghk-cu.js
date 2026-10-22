@@ -9482,3 +9482,115 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
   else start();
 })();
+
+
+/* LOCKED OS | CJC-1295 information tab. No background processing or dose calculations. */
+(() => {
+  'use strict';
+  const PAGE_ID = 'losCjcPage';
+  const TAB_ID = 'losCjcTab';
+  const $ = id => document.getElementById(id);
+
+  /* All values displayed here are transcribed from the user's source notes;
+     they are reference material, not verified prescribing instructions. */
+  const months = [
+    { label: 'Month 01', title: 'Weeks 1–4', rows: [['Week 1', '6 units'], ['Week 2', '8 units'], ['Week 3', '10 units'], ['Week 4', '12 units']] },
+    { label: 'Month 02', title: 'Weeks 5–8', rows: [['Week 5', '14 units'], ['Week 6', '16 units'], ['Week 7', '18 units'], ['Week 8', '20 units']] },
+    { label: 'Month 03', title: 'Weeks 9–12', rows: [['Weeks 9–12', '20 units']] },
+  ];
+  const renderMonth = (month, index) => `
+    <article class="cjc-month-card">
+      <div class="cjc-month-heading"><span class="cjc-month-label">${month.label}</span><span class="cjc-month-count">0${index + 1} / 03</span></div>
+      <h3>${month.title}</h3>
+      <div class="cjc-month-rows">
+        ${month.rows.map(([name,value]) => `<div class="cjc-month-row"><span>${name}</span><strong>${value}</strong></div>`).join('')}
+      </div>
+    </article>`;
+
+  function mount() {
+    const nav = document.querySelector('#mainApp .tabs');
+    const anchor = $('ghkCuPage');
+    if (!nav || !anchor || $(TAB_ID) || $(PAGE_ID)) return;
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'tab cjc-tab';
+    tab.dataset.tab = PAGE_ID;
+    tab.id = TAB_ID;
+    tab.textContent = 'CJC-1295';
+    nav.insertBefore(tab, nav.querySelector('[data-tab="ghkCuPage"]') || null);
+
+    const page = document.createElement('section');
+    page.className = 'page';
+    page.id = PAGE_ID;
+    page.setAttribute('aria-label', 'CJC-1295 and Ipamorelin reference');
+    page.innerHTML = `
+      <div class="cjc-shell">
+        <header class="cjc-hero">
+          <div class="cjc-hero-copy">
+            <span class="cjc-eyebrow"><span class="cjc-eyebrow-dot" aria-hidden="true"></span> COMPOUND REFERENCE / CJC-1295</span>
+            <h2>CJC-1295 <span>+ Ipamorelin</span></h2>
+            <p>Single-vial blend · The protocol below is transcribed from your supplied notes, not a verified dosing plan.</p>
+          </div>
+          <div class="cjc-hero-mark" aria-hidden="true"><span>2</span><small>PEPTIDES</small></div>
+        </header>
+
+        <div class="cjc-stats">
+          <div class="cjc-stat"><span>VIAL COMPOSITION</span><strong>5 mg <em>/</em> 5 mg</strong><small>CJC-1295 / Ipamorelin</small></div>
+          <div class="cjc-stat"><span>PREPARATION IN NOTES</span><strong>2 mL</strong><small>Bacteriostatic water</small></div>
+          <div class="cjc-stat"><span>STATED ROUTINE</span><strong>5 : 2</strong><small>Days on / days off</small></div>
+        </div>
+
+        <section class="cjc-section" aria-labelledby="cjc-schedule-heading">
+          <div class="cjc-section-head">
+            <div><span class="cjc-section-kicker">01 / REFERENCE</span><h3 id="cjc-schedule-heading">Supplied 3-month outline</h3></div>
+            <span class="cjc-section-tag">Source values · not verified</span>
+          </div>
+          <div class="cjc-month-grid">${months.map(renderMonth).join('')}</div>
+          <p class="cjc-footnote">The source describes a 0.3 mg starting amount and 1.0 mg at 20 units, then holding steady in month three. These numbers are not validated instructions. “Units” depend on the syringe scale and preparation, so they must not be assumed interchangeable.</p>
+        </section>
+
+        <div class="cjc-detail-grid">
+          <section class="cjc-section cjc-details" aria-labelledby="cjc-routine-heading">
+            <div class="cjc-section-head"><div><span class="cjc-section-kicker">02 / DETAILS</span><h3 id="cjc-routine-heading">Protocol notes</h3></div></div>
+            <dl class="cjc-facts">
+              <div><dt>Frequency</dt><dd>Once a day, 5 days followed by 2 days off</dd></div>
+              <div><dt>Timing</dt><dd>Before bed; at least 2 hours after the last meal</dd></div>
+              <div><dt>Route stated</dt><dd>Subcutaneous</dd></div>
+              <div><dt>Cycle</dt><dd>20 injections per month, up to 3 months, then a 2-month break</dd></div>
+              <div><dt>Storage claim</dt><dd>4–6 weeks refrigerated after reconstitution (source claim; product stability not verified)</dd></div>
+            </dl>
+          </section>
+
+          <section class="cjc-section cjc-observations" aria-labelledby="cjc-observations-heading">
+            <div class="cjc-section-head"><div><span class="cjc-section-kicker">03 / OBSERVATIONS</span><h3 id="cjc-observations-heading">Reported follow-up timeline</h3></div></div>
+            <div class="cjc-observation-list">
+              <div class="cjc-observation"><span class="cjc-observation-dot"></span><div><span>WEEKS 01–02</span><strong>Sleep</strong></div></div>
+              <div class="cjc-observation"><span class="cjc-observation-dot"></span><div><span>WEEKS 02–04</span><strong>Energy</strong></div></div>
+              <div class="cjc-observation"><span class="cjc-observation-dot"></span><div><span>WEEKS 06–12</span><strong>Body composition</strong></div></div>
+            </div>
+            <p class="cjc-footnote">These intervals describe claimed clinic observations. They are not established by a standardized prospective study of this combination.</p>
+          </section>
+        </div>
+
+        <div class="cjc-reference-note"><span aria-hidden="true">i</span><p><strong>Access and evidence:</strong> Your source describes this as provider-supervised and prescription-based. This combination is not FDA-approved for aesthetic, anti-aging, or weight-loss use. This tab is a reference copy of the provided information, not an instruction to administer or escalate doses.</p></div>
+      </div>`;
+    anchor.parentNode.insertBefore(page, anchor);
+
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('#mainApp .tab').forEach(item => item.classList.toggle('active', item === tab));
+      document.querySelectorAll('#mainApp .page').forEach(item => item.classList.toggle('active', item === page));
+    });
+    nav.addEventListener('click', event => {
+      const clicked = event.target.closest('.tab');
+      if (clicked && clicked !== tab) {
+        tab.classList.remove('active');
+        page.classList.remove('active');
+      }
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount, { once: true });
+  } else {
+    mount();
+  }
+})();

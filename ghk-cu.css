@@ -619,3 +619,62 @@
 #losPlanPage .los-timeline-action:hover { text-decoration:underline; }
 #losPlanPage .los-timeline-item.upcoming .los-timeline-card { opacity:.85; }
 @media(max-width:580px){ #losPlanPage .los-timeline-heading{padding:8px 1px 0;}#losPlanPage .los-timeline-item{grid-template-columns:36px minmax(0,1fr);gap:10px;}#losPlanPage .los-timeline-marker{width:34px;height:34px;border-radius:11px;font-size:.7rem;}#losPlanPage .los-timeline-rail::after{top:35px;}#losPlanPage .los-timeline-card{padding:17px 15px;border-radius:17px;}#losPlanPage .los-timeline-top{gap:8px;}#losPlanPage .los-timeline-status{font-size:.59rem;padding:5px 8px;} }
+
+
+/* LOCKED OS / CJC-1295 reference tab. Scope all styling to this tab. */
+#losCjcPage { color:var(--text,#21180f); }
+#losCjcPage .cjc-shell { width:min(1010px,100%); margin:0 auto; display:grid; gap:20px; padding:10px 0 35px; }
+#losCjcPage .cjc-hero { padding:34px 38px; min-height:214px; border-radius:25px; display:flex; justify-content:space-between; gap:30px; overflow:hidden; background:linear-gradient(118deg,#142b25 0%,#163b2f 63%,#245b40 100%); color:#fff; box-shadow:0 17px 42px rgba(19,48,35,.12); }
+#losCjcPage .cjc-hero-copy { align-self:center; max-width:670px; }
+#losCjcPage .cjc-eyebrow { font-size:.68rem; font-weight:850; letter-spacing:.12em; color:#b7ead1; display:flex; gap:9px; align-items:center; }
+#losCjcPage .cjc-eyebrow-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#63dca2; box-shadow:0 0 0 4px rgba(99,220,162,.12); }
+#losCjcPage .cjc-hero h2 { margin:19px 0 9px; font-size:clamp(2rem,4.5vw,3.1rem); line-height:1.06; letter-spacing:-.045em; font-weight:850; }
+#losCjcPage .cjc-hero h2 span { color:#abdfc6; }
+#losCjcPage .cjc-hero p { color:#cfdfd6; font-size:.9rem; line-height:1.56; margin:0; max-width:570px; }
+#losCjcPage .cjc-hero-mark { flex:0 0 136px; height:136px; align-self:center; border-radius:25px; border:1px solid rgba(212,252,228,.25); background:rgba(255,255,255,.065); display:flex; flex-direction:column; gap:1px; justify-content:center; align-items:center; }
+#losCjcPage .cjc-hero-mark span { font-size:4.3rem; line-height:1; font-weight:850; color:#b1edd0; letter-spacing:-.09em; }
+#losCjcPage .cjc-hero-mark small { font-size:.62rem; font-weight:800; letter-spacing:.13em; color:#cce6d6; }
+#losCjcPage .cjc-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; }
+#losCjcPage .cjc-stat { background:rgba(255,250,241,.94); border:1px solid var(--line,rgba(42,30,18,.12)); border-radius:19px; min-width:0; padding:20px 22px; display:flex; flex-direction:column; gap:7px; }
+#losCjcPage .cjc-stat>span { color:var(--muted,#7a6b59); font-size:.64rem; letter-spacing:.09em; font-weight:900; }
+#losCjcPage .cjc-stat strong { font-size:1.75rem; line-height:1.1; letter-spacing:-.045em; font-variant-numeric:tabular-nums; font-weight:850; }
+#losCjcPage .cjc-stat strong em { font-style:normal; color:#4ba16a; }
+#losCjcPage .cjc-stat small { font-size:.77rem; line-height:1.4; color:var(--muted,#7a6b59); }
+#losCjcPage .cjc-section { border:1px solid var(--line,rgba(42,30,18,.12)); border-radius:22px; background:rgba(255,250,241,.94); padding:25px 26px; min-width:0; }
+#losCjcPage .cjc-section-head { display:flex; align-items:end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:21px; }
+#losCjcPage .cjc-section-kicker { display:block; color:#277c51; font-size:.65rem; font-weight:900; letter-spacing:.11em; margin-bottom:7px; }
+#losCjcPage .cjc-section h3 { font-size:1.25rem; letter-spacing:-.03em; line-height:1.2; margin:0; }
+#losCjcPage .cjc-section-tag { color:#477e60; background:#e4f4e8; border:1px solid #c5e4d0; border-radius:999px; padding:7px 12px; font-size:.7rem; font-weight:800; }
+#losCjcPage .cjc-month-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+#losCjcPage .cjc-month-card { border:1px solid rgba(39,124,81,.15); border-radius:17px; background:#f8faf6; padding:18px; min-width:0; }
+#losCjcPage .cjc-month-heading { display:flex; align-items:center; justify-content:space-between; gap:9px; }
+#losCjcPage .cjc-month-label { font-size:.65rem; font-weight:900; color:#23794d; text-transform:uppercase; letter-spacing:.09em; }
+#losCjcPage .cjc-month-count { font-size:.66rem; font-weight:800; color:#94a79b; }
+#losCjcPage .cjc-month-card h3 { margin:11px 0 15px; font-size:1.03rem; font-weight:850; }
+#losCjcPage .cjc-month-rows { display:grid; gap:8px; }
+#losCjcPage .cjc-month-row { min-height:40px; display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid rgba(35,85,50,.09); }
+#losCjcPage .cjc-month-row:last-child { border-bottom:0; }
+#losCjcPage .cjc-month-row span { color:#69796c; font-size:.8rem; }
+#losCjcPage .cjc-month-row strong { font-weight:850; color:#244b35; font-size:.86rem; white-space:nowrap; }
+#losCjcPage .cjc-footnote { color:var(--muted,#7a6b59); font-size:.75rem; line-height:1.6; margin:16px 0 0; }
+#losCjcPage .cjc-detail-grid { display:grid; grid-template-columns:1.08fr .92fr; gap:14px; align-items:stretch; }
+#losCjcPage .cjc-detail-grid .cjc-section { padding:24px 26px; }
+#losCjcPage .cjc-facts { margin:0; }
+#losCjcPage .cjc-facts>div { display:grid; grid-template-columns:125px minmax(0,1fr); gap:10px; border-bottom:1px solid var(--line,rgba(42,30,18,.12)); padding:12px 0; font-size:.83rem; line-height:1.48; }
+#losCjcPage .cjc-facts>div:first-child { padding-top:0; }
+#losCjcPage .cjc-facts>div:last-child { border:0; padding-bottom:0; }
+#losCjcPage .cjc-facts dt { color:var(--muted,#7a6b59); font-weight:750; }
+#losCjcPage .cjc-facts dd { margin:0; font-weight:750; }
+#losCjcPage .cjc-observation-list { display:grid; gap:0; }
+#losCjcPage .cjc-observation { display:grid; grid-template-columns:15px 1fr; gap:11px; align-items:center; padding:0 0 19px; position:relative; }
+#losCjcPage .cjc-observation:not(:last-child)::before { content:''; position:absolute; left:5px; top:15px; bottom:0; width:2px; background:#d9e9dd; }
+#losCjcPage .cjc-observation-dot { width:11px; height:11px; border-radius:50%; border:3px solid #4eaa77; background:white; position:relative; z-index:1; }
+#losCjcPage .cjc-observation>div { display:grid; gap:4px; }
+#losCjcPage .cjc-observation div span { color:#3d9261; font-size:.66rem; letter-spacing:.07em; font-weight:850; }
+#losCjcPage .cjc-observation div strong { font-size:.9rem; font-weight:850; }
+#losCjcPage .cjc-reference-note { display:flex; align-items:start; gap:13px; border:1px solid rgba(39,124,81,.16); border-radius:16px; padding:17px 19px; background:rgba(228,243,231,.67); }
+#losCjcPage .cjc-reference-note>span { flex:0 0 21px; height:21px; border-radius:50%; background:#2d8556; color:#fff; text-align:center; line-height:21px; font-size:.74rem; font-weight:900; }
+#losCjcPage .cjc-reference-note p { color:#506658; font-size:.8rem; line-height:1.6; margin:0; }
+#losCjcPage .cjc-reference-note strong { color:#24543a; }
+@media(max-width:760px) {#losCjcPage .cjc-month-grid{grid-template-columns:1fr}#losCjcPage .cjc-detail-grid{grid-template-columns:1fr}#losCjcPage .cjc-hero-mark{display:none}#losCjcPage .cjc-hero{padding:27px 24px}#losCjcPage .cjc-section{padding:22px 20px}#losCjcPage .cjc-stats{grid-template-columns:repeat(3,minmax(0,1fr))}#losCjcPage .cjc-stat{padding:15px 13px}#losCjcPage .cjc-stat strong{font-size:1.34rem}}
+@media(max-width:500px) {#losCjcPage .cjc-stats{grid-template-columns:1fr}#losCjcPage .cjc-stat{padding:15px 18px}#losCjcPage .cjc-hero h2{font-size:2rem}#losCjcPage .cjc-facts>div{grid-template-columns:100px minmax(0,1fr)}}
