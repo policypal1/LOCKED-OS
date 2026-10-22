@@ -591,63 +591,31 @@
 .los-anatomy-hover small{font-size:.71rem;line-height:1.5;color:#b4c5d3;font-weight:650}
 
 
-/* Keep the original Recovery & Body switch functional. */
-#gymPage.los-show-body #losFlexGym{display:none!important}
-/* LOCKED OS · flexible training + personal roadmap */
-#gymPage .clean-gym-page > :is(.clean-gym-hero,.clean-gym-week-card,.clean-gym-log-card,.clean-gym-history-card){display:none!important}
-#losFlexGym,#losPlanPage{--los-ink:#17241f;--los-sub:#64746a;--los-border:#dae6df;--los-emerald:#237c5a;--los-dark:#142a21;--los-wash:#eef6f0;color:var(--los-ink)}
-.los-flex-gym,.los-plan-shell{display:grid;gap:18px;margin:0 0 25px;font-family:inherit;min-width:0}
-.los-upgrade-header{padding:25px 27px;display:flex;justify-content:space-between;align-items:center;gap:24px;background:linear-gradient(115deg,#132c22 0%,#234b38 66%,#22604a 100%);color:#fff;border:1px solid #245a44;border-radius:22px;box-shadow:0 14px 36px #173c2a16}
-.los-upgrade-header h2{font-weight:850;font-size:clamp(1.65rem,3vw,2.4rem);letter-spacing:-.055em;line-height:1.08;margin:6px 0 10px}
-.los-upgrade-header p{font-size:.91rem;line-height:1.6;color:#c7dcd1;margin:0;max-width:640px}
-.los-kicker{font-size:.68rem;font-weight:900;letter-spacing:.2em;color:#80dcb4}
-.los-pulse{display:inline-flex;align-items:center;gap:9px;white-space:nowrap;border:1px solid #ffffff3b;border-radius:100px;padding:10px 12px;font-size:.65rem;font-weight:850;letter-spacing:.12em;background:#ffffff15}
-.los-pulse i{display:block;width:7px;height:7px;border-radius:50%;background:#88e6b6;box-shadow:0 0 0 4px #88e6b623}
-.los-gym-kpis{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:12px}
-.los-gym-kpis article,.los-plan-overview{border:1px solid var(--los-border);border-radius:16px;background:#fff;padding:16px 18px}
-.los-gym-kpis article{display:flex;flex-direction:column;gap:6px}
-.los-gym-kpis span,.los-plan-overview span,.los-panel-head span,.los-plan-detail-head span{font-size:.67rem;font-weight:850;letter-spacing:.13em;color:var(--los-sub)}
-.los-gym-kpis strong{font-size:1.32rem;letter-spacing:-.04em;line-height:1.2}
-.los-gym-kpis small{font-size:.7rem;color:var(--los-sub)}
-.los-flex-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(290px,.9fr);align-items:start;gap:16px}
-.los-upgrade-panel{min-width:0;background:#fff;border:1px solid var(--los-border);border-radius:19px;padding:23px;box-shadow:0 4px 14px #153f2510}
-.los-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 17px}
-.los-panel-head h3{font-size:1.25rem;font-weight:800;letter-spacing:-.045em;margin:4px 0 0;line-height:1.2}
-.los-date-field,.los-field-label{display:grid;gap:7px;font-size:.69rem;font-weight:850;letter-spacing:.095em;color:var(--los-sub)}
-#losFlexGym input,#losFlexGym select,#losFlexGym textarea,#losPlanPage input,#losPlanPage textarea{font-family:inherit;color:var(--los-ink);border:1px solid #cfdfd5;border-radius:10px;background:#fcfefd;padding:11px 10px;font-size:.89rem;max-width:100%;box-sizing:border-box}
-#losFlexGym textarea,#losPlanPage textarea{width:100%;resize:vertical;line-height:1.55}
-#losFlexGym select{width:100%;margin-bottom:0}
-#losGymDate{width:162px}
-#losFlexGym input:focus,#losFlexGym select:focus,#losFlexGym textarea:focus,#losPlanPage input:focus,#losPlanPage textarea:focus{outline:2px solid #9cd8b6;outline-offset:1px;border-color:var(--los-emerald)}
-.los-gym-controls{display:flex;gap:8px;margin:-5px 0 18px;flex-wrap:wrap}
-.los-gym-controls button,.los-zoom button{padding:9px 13px;background:#f6faf7;border:1px solid var(--los-border);color:var(--los-ink);border-radius:9px;cursor:pointer;font-size:.79rem;font-weight:750}
-.los-gym-controls button:hover,.los-zoom button:hover{background:#eaf5ee}
-.los-help{font-size:.78rem;line-height:1.55;color:var(--los-sub);margin:9px 0 18px}
-.los-gym-exercises{display:grid;gap:9px;margin:14px 0 18px}
-.los-exercise{padding:14px;border:1px solid #e2eae4;border-radius:12px;background:#fcfefc;display:grid;grid-template-columns:minmax(125px,1fr) minmax(260px,1.6fr);gap:14px;align-items:center}
-.los-exercise>div:first-child{display:grid;gap:5px}.los-exercise strong{font-size:.86rem;line-height:1.4}.los-exercise small{color:var(--los-sub);font-size:.72rem}
-.los-set-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.los-set>span{display:block;font-size:.59rem;font-weight:800;color:var(--los-sub);margin-bottom:6px;white-space:normal}.los-set>div{display:flex;gap:5px;min-width:0}
-#losFlexGym .los-set input{min-width:0;width:50%;padding:10px 6px;font-size:.76rem}
-.los-gym-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:15px}.los-gym-actions button{border:1px solid transparent;border-radius:10px;padding:11px 15px;cursor:pointer;font:inherit;font-size:.79rem;font-weight:800}
-.los-btn-primary{background:var(--los-emerald);color:white}.los-btn-primary:hover{background:#1c6549}.los-btn-muted{background:#eef5f0;color:#1d5940}.los-btn-muted:hover{background:#e2eee6}
-.los-gym-actions .los-btn-danger{background:#fff5f3;color:#ab3b2b;border:1px solid #f1dcd8;padding:9px 11px}
-.los-save-message{min-height:1em;font-size:.78rem;font-weight:750;color:#225e45;margin:8px 0 0}
-.los-forecast{display:grid;gap:7px}.los-forecast-item,.los-gym-history button{width:100%;border:1px solid var(--los-border);border-radius:11px;background:#fff;padding:11px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--los-ink);font:inherit}
-.los-forecast-item:hover,.los-forecast-item.active{border-color:#78bd96;background:#f0f8f2}
-.los-forecast-item>span{font-size:.71rem;font-weight:850;color:var(--los-emerald);background:#ecf7ef;padding:7px;border-radius:8px}.los-forecast-item>div,.los-gym-history button>div{display:grid;gap:4px;flex:1}.los-forecast-item strong,.los-gym-history strong{font-size:.81rem}.los-forecast-item small,.los-gym-history small{font-size:.71rem;color:var(--los-sub)}.los-forecast-item b{font-size:.9rem;color:var(--los-emerald)}
-.los-pref-head{display:flex;justify-content:space-between;margin:24px 0 10px;font-size:.69rem;letter-spacing:.1em}.los-pref-head span{color:var(--los-sub);letter-spacing:0}.los-weekdays{display:flex;gap:6px;flex-wrap:wrap}
-.los-weekdays label{cursor:pointer}.los-weekdays input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}.los-weekdays span{display:inline-block;border:1px solid var(--los-border);padding:8px 10px;border-radius:8px;font-size:.72rem;font-weight:800;color:var(--los-sub);background:#fff}
-.los-weekdays input:checked+span{background:#e9f6ee;color:var(--los-emerald);border-color:#85bea1}.los-weekdays input:focus-visible+span{outline:2px solid var(--los-emerald)}
-.los-history-head{margin:25px 0 13px}.los-gym-history{display:grid;gap:7px}.los-gym-history button{justify-content:space-between}.los-gym-history button>span{font-size:.61rem;letter-spacing:.1em;font-weight:850;color:var(--los-emerald)}
-#losPlanPage{margin-top:0}.los-plan-overview{display:grid;grid-template-columns:auto minmax(80px,1fr) auto;gap:25px;align-items:center}.los-plan-overview>div:first-child,.los-plan-overview>div:last-child{display:grid;gap:5px}.los-plan-overview strong{font-size:1.35rem;letter-spacing:-.05em}
-.los-plan-progress{height:10px;background:#e7f0ea;border-radius:30px;overflow:hidden}.los-plan-progress i{display:block;height:100%;background:linear-gradient(90deg,#2c8660,#76c69d);transition:width .24s ease;border-radius:30px}
-.los-zoom{display:flex;align-items:center;gap:9px}.los-zoom span{font-size:.62rem;font-weight:850;letter-spacing:.13em;color:var(--los-sub);min-width:85px;text-align:center}.los-zoom button{font-size:1.2rem;line-height:1;width:33px;height:33px;padding:0}
-.los-track-scroll{overflow-x:auto;padding:8px 2px 19px;scrollbar-width:thin;scroll-snap-type:x proximity}.los-milestone-track{--los-node-width:330px;display:flex;gap:14px;min-width:max-content;position:relative;padding:20px 3px 0}.los-milestone-track:before{content:"";position:absolute;left:15px;right:15px;top:37px;height:2px;background:linear-gradient(90deg,#5da47c,#dae9e0)}
-.los-node{scroll-snap-align:start;position:relative;width:var(--los-node-width);text-align:left;border:1px solid #dae6df;background:#fbfdfa;border-radius:15px;padding:24px 18px 19px;display:flex;flex-direction:column;gap:10px;cursor:pointer;color:var(--los-ink);font:inherit;transition:width .2s,border-color .2s,background .2s}
-.los-node:hover,.los-node.selected{border-color:#69ab88;background:#f2faf5}.los-node-top{display:flex;justify-content:space-between;font-size:.64rem;font-weight:850;letter-spacing:.09em;color:var(--los-emerald)}.los-node-dot{position:absolute;top:-22px;left:14px;width:12px;height:12px;border:3px solid white;box-shadow:0 0 0 2px #84baa0;background:#27845d;border-radius:50%}
-.los-node>strong{font-size:1.05rem;letter-spacing:-.03em;line-height:1.3}.los-node>small{font-size:.76rem;color:var(--los-sub)}.los-node p{font-size:.8rem;line-height:1.5;color:var(--los-sub);margin:0}.los-node-bar{background:#e2ede5;border-radius:12px;height:6px;margin-top:4px;overflow:hidden}.los-node-bar i{display:block;background:#399b6c;height:100%;border-radius:12px}
-.los-plan-detail-head{display:flex;justify-content:space-between;gap:20px;margin-bottom:22px}.los-plan-detail-head h3{font-size:1.35rem;margin:8px 0 7px;letter-spacing:-.045em}.los-plan-detail-head p{color:var(--los-sub);font-size:.84rem;line-height:1.55;max-width:650px;margin:0}.los-plan-percent{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:85px;width:85px;height:85px;border:5px solid #bbdbc7;border-radius:50%;color:var(--los-emerald);font-size:1.4rem;font-weight:850}.los-plan-percent small{font-size:.59rem;color:var(--los-sub);font-weight:750}
-#losPlanDate{width:185px}.los-plan-checks{display:grid;gap:8px;margin:19px 0}.los-plan-checks label{display:flex;align-items:center;gap:12px;border:1px solid var(--los-border);background:#fcfefd;padding:12px;border-radius:10px;font-size:.84rem;cursor:pointer}.los-plan-checks input{accent-color:var(--los-emerald);width:17px;height:17px}.los-plan-checks input:checked+span{text-decoration:line-through;color:var(--los-sub)}
-@media(max-width:980px){.los-flex-grid{grid-template-columns:minmax(0,1fr)}.los-exercise{grid-template-columns:minmax(110px,1fr) minmax(240px,1.8fr)}}
-@media(max-width:640px){.los-upgrade-header{padding:22px 19px;flex-direction:column;align-items:start;gap:14px}.los-pulse{font-size:.59rem;padding:8px 11px}.los-gym-kpis{grid-template-columns:1fr 1fr}.los-gym-kpis article:first-child{grid-column:span 2}.los-upgrade-panel{padding:17px 14px}.los-panel-head{align-items:flex-start}.los-exercise{grid-template-columns:1fr;gap:10px}.los-gym-controls button{flex:1;white-space:nowrap;padding:9px 7px}.los-plan-overview{grid-template-columns:1fr 1fr;gap:13px}.los-plan-progress{grid-column:span 2;grid-row:2}.los-node{width:var(--los-node-width)}.los-plan-detail-head{gap:10px}.los-plan-percent{min-width:67px;width:67px;height:67px;font-size:1.1rem}}
-
+/* LOCKED OS · vertical milestone timeline only; original Gym styling untouched. */
+#losPlanPage .los-timeline-shell { max-width: 850px; margin: 0 auto; display:grid; gap:24px; padding:10px 0 28px; }
+#losPlanPage .los-timeline-heading { display:flex; align-items:end; justify-content:space-between; gap:18px; padding:24px 2px 8px; flex-wrap:wrap; }
+#losPlanPage .los-timeline-kicker { display:block; color:var(--green-dark,#1f6f3f); font-size:.72rem; font-weight:900; letter-spacing:.13em; margin-bottom:9px; }
+#losPlanPage .los-timeline-heading h2 { font-size:clamp(2rem,5vw,3rem); line-height:1.05; margin:0; letter-spacing:-.055em; }
+#losPlanPage .los-timeline-heading p { color:var(--muted,#7a6b59); margin:11px 0 0; line-height:1.45; }
+#losPlanPage .los-timeline-counter { color:var(--green-dark,#1f6f3f); font-size:.78rem; font-weight:850; border-radius:999px; background:var(--green-soft,rgba(47,143,86,.12)); padding:10px 15px; white-space:nowrap; }
+#losPlanPage .los-vertical-timeline { display:grid; padding:3px 0; }
+#losPlanPage .los-timeline-item { display:grid; grid-template-columns:51px minmax(0,1fr); gap:15px; position:relative; min-height:176px; }
+#losPlanPage .los-timeline-rail { position:relative; display:flex; justify-content:center; }
+#losPlanPage .los-timeline-rail::after { content:''; width:2px; background:linear-gradient(var(--green,#2f8f56),rgba(47,143,86,.18)); position:absolute; top:42px; bottom:0; left:calc(50% - 1px); }
+#losPlanPage .los-timeline-item:last-child .los-timeline-rail::after { display:none; }
+#losPlanPage .los-timeline-marker { z-index:1; width:42px; height:42px; border-radius:14px; display:grid; place-items:center; font-size:.83rem; font-weight:900; border:1px solid rgba(47,143,86,.28); background:#fffaf1; color:#34764a; box-shadow:0 3px 13px rgba(30,50,25,.055); }
+#losPlanPage .los-timeline-item.current .los-timeline-marker { color:#fff; background:#277e4d; border-color:#277e4d; box-shadow:0 0 0 5px rgba(47,143,86,.11); }
+#losPlanPage .los-timeline-item.completed .los-timeline-marker { color:#fff; background:#277e4d; }
+#losPlanPage .los-timeline-card { padding:22px 24px; margin:0 0 18px; border:1px solid var(--line,rgba(42,30,18,.12)); border-radius:21px; background:rgba(255,250,241,.92); box-shadow:0 8px 27px rgba(55,38,18,.06); min-width:0; }
+#losPlanPage .los-timeline-item.current .los-timeline-card { border-color:rgba(47,143,86,.43); box-shadow:0 12px 38px rgba(47,143,86,.09); }
+#losPlanPage .los-timeline-top { display:flex; justify-content:space-between; flex-wrap:wrap; align-items:center; gap:12px; }
+#losPlanPage .los-timeline-date { font-weight:850; color:var(--muted,#7a6b59); font-size:.78rem; }
+#losPlanPage .los-timeline-status { border-radius:999px; padding:6px 10px; font-size:.65rem; font-weight:900; letter-spacing:.07em; color:var(--muted,#7a6b59); background:rgba(42,30,18,.05); }
+#losPlanPage .los-timeline-item.current .los-timeline-status { color:#217a49; background:rgba(47,143,86,.13); }
+#losPlanPage .los-timeline-item.completed .los-timeline-status { color:#217a49; background:rgba(47,143,86,.13); }
+#losPlanPage .los-timeline-card h3 { font-size:clamp(1.12rem,2.4vw,1.4rem); letter-spacing:-.025em; line-height:1.2; margin:17px 0 9px; color:var(--text,#21180f); }
+#losPlanPage .los-timeline-card p { font-size:.89rem; line-height:1.6; color:var(--muted,#7a6b59); margin:0 0 17px; max-width:650px; }
+#losPlanPage .los-timeline-action { padding:0; display:inline-flex; align-items:center; gap:9px; background:none; font-size:.82rem; color:#217a49; font-weight:850; cursor:pointer; border:0; }
+#losPlanPage .los-timeline-action:hover { text-decoration:underline; }
+#losPlanPage .los-timeline-item.upcoming .los-timeline-card { opacity:.85; }
+@media(max-width:580px){ #losPlanPage .los-timeline-heading{padding:8px 1px 0;}#losPlanPage .los-timeline-item{grid-template-columns:36px minmax(0,1fr);gap:10px;}#losPlanPage .los-timeline-marker{width:34px;height:34px;border-radius:11px;font-size:.7rem;}#losPlanPage .los-timeline-rail::after{top:35px;}#losPlanPage .los-timeline-card{padding:17px 15px;border-radius:17px;}#losPlanPage .los-timeline-top{gap:8px;}#losPlanPage .los-timeline-status{font-size:.59rem;padding:5px 8px;} }
