@@ -9401,88 +9401,283 @@
   else setTimeout(start, 750);
 })();
 
-/* LOCKED OS · compact vertical looksmaxxing timeline */
+/* LOCKED OS · editable looksmaxxing timeline and checklists (only this tab). */
 (() => {
   'use strict';
-  const PHASES = [
-    { id: 'vacation-minoxidil-order', number: '01', name: 'Order oral minoxidil from IndiaMart', when: 'Vacation · day 5–8', description: 'Place the oral minoxidil order during the trip so it can start shipping. Oral minoxidil is moved earlier in the plan instead of waiting until after orthodontics. Goal: fuller eyelashes and eyebrows; results are not guaranteed.' },
-    { id: 'post-vacation-orders', number: '02', name: 'Order GHK-Cu + CJC-1295', when: 'When you return from vacation', description: 'Place the Modified Aminos order for GHK-Cu and CJC-1295, with any additional items still undecided. This ordering step comes before the body recomp phase.' },
-    { id: 'recomp', number: '03', name: 'Body recomp + CJC-1295 + MK-677', when: 'After vacation', description: 'Goal: get lean at 165–170 lb without losing muscle. Prioritize plenty of protein and keep lifting. When this phase starts, give yourself permission to spend money at the grocery store so you have the food you need.' },
-    { id: 'orthodontics', number: '04', name: 'MARPE + reverse-pull facemask', when: 'January 2027 · planned', description: 'Orthodontic phase. IGF-1 LR3 or HGH is also part of your stated plan during this period.' },
-    { id: 'skin-hair', number: '05', name: 'Isotretinoin', when: 'Following orthodontics', description: 'Goal: a smaller-looking nose. This is a desired outcome, not a guaranteed effect of the medication.' }
+  // Used only to seed an existing account. Once created, all milestones and
+  // checklist items live in state.meta.looksPlanEditorV2 and can be edited.
+  const DEFAULT_PHASES = [
+    { id: 'vacation-minoxidil-order', name: 'Order oral minoxidil from IndiaMart', when: 'Vacation · day 5–8', description: 'Place the oral minoxidil order during the trip so it can start shipping. Oral minoxidil is moved earlier in the plan instead of waiting until after orthodontics. Goal: fuller eyelashes and eyebrows; results are not guaranteed.' },
+    { id: 'post-vacation-orders', name: 'Order GHK-Cu + CJC-1295', when: 'When you return from vacation', description: 'Place the Modified Aminos order for GHK-Cu and CJC-1295, with any additional items still undecided. This ordering step comes before the body recomp phase.' },
+    { id: 'recomp', name: 'Body recomp + CJC-1295 + MK-677', when: 'After vacation', description: 'Goal: get lean at 165–170 lb without losing muscle. Prioritize plenty of protein and keep lifting. When this phase starts, give yourself permission to spend money at the grocery store so you have the food you need.' },
+    { id: 'orthodontics', name: 'MARPE + reverse-pull facemask', when: 'January 2027 · planned', description: 'Orthodontic phase. IGF-1 LR3 or HGH is also part of your stated plan during this period.' },
+    { id: 'skin-hair', name: 'Isotretinoin', when: 'Following orthodontics', description: 'Goal: a smaller-looking nose. This is a desired outcome, not a guaranteed effect of the medication.' }
   ];
   const $ = id => document.getElementById(id);
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, chr=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[chr]));
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+  const makeId = prefix => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const clean = (value, limit) => String(value ?? '').trim().slice(0, limit);
   const persist = () => {
     if (typeof saveState === 'function') saveState();
     else if (typeof saveLocalState === 'function') saveLocalState();
   };
-  function planState(){
-    if (typeof state === 'undefined' || !state) return null;
-    state.meta = state.meta && typeof state.meta === 'object' ? state.meta : {};
-    const data=state.meta.looksPlanV1;
-    if (!data || typeof data !== 'object' || Array.isArray(data)) state.meta.looksPlanV1={};
-    return state.meta.looksPlanV1;
+  let editingPhaseId = null;
+  let editingItem = null;
+
+  function planData() {
+    if (typeof state === 'undefined' || !state || typeof state !== 'object') return null;
+    if (!state.meta || typeof state.meta !== 'object' || Array.isArray(state.meta)) state.meta = {};
+    if (!state.meta.looksPlanV1 || typeof state.meta.looksPlanV1 !== 'object' || Array.isArray(state.meta.looksPlanV1)) state.meta.looksPlanV1 = {};
+    let data = state.meta.looksPlanEditorV2;
+    // Migrate old phase completion flags once, without clearing any user data.
+    if (!data || !Array.isArray(data.phases)) {
+      data = { phases: DEFAULT_PHASES.map(phase => ({
+        ...phase,
+        completed: state.meta.looksPlanV1[phase.id]?.completed === true,
+        items: []
+      })) };
+      state.meta.looksPlanEditorV2 = data;
+    }
+    return data;
   }
-  function phaseComplete(phase){return planState()?.[phase.id]?.completed === true;}
-  function phaseStatus(phase,index){
-    if (phaseComplete(phase)) return 'completed';
-    return PHASES.slice(0,index).every(phaseComplete) ? 'current' : 'upcoming';
+  function phaseById(id) { return planData()?.phases.find(phase => phase.id === id); }
+  function itemById(phase, id) { return phase?.items?.find(item => item.id === id); }
+  function phaseStatus(phases, phase, index) {
+    if (phase.completed) return 'completed';
+    return phases.slice(0, index).every(item => item.completed) ? 'current' : 'upcoming';
   }
-  function render(){
-    const root=$('losPlanPage');if (!root||!planState()) return;
-    const finished=PHASES.filter(phaseComplete).length;
-    const counter=$('losTimelineCount');if(counter)counter.textContent=`${finished} of ${PHASES.length} completed`;
-    const list=$('losVerticalTimeline');if(!list)return;
-    list.innerHTML=PHASES.map((p,i)=>{
-      const status=phaseStatus(p,i);
-      return `<article class="los-timeline-item ${status}" data-phase="${p.id}">
-        <div class="los-timeline-rail"><div class="los-timeline-marker">${status==='completed'?'✓':p.number}</div></div>
-        <div class="los-timeline-card"><div class="los-timeline-top"><span class="los-timeline-date">${esc(p.when)}</span><span class="los-timeline-status">${status==='current'?'CURRENT':status==='completed'?'DONE':'UPCOMING'}</span></div>
-        <h3>${esc(p.name)}</h3><p>${esc(p.description)}</p>
-        <button type="button" data-toggle-phase="${p.id}" class="los-timeline-action">${status==='completed'?'Mark not done':'Mark complete'} <span aria-hidden="true">${status==='completed'?'↶':'→'}</span></button>
-        </div></article>`;
+  function phaseForm(phase) {
+    const editing = Boolean(phase);
+    return `<form class="los-plan-form los-plan-phase-form" data-plan-form="phase" ${editing ? `data-phase-id="${esc(phase.id)}"` : ''}>
+      <div class="los-plan-form-title">${editing ? 'Edit milestone' : 'New milestone'}</div>
+      <label>Milestone name<input name="title" type="text" maxlength="140" required placeholder="What do you want to achieve?" value="${esc(phase?.name || '')}"></label>
+      <label>Timing<input name="when" type="text" maxlength="110" placeholder="e.g. Next month" value="${esc(phase?.when || '')}"></label>
+      <label>Notes<textarea name="description" rows="3" maxlength="1500" placeholder="Add any details or goals...">${esc(phase?.description || '')}</textarea></label>
+      <div class="los-plan-form-actions"><button class="los-plan-primary" type="submit">${editing ? 'Save changes' : 'Add milestone'}</button><button class="los-plan-quiet" type="button" data-plan-action="cancel-edit">Cancel</button></div>
+    </form>`;
+  }
+  function itemForm(phaseId, item) {
+    return `<form class="los-plan-item-form" data-plan-form="item" data-phase-id="${esc(phaseId)}" ${item ? `data-item-id="${esc(item.id)}"` : ''}>
+      <input type="text" name="title" required maxlength="220" aria-label="Checklist item" placeholder="${item ? 'Edit checklist step' : 'Add a checklist step...'}" value="${esc(item?.title || '')}">
+      <button type="submit" class="los-plan-primary">${item ? 'Save' : 'Add'}</button>
+      ${item ? '<button type="button" class="los-plan-quiet" data-plan-action="cancel-edit-item">Cancel</button>' : ''}
+    </form>`;
+  }
+  function itemMarkup(phase, item, index) {
+    const isEditing = editingItem?.phaseId === phase.id && editingItem.itemId === item.id;
+    if (isEditing) return `<div class="los-plan-check-row editing">${itemForm(phase.id, item)}</div>`;
+    return `<div class="los-plan-check-row ${item.completed ? 'checked' : ''}">
+      <label class="los-plan-check-label"><input type="checkbox" data-plan-check="${esc(item.id)}" data-phase-id="${esc(phase.id)}" ${item.completed ? 'checked' : ''}><span>${esc(item.title)}</span></label>
+      <div class="los-plan-item-actions">
+        <button type="button" data-plan-action="move-item" data-phase-id="${esc(phase.id)}" data-item-id="${esc(item.id)}" data-direction="-1" title="Move step up" aria-label="Move ${esc(item.title)} up" ${index === 0 ? 'disabled' : ''}>↑</button>
+        <button type="button" data-plan-action="move-item" data-phase-id="${esc(phase.id)}" data-item-id="${esc(item.id)}" data-direction="1" title="Move step down" aria-label="Move ${esc(item.title)} down" ${index === phase.items.length - 1 ? 'disabled' : ''}>↓</button>
+        <button type="button" data-plan-action="edit-item" data-phase-id="${esc(phase.id)}" data-item-id="${esc(item.id)}" aria-label="Edit ${esc(item.title)}">Edit</button>
+        <button type="button" class="los-plan-danger-text" data-plan-action="delete-item" data-phase-id="${esc(phase.id)}" data-item-id="${esc(item.id)}" aria-label="Delete ${esc(item.title)}">×</button>
+      </div>
+    </div>`;
+  }
+  function render() {
+    const root = $('losPlanPage');
+    const data = planData();
+    if (!root || !data) return;
+    const phases = data.phases;
+    const done = phases.filter(phase => phase.completed).length;
+    const counter = $('losTimelineCount');
+    if (counter) counter.textContent = `${done} of ${phases.length} milestones complete`;
+    const create = $('losPlanCreate');
+    if (create) create.innerHTML = editingPhaseId === '__new__' ? phaseForm(null) : '';
+    const list = $('losVerticalTimeline');
+    if (!list) return;
+    if (!phases.length) {
+      list.innerHTML = '<div class="los-plan-empty-plan">Your plan is empty. Select <strong>Add milestone</strong> to create your first step.</div>';
+      return;
+    }
+    list.innerHTML = phases.map((phase, index) => {
+      const status = phaseStatus(phases, phase, index);
+      const items = Array.isArray(phase.items) ? phase.items : [];
+      const checked = items.filter(item => item.completed).length;
+      return `<article class="los-timeline-item ${status}" data-phase="${esc(phase.id)}">
+        <div class="los-timeline-rail"><div class="los-timeline-marker">${status === 'completed' ? '✓' : String(index + 1).padStart(2, '0')}</div></div>
+        <div class="los-timeline-card">
+          <div class="los-timeline-top"><span class="los-timeline-date">${esc(phase.when || 'No date set')}</span><span class="los-timeline-status">${status === 'current' ? 'CURRENT' : status === 'completed' ? 'DONE' : 'UPCOMING'}</span></div>
+          <div class="los-plan-phase-header"><h3>${esc(phase.name)}</h3><div class="los-plan-phase-tools">
+            <button type="button" data-plan-action="move-phase" data-phase-id="${esc(phase.id)}" data-direction="-1" aria-label="Move milestone up" title="Move up" ${index === 0 ? 'disabled' : ''}>↑</button>
+            <button type="button" data-plan-action="move-phase" data-phase-id="${esc(phase.id)}" data-direction="1" aria-label="Move milestone down" title="Move down" ${index === phases.length - 1 ? 'disabled' : ''}>↓</button>
+            <button type="button" data-plan-action="edit-phase" data-phase-id="${esc(phase.id)}">Edit</button>
+            <button type="button" class="los-plan-danger-text" data-plan-action="delete-phase" data-phase-id="${esc(phase.id)}">Delete</button>
+          </div></div>
+          ${phase.description ? `<p class="los-plan-phase-description">${esc(phase.description)}</p>` : ''}
+          ${editingPhaseId === phase.id ? phaseForm(phase) : ''}
+          <section class="los-plan-checklist" aria-label="Checklist for ${esc(phase.name)}">
+            <div class="los-plan-checklist-head"><h4>Checklist</h4><span>${checked} / ${items.length} done</span></div>
+            ${items.length ? `<div class="los-plan-checks">${items.map((item, itemIndex) => itemMarkup(phase, item, itemIndex)).join('')}</div>` : '<div class="los-plan-empty-checks">No checklist items yet. Add one below.</div>'}
+            ${itemForm(phase.id, null)}
+          </section>
+          <button type="button" data-plan-action="toggle-phase" data-phase-id="${esc(phase.id)}" class="los-timeline-action">${phase.completed ? 'Mark milestone not done' : 'Mark milestone complete'} <span aria-hidden="true">${phase.completed ? '↶' : '→'}</span></button>
+        </div>
+      </article>`;
     }).join('');
   }
-  function mount(){
-    const nav=document.querySelector('.tabs'), looks=$('looksPage');if(!nav||!looks||!planState())return;
-    let tab=nav.querySelector('[data-tab="losPlanPage"]');
-    if(!tab){
-      tab=document.createElement('button');tab.type='button';tab.className='tab los-plan-tab';
-      tab.dataset.tab='losPlanPage';tab.textContent='Looksmaxxing Plan';
-      nav.insertBefore(tab,nav.querySelector('[data-tab="ghkCuPage"]')||null);
+  function saveAndRender() { persist(); render(); }
+  function focusForm(selector) { requestAnimationFrame(() => $('losPlanPage')?.querySelector(selector)?.focus()); }
+  function move(list, id, direction) {
+    const current = list.findIndex(item => item.id === id);
+    const next = current + direction;
+    if (current < 0 || next < 0 || next >= list.length) return false;
+    [list[current], list[next]] = [list[next], list[current]];
+    return true;
+  }
+  function mount() {
+    const nav = document.querySelector('.tabs');
+    const looks = $('looksPage');
+    if (!nav || !looks || !planData()) return;
+    let tab = nav.querySelector('[data-tab="losPlanPage"]');
+    if (!tab) {
+      tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'tab los-plan-tab';
+      tab.dataset.tab = 'losPlanPage';
+      tab.textContent = 'Looksmaxxing Plan';
+      nav.insertBefore(tab, nav.querySelector('[data-tab="ghkCuPage"]') || null);
     }
-    let page=$('losPlanPage');
-    if(!page){
-      page=document.createElement('section');page.id='losPlanPage';page.className='page';
-      page.innerHTML=`<div class="los-timeline-shell"><header class="los-timeline-heading"><div><span class="los-timeline-kicker">PERSONAL TIMELINE</span><h2>Looksmaxxing plan</h2><p>Five milestones, one step at a time.</p></div><span class="los-timeline-counter" id="losTimelineCount"></span></header><div class="los-vertical-timeline" id="losVerticalTimeline"></div></div>`;
-      looks.parentNode.insertBefore(page,looks.nextSibling);
+    let page = $('losPlanPage');
+    if (!page) {
+      page = document.createElement('section');
+      page.id = 'losPlanPage';
+      page.className = 'page';
+      page.innerHTML = `<div class="los-timeline-shell">
+        <header class="los-timeline-heading"><div><span class="los-timeline-kicker">PERSONAL TIMELINE</span><h2>Looksmaxxing plan</h2><p>Edit any milestone, create checklists, and track your progress.</p></div>
+          <div class="los-plan-heading-actions"><span class="los-timeline-counter" id="losTimelineCount"></span><button type="button" class="los-plan-primary" data-plan-action="new-phase">+ Add milestone</button></div></header>
+        <div id="losPlanCreate"></div><div class="los-vertical-timeline" id="losVerticalTimeline"></div>
+      </div>`;
+      looks.parentNode.insertBefore(page, looks.nextSibling);
     }
-    if(page.dataset.timelineMounted==='1'){render();return;}
-    page.dataset.timelineMounted='1';
-    tab.addEventListener('click',()=>{
-      document.querySelectorAll('.tab').forEach(btn=>btn.classList.toggle('active',btn===tab));
-      document.querySelectorAll('.page').forEach(section=>section.classList.toggle('active',section===page));
+    if (page.dataset.timelineMounted === '1') { render(); return; }
+    page.dataset.timelineMounted = '1';
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(button => button.classList.toggle('active', button === tab));
+      document.querySelectorAll('.page').forEach(section => section.classList.toggle('active', section === page));
       render();
     });
-    nav.addEventListener('click',e=>{
-      const target=e.target.closest('.tab');
-      if(target && target!==tab){tab.classList.remove('active');page.classList.remove('active');}
+    nav.addEventListener('click', event => {
+      const target = event.target.closest('.tab');
+      if (target && target !== tab) { tab.classList.remove('active'); page.classList.remove('active'); }
     });
-    page.addEventListener('click',e=>{
-      const button=e.target.closest('[data-toggle-phase]');if(!button)return;
-      const id=button.dataset.togglePhase;
-      if(!PHASES.some(p=>p.id===id))return;
-      const data=planState();
-      if(!data[id]||typeof data[id]!=='object') data[id]={};
-      data[id].completed=!Boolean(data[id].completed);
-      persist();render();
+    page.addEventListener('click', event => {
+      const button = event.target.closest('button[data-plan-action]');
+      if (!button) return;
+      const action = button.dataset.planAction;
+      const phaseId = button.dataset.phaseId;
+      const itemId = button.dataset.itemId;
+      const data = planData();
+      const phases = data.phases;
+      const phase = phaseById(phaseId);
+      if (action === 'new-phase') {
+        editingPhaseId = editingPhaseId === '__new__' ? null : '__new__';
+        editingItem = null;
+        render();
+        if (editingPhaseId) focusForm('#losPlanCreate input[name="title"]');
+        return;
+      }
+      if (action === 'cancel-edit') { editingPhaseId = null; render(); return; }
+      if (action === 'cancel-edit-item') { editingItem = null; render(); return; }
+      if (!phase) return;
+      if (action === 'edit-phase') {
+        editingPhaseId = editingPhaseId === phaseId ? null : phaseId;
+        editingItem = null;
+        render();
+        if (editingPhaseId) focusForm(`[data-plan-form="phase"][data-phase-id="${CSS.escape(phaseId)}"] input[name="title"]`);
+        return;
+      }
+      if (action === 'delete-phase') {
+        if (!window.confirm(`Delete "${phase.name}" and all its checklist items?`)) return;
+        data.phases = phases.filter(item => item.id !== phaseId);
+        if (editingPhaseId === phaseId) editingPhaseId = null;
+        if (editingItem?.phaseId === phaseId) editingItem = null;
+        saveAndRender();
+        return;
+      }
+      if (action === 'move-phase') {
+        if (move(phases, phaseId, Number(button.dataset.direction))) saveAndRender();
+        return;
+      }
+      if (action === 'toggle-phase') {
+        phase.completed = !phase.completed;
+        if (state.meta.looksPlanV1[phaseId] && typeof state.meta.looksPlanV1[phaseId] === 'object') {
+          state.meta.looksPlanV1[phaseId].completed = phase.completed;
+        }
+        saveAndRender();
+        return;
+      }
+      if (!Array.isArray(phase.items)) phase.items = [];
+      if (action === 'edit-item') {
+        editingItem = editingItem?.phaseId === phaseId && editingItem.itemId === itemId ? null : { phaseId, itemId };
+        editingPhaseId = null;
+        render();
+        if (editingItem) focusForm(`form[data-plan-form="item"][data-item-id="${CSS.escape(itemId)}"] input[name="title"]`);
+        return;
+      }
+      if (action === 'delete-item') {
+        const item = itemById(phase, itemId);
+        if (!item || !window.confirm(`Delete checklist item "${item.title}"?`)) return;
+        phase.items = phase.items.filter(entry => entry.id !== itemId);
+        if (editingItem?.itemId === itemId) editingItem = null;
+        saveAndRender();
+        return;
+      }
+      if (action === 'move-item') {
+        if (move(phase.items, itemId, Number(button.dataset.direction))) saveAndRender();
+      }
     });
+    page.addEventListener('change', event => {
+      const checkbox = event.target.closest('input[data-plan-check]');
+      if (!checkbox) return;
+      const phase = phaseById(checkbox.dataset.phaseId);
+      const item = itemById(phase, checkbox.dataset.planCheck);
+      if (!item) return;
+      item.completed = checkbox.checked;
+      saveAndRender();
+    });
+    page.addEventListener('submit', event => {
+      const form = event.target.closest('form[data-plan-form]');
+      if (!form) return;
+      event.preventDefault();
+      const value = clean(form.elements.title.value, form.dataset.planForm === 'phase' ? 140 : 220);
+      if (!value) { form.elements.title.focus(); return; }
+      const data = planData();
+      const addingItem = form.dataset.planForm === 'item' && !form.dataset.itemId;
+      let createdPhaseId = null;
+      if (form.dataset.planForm === 'phase') {
+        const when = clean(form.elements.when.value, 110);
+        const description = clean(form.elements.description.value, 1500);
+        const existing = phaseById(form.dataset.phaseId);
+        if (existing) { existing.name = value; existing.when = when; existing.description = description; }
+        else {
+          createdPhaseId = makeId('milestone');
+          data.phases.push({ id: createdPhaseId, name: value, when, description, completed: false, items: [] });
+        }
+        editingPhaseId = null;
+      } else {
+        const phase = phaseById(form.dataset.phaseId);
+        if (!phase) return;
+        if (!Array.isArray(phase.items)) phase.items = [];
+        const existing = itemById(phase, form.dataset.itemId);
+        if (existing) existing.title = value;
+        else phase.items.push({ id: makeId('step'), title: value, completed: false });
+        editingItem = null;
+      }
+      saveAndRender();
+      if (addingItem) focusForm(`article[data-phase="${CSS.escape(form.dataset.phaseId)}"] form[data-plan-form="item"] input[name="title"]`);
+      if (createdPhaseId) requestAnimationFrame(() => {
+        $('losPlanPage')?.querySelector(`article[data-phase="${CSS.escape(createdPhaseId)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    });
+    // A remote cloud refresh may swap the state object. Repaint the plan on
+    // tab selection, so the editor reflects the latest saved version.
     render();
   }
-  const start=()=>mount();
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
-  else start();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
+  else mount();
 })();
 
 
