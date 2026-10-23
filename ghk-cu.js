@@ -9405,9 +9405,11 @@
 (() => {
   'use strict';
   const PHASES = [
-    { id: 'recomp', number: '01', name: 'Body recomp + CJC-1295 + MK-677', when: 'After vacation', description: 'Goal: get lean at 165–170 lb without losing muscle. Prioritize plenty of protein and keep lifting. When this phase starts, give yourself permission to spend money at the grocery store so you have the food you need.' },
-    { id: 'orthodontics', number: '02', name: 'MARPE + reverse-pull facemask', when: 'January 2027 · planned', description: 'Orthodontic phase. IGF-1 LR3 or HGH is also part of your stated plan during this period.' },
-    { id: 'skin-hair', number: '03', name: 'Isotretinoin + oral minoxidil', when: 'Following orthodontics', description: 'Goals: a smaller-looking nose and fuller eyelashes and eyebrows. These are desired outcomes, not guaranteed effects of the medications.' }
+    { id: 'vacation-minoxidil-order', number: '01', name: 'Order oral minoxidil from IndiaMart', when: 'Vacation · day 5–8', description: 'Place the oral minoxidil order during the trip so it can start shipping. Oral minoxidil is moved earlier in the plan instead of waiting until after orthodontics. Goal: fuller eyelashes and eyebrows; results are not guaranteed.' },
+    { id: 'post-vacation-orders', number: '02', name: 'Order GHK-Cu + CJC-1295', when: 'When you return from vacation', description: 'Place the Modified Aminos order for GHK-Cu and CJC-1295, with any additional items still undecided. This ordering step comes before the body recomp phase.' },
+    { id: 'recomp', number: '03', name: 'Body recomp + CJC-1295 + MK-677', when: 'After vacation', description: 'Goal: get lean at 165–170 lb without losing muscle. Prioritize plenty of protein and keep lifting. When this phase starts, give yourself permission to spend money at the grocery store so you have the food you need.' },
+    { id: 'orthodontics', number: '04', name: 'MARPE + reverse-pull facemask', when: 'January 2027 · planned', description: 'Orthodontic phase. IGF-1 LR3 or HGH is also part of your stated plan during this period.' },
+    { id: 'skin-hair', number: '05', name: 'Isotretinoin', when: 'Following orthodontics', description: 'Goal: a smaller-looking nose. This is a desired outcome, not a guaranteed effect of the medication.' }
   ];
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, chr=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[chr]));
@@ -9453,7 +9455,7 @@
     let page=$('losPlanPage');
     if(!page){
       page=document.createElement('section');page.id='losPlanPage';page.className='page';
-      page.innerHTML=`<div class="los-timeline-shell"><header class="los-timeline-heading"><div><span class="los-timeline-kicker">PERSONAL TIMELINE</span><h2>Looksmaxxing plan</h2><p>Three milestones, one step at a time.</p></div><span class="los-timeline-counter" id="losTimelineCount"></span></header><div class="los-vertical-timeline" id="losVerticalTimeline"></div></div>`;
+      page.innerHTML=`<div class="los-timeline-shell"><header class="los-timeline-heading"><div><span class="los-timeline-kicker">PERSONAL TIMELINE</span><h2>Looksmaxxing plan</h2><p>Five milestones, one step at a time.</p></div><span class="los-timeline-counter" id="losTimelineCount"></span></header><div class="los-vertical-timeline" id="losVerticalTimeline"></div></div>`;
       looks.parentNode.insertBefore(page,looks.nextSibling);
     }
     if(page.dataset.timelineMounted==='1'){render();return;}
