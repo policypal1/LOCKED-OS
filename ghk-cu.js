@@ -65,7 +65,7 @@
 
   const safeText = (value, max = 2000) => String(value ?? "").trim().slice(0, max);
   const makeId = prefix => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
-  const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  const validDateKey = value => isDateKey(value);
   const validTime = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
 
   function normalizeUrl(raw) {
@@ -221,9 +221,9 @@
   }
 
   function highlightGhkToday() {
-    const day = new Date().getDay();
-    // Calendar display only. Wednesday is the one rest day.
-    const scheduled = new Set([0, 1, 5, 6]);
+    if (window.lockedOsRenderGhkCalendar) return window.lockedOsRenderGhkCalendar();
+    const day = keyToLocalDate(getTodayKey()).getDay();
+    const scheduled = new Set([0, 1, 4, 5, 6]);
     document.querySelectorAll("[data-ghk-day]").forEach(el => {
       const weekday = Number(el.dataset.ghkDay);
       const active = scheduled.has(weekday);
@@ -1184,7 +1184,7 @@
   let cleanRealtimeChannel = null;
 
   const clone = value => JSON.parse(JSON.stringify(value));
-  const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  const validDateKey = value => isDateKey(value);
 
   function validDays(value) {
     if (!Array.isArray(value)) return [];
@@ -2028,6 +2028,7 @@
   }
 
   function renderCleanGym() {
+    if (window.lockedOsRenderGym) return window.lockedOsRenderGym();
     if (!document.getElementById("gymPage")) return;
     if (!validDateKey(cleanGymSelectedDate)) cleanGymSelectedDate = getTodayKey();
 
@@ -2446,7 +2447,7 @@
   let sequenceRefreshTimer = null;
 
   const clone = value => JSON.parse(JSON.stringify(value));
-  const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  const validDateKey = value => isDateKey(value);
 
   function safeArray(value) {
     return Array.isArray(value) ? value : [];
@@ -2864,6 +2865,7 @@
   }
 
   function renderNextWorkoutStrip() {
+    if (window.lockedOsRenderGymStrip) return window.lockedOsRenderGymStrip({ scroll: false });
     const grid = document.getElementById("cleanGymWeekGrid");
     if (!grid) return;
 
@@ -3044,7 +3046,7 @@
 
   let selectedDate = "";
 
-  const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  const validDateKey = value => isDateKey(value);
 
   function ensureGym() {
     state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
@@ -3276,6 +3278,7 @@
   }
 
   function renderAllGym() {
+    if (window.lockedOsRenderGym) return window.lockedOsRenderGym();
     ensureGym();
     const badge = document.getElementById("cleanGymTodayBadge");
     if (badge) badge.textContent = workoutFor(getTodayKey()) || "Rest day";
@@ -3362,6 +3365,7 @@
   }
 
   function installNavigation() {
+    if (window.lockedOsRenderGym) return;
     replaceControl("cleanGymPrev", () => {
       const target = adjacentWorkout(selectedDate || getTodayKey(), -1);
       if (target) {
@@ -3540,7 +3544,8 @@
       "Lat Pulldown",
       "Chest-Supported Row",
       "Seated Cable Row, both arms",
-      "Reverse Pec Deck"
+      "Reverse Pec Deck",
+      "Shrugs"
     ],
     "Arms": [
       "Triceps Pressdown",
@@ -3560,8 +3565,36 @@
 
   let uiSelectedDate = "";
   let stripAnchorDate = "";
+  const DRAFT_KEY = "locked_os_gym_drafts_v1";
+  let workoutDrafts = {};
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "{}");
+    if (saved && typeof saved === "object" && !Array.isArray(saved)) workoutDrafts = saved;
+  } catch (_) {}
+  function persistDrafts() {
+    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(workoutDrafts)); } catch (_) {}
+  }
+  function captureDraft() {
+    const body = document.getElementById("cleanGymWorkoutBody");
+    if (!body?.dataset.date || !body.querySelector("input[data-field]")) return;
+    workoutDrafts[body.dataset.date] = {
+      workout: body.dataset.workout,
+      exercises: [...body.querySelectorAll(".clean-gym-exercise")].map(row => ({
+        name: row.dataset.exercise,
+        sets: [0, 1].map(index => Object.fromEntries(["weight", "reps"].map(field => [field,
+          row.querySelector(`[data-set="${index}"][data-field="${field}"]`)?.value || ""
+        ])))
+      }))
+    };
+    window.lockedOsGymDraftDirty = true;
+    persistDrafts();
+  }
+  function selectDate(dayKey) {
+    uiSelectedDate = dayKey;
+    window.lockedOsGymDraftDirty = Boolean(workoutDrafts[dayKey]);
+  }
 
-  const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  const validDateKey = value => isDateKey(value);
 
   function ensureGym() {
     state.meta = state.meta && typeof state.meta === "object" ? state.meta : {};
@@ -3778,7 +3811,7 @@
       button.addEventListener("click", event => {
         event.preventDefault();
         event.stopPropagation();
-        uiSelectedDate = item.date;
+        selectDate(item.date);
         renderGymUi();
       });
 
@@ -3811,6 +3844,7 @@
   }
 
   function recordExerciseEntry(event) {
+    captureDraft();
     const input = event.target.closest?.('input[data-field][data-set]');
     const row = input?.closest("#cleanGymWorkoutBody .clean-gym-exercise");
     if (!row || !(Number(input.value) > 0) || !validDateKey(uiSelectedDate)) return;
@@ -3848,8 +3882,19 @@
       uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
     }
 
-    const workout = workoutFor(uiSelectedDate);
-    const session = sessionFor(uiSelectedDate);
+    for (const id of ["cleanGymSave", "cleanGymComplete"]) {
+      const button = document.getElementById(id);
+      if (button) button.disabled = uiSelectedDate > getTodayKey();
+    }
+    // A redraw or cloud refresh must not erase the set currently being typed.
+    if (body.dataset.date === uiSelectedDate && workoutDrafts[uiSelectedDate] && body.querySelector("input")) return;
+    const draft = workoutDrafts[uiSelectedDate];
+    const workout = GYM_WORKOUTS.includes(draft?.workout) ? draft.workout : workoutFor(uiSelectedDate);
+    const session = draft || sessionFor(uiSelectedDate);
+    body.dataset.date = uiSelectedDate;
+    body.dataset.workout = workout;
+    window.lockedOsGymDraftDirty = Boolean(draft);
+
 
     dateLabel.textContent = formatDate(uiSelectedDate);
     if (status) status.textContent = "";
@@ -3891,12 +3936,12 @@
               <label>
                 <span>Set ${index + 1} lb</span>
                 <input data-set="${index}" data-field="weight" type="number" min="0" max="2000" step="0.5"
-                  value="${Number(set.weight) || ""}" placeholder="Weight">
+                  value="${escapeHtml(draft ? (set.weight ?? "") : (Number(set.weight) || ""))}" placeholder="Weight">
               </label>
               <label>
                 <span>Reps</span>
                 <input data-set="${index}" data-field="reps" type="number" min="0" max="100" step="1"
-                  value="${Number(set.reps) || ""}" placeholder="Reps">
+                  value="${escapeHtml(draft ? (set.reps ?? "") : (Number(set.reps) || ""))}" placeholder="Reps">
               </label>
             </div>`;
         }).join("")}`;
@@ -3953,21 +3998,25 @@
     }
   }
 
-  function renderGymUi() {
+  function renderGymUi({ scroll = false } = {}) {
     ensureGym();
     ensureSelectedVisible();
 
     const badge = document.getElementById("cleanGymTodayBadge");
     if (badge) badge.textContent = workoutFor(getTodayKey()) || "Rest day";
 
-    renderStableStrip();
+    renderStableStrip({ scroll });
     renderWorkoutForm();
     renderHistory();
   }
 
+  window.lockedOsRenderGym = renderGymUi;
+  window.lockedOsRenderGymStrip = renderStableStrip;
+  window.lockedOsGymSelectedDate = () => uiSelectedDate;
+
   function collectForm() {
     const exercises = [];
-    let invalid = false;
+    let invalid = false, outOfRange = false;
 
     document.querySelectorAll("#cleanGymWorkoutBody .clean-gym-exercise").forEach(row => {
       const sets = [0, 1].map(index => {
@@ -3979,6 +4028,8 @@
         );
 
         if ((weight > 0) !== (reps > 0)) invalid = true;
+        if (!Number.isFinite(weight) || !Number.isFinite(reps) || weight < 0 || weight > 2000 || reps < 0 || reps > 100 || !Number.isInteger(reps)) outOfRange = true;
+        if ([...row.querySelectorAll(`[data-set="${index}"]`)].some(input => input.validity?.badInput)) outOfRange = true;
 
         return {
           weight: Number.isFinite(weight) ? Math.max(0, weight) : 0,
@@ -3992,14 +4043,22 @@
       });
     });
 
-    return { exercises, invalid };
+    return { exercises, invalid, outOfRange };
   }
 
   function saveWorkout(markComplete) {
     const status = document.getElementById("cleanGymSaveStatus");
-    const workout = workoutFor(uiSelectedDate);
+    if (uiSelectedDate > getTodayKey()) {
+      if (status) status.textContent = "Future workouts are previews. Choose today or an earlier date to save a log.";
+      return false;
+    }
+    const workout = document.getElementById("cleanGymWorkoutBody")?.dataset.workout || workoutFor(uiSelectedDate);
     if (!workout) { if (status) status.textContent = "Select a workout first."; return false; }
     const collected = collectForm();
+    if (collected.outOfRange || !collected.exercises.length) {
+      if (status) status.textContent = "Use weights from 0–2,000 lb and whole-number reps from 0–100.";
+      return false;
+    }
     if (markComplete && (collected.invalid || collected.exercises.some(ex => ex.sets.some(set => !(set.weight > 0 && set.reps > 0))))) {
       if (status) status.textContent = "Fill in weight and reps for both sets of every exercise before completing.";
       return false;
@@ -4012,9 +4071,11 @@
     const saved = saveState();
     if (saved === false) { if (status) status.textContent = "Local storage full; workout not safely saved."; return false; }
     try { window.lockedOsBackupGymSessions?.(); } catch (error) { console.warn(error); }
+    delete workoutDrafts[uiSelectedDate];
+    persistDrafts();
     window.lockedOsGymDraftDirty = false;
     if (status) status.textContent = markComplete ? "Workout saved and completed." : "Workout saved locally. Cloud sync pending.";
-    document.dispatchEvent(new Event("locked-os-workout-saved"));
+    document.dispatchEvent(new CustomEvent("locked-os-workout-saved", { detail: { dayKey: uiSelectedDate } }));
     if (typeof toast === "function") toast(markComplete ? "Workout completed." : "Workout saved.");
     renderStableStrip({ scroll: false });
     renderHistory();
@@ -4085,7 +4146,7 @@
     modal.querySelector(".gym-log-close")?.addEventListener("click", close);
     modal.querySelector(".gym-log-done")?.addEventListener("click", close);
     modal.querySelector(".gym-log-edit")?.addEventListener("click", () => {
-      uiSelectedDate = dayKey;
+      selectDate(dayKey);
       if (!stripContains(dayKey)) stripAnchorDate = dayKey;
       close();
       renderGymUi();
@@ -4120,7 +4181,7 @@
         return;
       }
 
-      uiSelectedDate = target;
+      selectDate(target);
 
       /*
         Keep the selected workout in the current 5-card window if possible.
@@ -4134,13 +4195,13 @@
       const target = adjacentWorkout(uiSelectedDate || firstWorkoutOnOrAfter(getTodayKey()), 1);
       if (!target) return;
 
-      uiSelectedDate = target;
+      selectDate(target);
       if (!stripContains(target)) stripAnchorDate = target;
       renderGymUi();
     });
 
     replaceControl("cleanGymToday", () => {
-      uiSelectedDate = firstWorkoutOnOrAfter(getTodayKey());
+      selectDate(firstWorkoutOnOrAfter(getTodayKey()));
       stripAnchorDate = firstWorkoutOnOrAfter(getTodayKey());
       renderGymUi();
     });
@@ -4398,6 +4459,13 @@
     });
 
     window.addEventListener("focus", keepLooksGymReadOnly);
+    document.addEventListener("locked-os-day-changed", event => {
+      if (uiSelectedDate === event.detail?.previousDayKey && !workoutDrafts[uiSelectedDate]) {
+        selectDate(firstWorkoutOnOrAfter(getTodayKey()));
+        stripAnchorDate = uiSelectedDate;
+      }
+      if (document.getElementById("gymPage")?.classList.contains("active")) renderGymUi();
+    });
   }
 
   const start = () => setTimeout(install, 120);
@@ -4431,7 +4499,7 @@
   let installFinished = false;
 
   const clone = value => JSON.parse(JSON.stringify(value));
-  const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  const validDateKey = value => isDateKey(value);
 
   function isoNow() {
     const now = new Date().toISOString();
@@ -5804,23 +5872,13 @@
       which deliberately stops propagation. Delay the reconciliation until that
       handler has finished saving the session.
     */
-    document.addEventListener("click", event => {
-      if (!event.target.closest("#cleanGymComplete")) return;
-
-      setTimeout(() => {
-        const selected = document.querySelector(
-          "#cleanGymWeekGrid [data-gym-strip-date].gym-strip-selected"
-        );
-        const dayKey = selected?.dataset?.gymStripDate;
-        if (!dayKey) return;
-
-        if (qaSyncCompletedGymSession(dayKey)) {
-          saveState();
-          try { renderLooks(); } catch (_) {}
-          try { renderWeeklyReview(); } catch (_) {}
-        }
-      }, 0);
-    }, true);
+    document.addEventListener("locked-os-workout-saved", event => {
+      const dayKey = event.detail?.dayKey || window.lockedOsGymSelectedDate?.();
+      if (dayKey && qaSyncCompletedGymSession(dayKey)) {
+        saveState();
+        if (document.getElementById("looksPage")?.classList.contains("active")) renderLooks();
+      }
+    });
 
     let changed = false;
     for (const session of state?.meta?.gymClean?.sessions || []) {
@@ -6006,8 +6064,7 @@
     }
   };
 
-  const validDateKey = value =>
-    /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  const validDateKey = value => isDateKey(value);
 
   function safeArray(value) {
     return Array.isArray(value) ? value : [];
@@ -7507,6 +7564,8 @@
   }
 
   function visibleGymDayKey() {
+    const selected = window.lockedOsGymSelectedDate?.();
+    if (selected) return selected;
     const label = document.getElementById("cleanGymDateLabel")?.textContent?.trim() || "";
     const today = typeof getTodayKey === "function" ? getTodayKey() : "";
 
@@ -7691,10 +7750,12 @@
   const BASE_KEY = 'locked_os_sync_base_v3';
   const DIRTY_KEY = 'locked_os_supabase_dirty_clean';
   const read = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
-  const previousSave = (read('locked_os_recovery_snapshots_clean') || []).find(entry => entry.label === 'saved-to-supabase');
+  const recovery = read('locked_os_recovery_snapshots_clean');
+  const previousSave = (Array.isArray(recovery) ? recovery : []).find(entry => entry?.label === 'saved-to-supabase');
   let recoveredBase = null;
   try { recoveredBase = previousSave?.state || JSON.parse(previousSave?.serialized || 'null'); } catch {}
-  const storedBase = read(BASE_KEY);
+  const rawBase = read(BASE_KEY);
+  const storedBase = object(rawBase) ? rawBase : null;
   let base = storedBase || (window.lockedOsInitiallyDirty ? recoveredBase || {} : copy(state));
   let earlyUserEdit = false;
   document.addEventListener('click', event => { if (!ready && event.target.closest('.task-main,.task-menu-action')) earlyUserEdit = true; }, true);
@@ -7711,6 +7772,11 @@
     if (Array.isArray(local) && Array.isArray(remote)) {
       const prior = Array.isArray(before) ? before : [];
       if ([...prior, ...local, ...remote].every(x => typeof x === 'string' || typeof x === 'number')) {
+        const ordered = path.includes('looksTaskOrder') || path.includes('exerciseEntryOrderByDate') || path.includes('exerciseOrderByWorkout');
+        if (ordered) {
+          const removed = new Set(prior.filter(x => !local.includes(x)));
+          return [...local, ...remote.filter(x => !local.includes(x) && !removed.has(x))];
+        }
         const removed = new Set(prior.filter(x => !local.includes(x)));
         return [...new Set([...remote.filter(x => !removed.has(x)), ...local.filter(x => !prior.includes(x))])];
       }
@@ -7751,13 +7817,20 @@
   }
   window.lockedOsMergeState = merge;
 
+  function markDirty(dirty) {
+    try {
+      if (dirty) localStorage.setItem(DIRTY_KEY, '1');
+      else localStorage.removeItem(DIRTY_KEY);
+    } catch (_) { /* Cloud saves must still run when local storage is full. */ }
+  }
   function persist() {
     try {
       const disk = read(STORAGE_KEY);
       if (disk && !equal(disk, diskSnapshot)) state = merge(base, state, disk);
-      diskSnapshot = copy(state);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      localStorage.setItem(BASE_KEY, JSON.stringify(base));
+      diskSnapshot = copy(state);
+      try { localStorage.setItem(BASE_KEY, JSON.stringify(base)); }
+      catch (error) { console.warn('Sync checkpoint could not be stored', error); }
       return true;
     } catch (error) {
       console.error('Local save failed', error);
@@ -7768,7 +7841,7 @@
   function pending() { return !equal(state, base); }
   function editing() {
     return document.querySelector('dialog[open], .looks-task-modal-backdrop, .task-row.editing, .task-menu[open]') ||
-      /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || window.lockedOsGymDraftDirty;
+      /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
   }
   function repaint() {
     if (mainApp.classList.contains('hidden')) return;
@@ -7779,6 +7852,7 @@
   }
   function receive(remote, timestamp = '') {
     if (!object(remote)) return false;
+    if (timestamp && baseTimestamp && Date.parse(timestamp) < Date.parse(baseTimestamp)) return false;
     const before = copy(state);
     const disk = read(STORAGE_KEY);
     if (disk && !equal(disk, diskSnapshot)) { state = merge(base, state, disk); diskSnapshot = copy(disk); }
@@ -7787,8 +7861,7 @@
     baseTimestamp = timestamp;
     normalizeState();
     persist();
-    if (pending()) localStorage.setItem(DIRTY_KEY, '1');
-    else localStorage.removeItem(DIRTY_KEY);
+    markDirty(pending());
     if (!equal(before,state)) repaint();
     return true;
   }
@@ -7800,10 +7873,21 @@
   }
   function retryLater() {
     clearTimeout(retry);
-    retry = setTimeout(() => { retry = null; if (!mainApp.classList.contains('hidden')) refresh(); }, 5000);
+    retry = setTimeout(() => {
+      retry = null;
+      if (!mainApp.classList.contains('hidden')) {
+        if (pending()) save();
+        else { lastBackgroundRefresh = 0; refresh(); }
+      }
+    }, 5000);
   }
   async function save() {
     if (!ready || mainApp.classList.contains('hidden')) return false;
+    if (!supabaseClient) {
+      persist();
+      if (syncStatus) syncStatus.textContent = 'Saved on this device. Cloud connection unavailable.';
+      return false;
+    }
     if (busy) { supabaseSaveQueued = true; return false; }
     if (!pending()) return true;
     busy = supabaseSaveInFlight = true;
@@ -7837,13 +7921,13 @@
         break;
       }
       if (!success) throw new Error('Concurrent save; retrying');
-      if (!pending()) localStorage.removeItem(DIRTY_KEY);
+      if (!pending()) markDirty(false);
       if (syncStatus) syncStatus.textContent = pending() ? 'Syncing newer changes…' : 'Synced across devices.';
       return true;
     } catch(error) {
       console.warn('Sync will retry:', error.message || error);
       persist();
-      localStorage.setItem(DIRTY_KEY,'1');
+      markDirty(true);
       if (syncStatus) syncStatus.textContent = 'Saved on this device. Waiting to sync…';
       retryLater();
       return false;
@@ -7856,6 +7940,10 @@
   let lastBackgroundRefresh = 0;
   async function refresh() {
     if (!ready || refreshing || busy || mainApp.classList.contains('hidden') || document.hidden) return false;
+    if (!supabaseClient) {
+      if (syncStatus) syncStatus.textContent = 'Saved on this device. Cloud connection unavailable.';
+      return false;
+    }
     // Focus/visibility/periodic listeners often fire together. Fetch at most
     // once per 20 seconds unless the user explicitly presses Sync now.
     const now = Date.now();
@@ -7882,10 +7970,10 @@
     hasPendingLocalChanges = () => busy || pending();
     saveState = function() {
       localRevision++;
-      localStorage.setItem(DIRTY_KEY,'1');
-      if (!persist()) return false;
+      markDirty(true);
+      const stored = persist();
       queueSupabaseSave();
-      return true;
+      return stored;
     };
     queueSupabaseSave = function(delay = 180) {
       clearTimeout(saveTimer);
@@ -8311,6 +8399,9 @@
       if(!picker){picker=document.createElement('input');picker.id='looksDatePickerV4';picker.type='date';picker.setAttribute('aria-label','Routine date');picker.onchange=()=>{if(validDate(picker.value)){lockedOsSelectedLooksDayKey=picker.value;renderLooks();}};document.getElementById('looksDayNav')?.append(picker);}
       picker.value=lockedOsLooksKey();
     };
+    document.addEventListener('locked-os-day-changed', event => {
+      if (lockedOsSelectedLooksDayKey === event.detail?.previousDayKey) lockedOsSelectedLooksDayKey = event.detail.dayKey;
+    });
     window.lockedOsScheduleCatalog=taskCatalog;
     window.lockedOsResolvedSchedule=resolvedSchedule;
     window.lockedOsSaveTaskDetails=saveTaskDetails;
@@ -8348,7 +8439,7 @@
   window.lockedOsRenderGymProgress=renderProgress;
   document.addEventListener('locked-os-workout-saved',()=>{window.lockedOsGymDraftDirty=false;setTimeout(renderProgress,0);});
   document.addEventListener('input',e=>{if(e.target.closest('#cleanGymWorkoutBody'))window.lockedOsGymDraftDirty=true;});
-  document.addEventListener('click',e=>{if(e.target.closest('#cleanGymPrev,#cleanGymNext,#cleanGymToday,[data-gym-strip-date]'))window.lockedOsGymDraftDirty=false;});
+  // The gym controller owns draft state for the selected date.
   // Legacy layers finish their one-time installation at 225 ms.
   setTimeout(()=>{
     installSync(); installTasks(); installSchedules();
@@ -8363,6 +8454,7 @@
     }
     const oldRender=render;
     render=function(){
+      refreshRoutineDay();
       const active=document.querySelector('.page.active')?.id;
       if(active==='checklistPage') return;
       if(active==='looksPage') {
@@ -8381,6 +8473,7 @@
       if(active==='gymPage') {
         // Gym's own tab handlers render its workout editor. Only refresh the
         // progress widget here, not every hidden checklist and admin panel.
+        window.lockedOsRenderGym?.();
         window.lockedOsRenderGymProgress?.();
         window.lockedOsRenderNutrition?.();
         return;
@@ -8887,7 +8980,7 @@
   function ghkCalendar() {
     const page = $('ghkCuPage');
     if (!page) return;
-    const today = new Date().getDay();
+    const today = keyToLocalDate(getTodayKey()).getDay();
     page.querySelectorAll('[data-ghk-day]').forEach(dayEl => {
       const day = Number(dayEl.dataset.ghkDay);
       dayEl.classList.toggle('off', !ACTIVE_GHK_DAYS.has(day));
@@ -8898,6 +8991,7 @@
     const badge = $('ghkTodayBadge');
     if (badge) badge.textContent = ACTIVE_GHK_DAYS.has(today) ? 'Today · midday' : 'Today · off day';
   }
+  window.lockedOsRenderGhkCalendar = ghkCalendar;
   function muscleFromSession(session, scheduledWorkout = '') {
     const found = new Set();
     const exercises = Array.isArray(session?.exercises) ? session.exercises : [];
@@ -9390,6 +9484,7 @@
   }
   function start() {
     ghkCalendar();
+    document.addEventListener('locked-os-day-changed', ghkCalendar);
     installStudio();
     document.addEventListener('locked-os-workout-saved', () => { previousSignature = ''; update(true); });
     document.addEventListener('click', e => {
@@ -9727,55 +9822,54 @@
     page.id = PAGE_ID;
     page.setAttribute('aria-label', 'CJC-1295 and Ipamorelin reference');
     page.innerHTML = `
-      <div class="cjc-shell">
-        <header class="cjc-hero">
-          <div class="cjc-hero-copy">
-            <span class="cjc-eyebrow"><span class="cjc-eyebrow-dot" aria-hidden="true"></span> COMPOUND REFERENCE / CJC-1295</span>
-            <h2>CJC-1295 <span>+ Ipamorelin</span></h2>
-            <p>Single-vial blend · The protocol below is transcribed from your supplied notes, not a verified dosing plan.</p>
+      <div class="ghk-page cjc-shell">
+        <header class="card ghk-hero-card">
+          <div>
+            <p class="eyebrow blue">Reference notes</p>
+            <h2>CJC-1295</h2>
+            <p>CJC-1295 + Ipamorelin. Personal reference notes, not a verified dosing plan.</p>
           </div>
-          <div class="cjc-hero-mark" aria-hidden="true"><span>2</span><small>PEPTIDES</small></div>
         </header>
 
         <div class="cjc-stats">
-          <div class="cjc-stat"><span>VIAL COMPOSITION</span><strong>5 mg <em>/</em> 5 mg</strong><small>CJC-1295 / Ipamorelin</small></div>
-          <div class="cjc-stat"><span>PREPARATION IN NOTES</span><strong>2 mL</strong><small>Bacteriostatic water</small></div>
-          <div class="cjc-stat"><span>STATED ROUTINE</span><strong>5 : 2</strong><small>Days on / days off</small></div>
+          <div class="card cjc-stat"><span>VIAL COMPOSITION</span><strong>5 mg <em>/</em> 5 mg</strong><small>CJC-1295 / Ipamorelin</small></div>
+          <div class="card cjc-stat"><span>VIAL NOTES</span><strong>2 mL</strong><small>Bacteriostatic water</small></div>
+          <div class="card cjc-stat"><span>ROUTINE NOTES</span><strong>5 : 2</strong><small>Days on / days off</small></div>
         </div>
 
-        <section class="cjc-section" aria-labelledby="cjc-schedule-heading">
-          <div class="cjc-section-head">
-            <div><span class="cjc-section-kicker">01 / REFERENCE</span><h3 id="cjc-schedule-heading">Supplied 3-month outline</h3></div>
-            <span class="cjc-section-tag">Source values · not verified</span>
+        <section class="card cjc-section" aria-labelledby="cjc-schedule-heading">
+          <div class="panel-title cjc-section-head">
+            <div><span class="eyebrow blue">01 / REFERENCE</span><h3 id="cjc-schedule-heading">3-month outline</h3></div>
+            <span class="badge blue">12 weeks</span>
           </div>
           <div class="cjc-month-grid">${months.map(renderMonth).join('')}</div>
-          <p class="cjc-footnote">The source describes a 0.3 mg starting amount and 1.0 mg at 20 units, then holding steady in month three. These numbers are not validated instructions. “Units” depend on the syringe scale and preparation, so they must not be assumed interchangeable.</p>
+          <p class="cjc-footnote">Syringe units depend on the syringe scale and preparation.</p>
         </section>
 
         <div class="cjc-detail-grid">
-          <section class="cjc-section cjc-details" aria-labelledby="cjc-routine-heading">
-            <div class="cjc-section-head"><div><span class="cjc-section-kicker">02 / DETAILS</span><h3 id="cjc-routine-heading">Protocol notes</h3></div></div>
+          <section class="card cjc-section cjc-details" aria-labelledby="cjc-routine-heading">
+            <div class="panel-title cjc-section-head"><div><span class="eyebrow blue">02 / DETAILS</span><h3 id="cjc-routine-heading">Protocol notes</h3></div></div>
             <dl class="cjc-facts">
               <div><dt>Frequency</dt><dd>Once a day, 5 days followed by 2 days off</dd></div>
               <div><dt>Timing</dt><dd>Before bed; at least 2 hours after the last meal</dd></div>
               <div><dt>Route stated</dt><dd>Subcutaneous</dd></div>
               <div><dt>Cycle</dt><dd>20 injections per month, up to 3 months, then a 2-month break</dd></div>
-              <div><dt>Storage claim</dt><dd>4–6 weeks refrigerated after reconstitution (source claim; product stability not verified)</dd></div>
+              <div><dt>Storage note</dt><dd>4–6 weeks refrigerated after reconstitution (not verified for your product)</dd></div>
             </dl>
           </section>
 
-          <section class="cjc-section cjc-observations" aria-labelledby="cjc-observations-heading">
-            <div class="cjc-section-head"><div><span class="cjc-section-kicker">03 / OBSERVATIONS</span><h3 id="cjc-observations-heading">Reported follow-up timeline</h3></div></div>
+          <section class="card cjc-section cjc-observations" aria-labelledby="cjc-observations-heading">
+            <div class="panel-title cjc-section-head"><div><span class="eyebrow blue">03 / OBSERVATIONS</span><h3 id="cjc-observations-heading">Reported follow-up timeline</h3></div></div>
             <div class="cjc-observation-list">
               <div class="cjc-observation"><span class="cjc-observation-dot"></span><div><span>WEEKS 01–02</span><strong>Sleep</strong></div></div>
               <div class="cjc-observation"><span class="cjc-observation-dot"></span><div><span>WEEKS 02–04</span><strong>Energy</strong></div></div>
               <div class="cjc-observation"><span class="cjc-observation-dot"></span><div><span>WEEKS 06–12</span><strong>Body composition</strong></div></div>
             </div>
-            <p class="cjc-footnote">These intervals describe claimed clinic observations. They are not established by a standardized prospective study of this combination.</p>
+            <p class="cjc-footnote">Reported observations, not guaranteed results.</p>
           </section>
         </div>
 
-        <div class="cjc-reference-note"><span aria-hidden="true">i</span><p><strong>Access and evidence:</strong> Your source describes this as provider-supervised and prescription-based. This combination is not FDA-approved for aesthetic, anti-aging, or weight-loss use. This tab is a reference copy of the provided information, not an instruction to administer or escalate doses.</p></div>
+
       </div>`;
     anchor.parentNode.insertBefore(page, anchor);
 
@@ -10226,3 +10320,4 @@
   // Only mounted, visible Nutrition is checked; no background rendering loop.
   setInterval(() => { if (!document.hidden && visible()) render(); },60000);
 })();
+

@@ -140,7 +140,9 @@ function keyToUtcDayNumber(key) {
 }
 
 function isDateKey(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = keyToLocalDate(value);
+  return formatDateKey(date) === value;
 }
 
 function addDays(date, days) {
@@ -564,7 +566,7 @@ function loadLocalState() {
   for (const key of [STORAGE_KEY, ...OLD_STORAGE_KEYS]) {
     try {
       const parsed = JSON.parse(localStorage.getItem(key));
-      if (parsed && typeof parsed === "object") return parsed;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
     } catch {
       // Try the next saved version.
     }
@@ -573,8 +575,15 @@ function loadLocalState() {
 }
 
 function saveLocalState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  OLD_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    OLD_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
+    return true;
+  } catch (error) {
+    console.warn("Local save unavailable:", error);
+    if (syncStatus) syncStatus.textContent = "Device storage is unavailable. Keep this tab open until cloud sync finishes.";
+    return false;
+  }
 }
 
 function getResolvedSet(day, type = "main") {
@@ -599,6 +608,7 @@ function syncWaterTask(day, dayKey) {
 }
 
 function normalizeDay(dayKey, original = {}) {
+  if (!original || typeof original !== "object" || Array.isArray(original)) original = {};
   const allowedLooks = getLooksTaskIds(dayKey);
   const normalized = {
     ...createDayRecord(),
@@ -710,15 +720,15 @@ function backfillMissingPastDays() {
 function normalizeState() {
   let changed = false;
 
-  if (!state || typeof state !== "object") {
+  if (!state || typeof state !== "object" || Array.isArray(state)) {
     state = createEmptyState();
     changed = true;
   }
-  if (!state.days || typeof state.days !== "object") {
+  if (!state.days || typeof state.days !== "object" || Array.isArray(state.days)) {
     state.days = {};
     changed = true;
   }
-  if (!state.meta || typeof state.meta !== "object") {
+  if (!state.meta || typeof state.meta !== "object" || Array.isArray(state.meta)) {
     state.meta = { lastOpenedDayKey: state.lastOpenedDayKey || null, tretinoinScheduleChanges: [], looksTaskEdits: {}, looksCustomTasks: [], looksDeletedTaskIds: [], looksTaskOrder: { morning: [], midday: [], night: [] } };
     changed = true;
   }
@@ -2731,8 +2741,20 @@ function toast(message) {
   toastTimer = setTimeout(() => element.classList.remove("show"), 2200);
 }
 
+function refreshRoutineDay() {
+  const dayKey = getTodayKey();
+  if (dayKey === renderedDayKey) return false;
+  const previousDayKey = renderedDayKey;
+  renderedDayKey = dayKey;
+  normalizeState();
+  saveState();
+  workoutDraftDirty = false;
+  document.dispatchEvent(new CustomEvent("locked-os-day-changed", { detail: { previousDayKey, dayKey } }));
+  return true;
+}
+
 function render() {
-  renderedDayKey = getTodayKey();
+  refreshRoutineDay();
   ensureDay();
   const active = document.querySelector('.page.active')?.id || 'looksPage';
   if (active === 'looksPage') {
@@ -2774,18 +2796,35 @@ async function unlock() {
 }
 
 function setupTabs() {
-  const tabs = [...document.querySelectorAll(".tab")];
-  const pages = [...document.querySelectorAll(".page")];
-
-  tabs.forEach(tab => {
-    tab.addEventListener("click", () => {
-      tabs.forEach(item => item.classList.remove("active"));
-      pages.forEach(page => page.classList.remove("active"));
-      tab.classList.add("active");
-      $(tab.dataset.tab).classList.add("active");
-      render();
+  const nav = document.querySelector("#mainApp .tabs");
+  if (!nav || nav.dataset.navigationBound) return;
+  nav.dataset.navigationBound = "true";
+  const order = ["looksPage", "gymPage", "ghkCuPage", "losCjcPage", "losPlanPage", "adminPage"];
+  function orderTabs() {
+    const tabs = [...nav.querySelectorAll(".tab")];
+    const sorted = [...tabs].sort((a, b) => {
+      const rank = tab => order.includes(tab.dataset.tab) ? order.indexOf(tab.dataset.tab) : order.length;
+      return rank(a) - rank(b);
     });
+    if (tabs.some((tab, index) => tab !== sorted[index])) sorted.forEach(tab => nav.appendChild(tab));
+  }
+  // Modules add and replace buttons during startup. Resolve the current nodes
+  // on each click, so detached buttons cannot leave two pages active.
+  nav.addEventListener("click", event => {
+    const tab = event.target.closest(".tab[data-tab]");
+    if (!tab || !nav.contains(tab)) return;
+    const target = document.getElementById(tab.dataset.tab);
+    if (!target?.classList.contains("page")) return;
+    nav.querySelectorAll(".tab").forEach(item => {
+      item.classList.toggle("active", item === tab);
+      if (item === tab) item.setAttribute("aria-current", "page");
+      else item.removeAttribute("aria-current");
+    });
+    document.querySelectorAll("#mainApp .page").forEach(page => page.classList.toggle("active", page === target));
+    render();
   });
+  orderTabs();
+  new MutationObserver(orderTabs).observe(nav, { childList: true });
 }
 
 unlockBtn.addEventListener("click", unlock);
@@ -2846,12 +2885,7 @@ window.addEventListener("online", async () => {
 });
 
 setInterval(() => {
-  if (getTodayKey() !== renderedDayKey && !mainApp.classList.contains("hidden")) {
-    normalizeState();
-    saveState();
-    workoutDraftDirty = false;
-    render();
-  }
+  if (!mainApp.classList.contains("hidden") && refreshRoutineDay()) render();
 }, 60_000);
 
 setupTabs();
@@ -2954,3 +2988,4 @@ showLogin();
     window.addEventListener("load", () => setTimeout(installTret2xFix, 0), { once: true });
   }
 })();
+
