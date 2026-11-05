@@ -8382,6 +8382,7 @@
         // Gym's own tab handlers render its workout editor. Only refresh the
         // progress widget here, not every hidden checklist and admin panel.
         window.lockedOsRenderGymProgress?.();
+        window.lockedOsRenderNutrition?.();
         return;
       }
       // Preserve the existing GHK-Cu render wrappers.
@@ -8986,7 +8987,7 @@
     const switches = document.createElement('div');
     switches.id = 'losGymSwitch';
     switches.className = 'los-gym-switch';
-    switches.innerHTML = '<button type="button" id="losLogTab" class="active">Workout log</button><button type="button" id="losBodyTab">Recovery &amp; Body</button>';
+    switches.innerHTML = '<button type="button" id="losLogTab" class="active">Workout log</button><button type="button" id="losBodyTab">Recovery &amp; Body</button><button type="button" id="losNutritionTab" aria-controls="losNutritionPanel">Nutrition</button>';
     page.prepend(switches);
     const panel = document.createElement('div');
     panel.id = 'losBodyStudio';
@@ -9004,13 +9005,18 @@
       activeView = next;
       panel.hidden = next !== 'body';
       page.classList.toggle('los-show-body', next === 'body');
+      page.classList.toggle('los-show-nutrition', next === 'nutrition');
+      if ($('losNutritionPanel')) $('losNutritionPanel').hidden = next !== 'nutrition';
       $('losLogTab').classList.toggle('active', next === 'log');
       $('losBodyTab').classList.toggle('active', next === 'body');
+      $('losNutritionTab').classList.toggle('active', next === 'nutrition');
+      if (next === 'nutrition') window.lockedOsOpenNutrition?.();
       if (next === 'body') { update(true); startViewer(); }
       else stopViewer();
     };
     $('losLogTab').onclick = () => toggle('log');
     $('losBodyTab').onclick = () => toggle('body');
+    $('losNutritionTab').onclick = () => toggle('nutrition');
     // A real, segmented anatomical GLB replaces the former two-sided SVG.
     // Lazily import WebGL and model files on first visit to Recovery & Body.
     // The Looks checklist stays fast; no renderer runs in background tabs.
@@ -9790,4 +9796,433 @@
   } else {
     mount();
   }
+})();
+
+/* LOCKED OS: Gym > Nutrition. Additive module, November 2026.
+   Uses only state.meta.gymNutritionV1 and the existing saveState()/sync path.
+   Entry snapshots keep historical nutrition intact when a saved meal changes.
+   Batch stock is derived from entries rather than a second mutable counter. */
+(() => {
+  'use strict';
+  if (window.__lockedOsGymNutritionV1) return;
+  window.__lockedOsGymNutritionV1 = true;
+  const KEY = 'gymNutritionV1';
+  const TARGETS = Object.freeze({ calories: 2200, protein: 180 });
+  const TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+  const $ = id => document.getElementById(id);
+  const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const object = value => Boolean(value && typeof value === 'object' && !Array.isArray(value));
+  const copy = value => JSON.parse(JSON.stringify(value));
+  const round = value => Math.round((value + Number.EPSILON) * 10000) / 10000;
+  const numberText = value => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const id = prefix => `${prefix}-${typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`;
+  const now = () => new Date().toISOString();
+  const currentDay = () => typeof getTodayKey === 'function' ? getTodayKey() : localDay(new Date());
+  let selectedDay = currentDay(), lastToday = selectedDay, editingEntry = null, undoAction = null;
+  let lastSignature = '', mounted = false, dialogReturnFocus = null;
+
+  function localDay(date) {
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  }
+  function validDay(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false;
+    const [y,m,d] = value.split('-').map(Number), date = new Date(y,m-1,d,12);
+    return date.getFullYear() === y && date.getMonth() === m-1 && date.getDate() === d;
+  }
+  function moveDay(key, amount) {
+    const [y,m,d] = key.split('-').map(Number);
+    return localDay(new Date(y,m-1,d+amount,12));
+  }
+  function dayText(key) {
+    const [y,m,d] = key.split('-').map(Number);
+    return new Date(y,m-1,d,12).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+  }
+  function getState() {
+    return typeof state !== 'undefined' && object(state) ? state : null;
+  }
+  function data() {
+    const raw = getState()?.meta?.[KEY];
+    return object(raw) ? raw : { version:1, meals:{}, batches:{}, entries:{} };
+  }
+  function live(collection) {
+    return Object.values(object(collection) ? collection : {}).filter(item => object(item) && item.id && !item.deletedAt);
+  }
+  function lookup(collection, itemId) {
+    const item = object(collection) && Object.prototype.hasOwnProperty.call(collection,itemId) ? collection[itemId] : null;
+    return object(item) && !item.deletedAt ? item : null;
+  }
+  function totals(entries) {
+    return entries.reduce((sum, entry) => ({ calories:sum.calories + entry.calories * entry.servings, protein:sum.protein + entry.protein * entry.servings }), { calories:0, protein:0 });
+  }
+  function remaining(batch, source = data()) {
+    const used = live(source.entries).filter(entry => entry.batchId === batch.id).reduce((sum, entry) => sum + Number(entry.servings || 0), 0);
+    return round(Number(batch.servingsPrepared || 0) - used);
+  }
+  function visible() {
+    return mounted && $('gymPage')?.classList.contains('active') && !$('losNutritionPanel')?.hidden;
+  }
+  function message(text, kind = 'info') {
+    const box = $('losNutritionMessage');
+    if (!box) return;
+    box.hidden = !text;
+    box.dataset.kind = kind;
+    $('losNutritionMessageText').textContent = text;
+    $('losNutritionUndo').hidden = !undoAction;
+  }
+  function requireNumber(raw, label, min = 0, max = 100000) {
+    if (raw === '' || raw === null || raw === undefined) throw new Error(`Enter ${label.toLowerCase()}.`);
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < min || value > max) throw new Error(`${label} must be between ${min} and ${max.toLocaleString()}.`);
+    return value;
+  }
+  function requireName(raw) {
+    const name = String(raw || '').trim().slice(0,120);
+    if (!name) throw new Error('Enter a food or meal name.');
+    return name;
+  }
+  function requireLogDate(day) {
+    if (!validDay(day) || day > currentDay()) throw new Error('Choose today or an earlier date for food you have eaten.');
+  }
+  function commit(change, success, undo = null) {
+    const current = getState();
+    if (!current || typeof saveState !== 'function') throw new Error('The app is not ready to save. Reopen Nutrition and try again.');
+    const draft = copy(data());
+    draft.version = 1;
+    for (const key of ['meals','batches','entries']) if (!object(draft[key])) draft[key] = {};
+    change(draft);
+    current.meta = object(current.meta) ? current.meta : {};
+    current.meta[KEY] = draft;
+    const stored = saveState();
+    undoAction = undo;
+    render(true);
+    message(stored === false ? 'This change is in memory, but device storage could not save it. Keep this tab open and use Sync now.' : success, stored === false ? 'error' : 'info');
+  }
+  function entryFrom(meal, servings, mealType, batchId = '') {
+    requireLogDate(selectedDay);
+    return { id:id('food'), date:selectedDay, name:meal.name, calories:meal.calories, protein:meal.protein,
+      servings, mealType:TYPES.includes(mealType) ? mealType : 'Snack', mealId:meal.mealId || meal.id || '',
+      batchId, createdAt:now(), updatedAt:now() };
+  }
+  function removeItem(collection, itemId, label) {
+    const original = lookup(data()[collection],itemId);
+    if (!original) return;
+    const deletedAt = now();
+    commit(draft => { draft[collection][itemId] = { ...original, deletedAt, updatedAt:deletedAt }; }, label,
+      { collection, id:itemId, deletedAt });
+    if (collection === 'entries' && editingEntry?.id === itemId) resetQuickForm();
+  }
+  function undoLast() {
+    const undo = undoAction;
+    if (!undo) return;
+    const item = data()[undo.collection]?.[undo.id];
+    if (!item || item.deletedAt !== undo.deletedAt) { undoAction = null; message('That item has changed since it was removed.'); return; }
+    commit(draft => {
+      const restored = { ...draft[undo.collection][undo.id], updatedAt:now() };
+      delete restored.deletedAt;
+      // Do not let undo over-allocate a batch after another serving was logged.
+      if (undo.collection === 'entries' && restored.batchId) {
+        const batch = lookup(draft.batches,restored.batchId);
+        if (batch && remaining(batch,draft) + 0.00001 < restored.servings) throw new Error('There are not enough prepped servings left to restore this entry.');
+      }
+      draft[undo.collection][undo.id] = restored;
+    }, 'Restored.');
+  }
+
+  function mount() {
+    const page = $('gymPage');
+    if (!page || mounted) return;
+    const panel = document.createElement('section');
+    panel.id = 'losNutritionPanel';
+    panel.hidden = true;
+    panel.setAttribute('aria-labelledby','losNutritionHeading');
+    panel.innerHTML = `
+      <div class="card ln-hero">
+        <div><p class="eyebrow blue">Gym / Nutrition</p><h2 id="losNutritionHeading">Food, made simple.</h2><p>Log what you eat. Save your regular meals. Keep track of your prep.</p></div>
+        <div class="ln-date-nav" aria-label="Food log date">
+          <button type="button" class="ln-icon-btn" id="lnPrevDay" aria-label="Previous day">&#8249;</button>
+          <label class="ln-sr-only" for="lnDate">Food log date</label><input type="date" id="lnDate">
+          <button type="button" class="ln-icon-btn" id="lnNextDay" aria-label="Next day">&#8250;</button>
+          <button type="button" class="ln-text-btn" id="lnToday">Today</button>
+        </div>
+      </div>
+      <div id="losNutritionMessage" class="ln-message" role="status" aria-live="polite" hidden><span id="losNutritionMessageText"></span><button type="button" id="losNutritionUndo" class="ln-text-btn" hidden>Undo</button></div>
+      <div class="ln-stats" aria-label="Daily nutrition totals">
+        <section class="card ln-stat"><div class="ln-stat-top"><h3>Calories</h3><span>Daily target</span></div><p class="ln-metric"><strong id="lnCalories">0</strong><span> / 2,200 kcal</span></p><progress id="lnCalProgress" max="2200" value="0" aria-label="Calories logged against daily target"></progress><p class="ln-stat-note" id="lnCalNote">Logged today</p></section>
+        <section class="card ln-stat ln-protein"><div class="ln-stat-top"><h3>Protein</h3><span>Daily target</span></div><p class="ln-metric"><strong id="lnProtein">0</strong><span> / 180 g</span></p><progress id="lnProteinProgress" max="180" value="0" aria-label="Protein logged against daily target"></progress><p class="ln-stat-note" id="lnProteinNote">Logged today</p></section>
+      </div>
+      <section class="card ln-section" aria-labelledby="lnQuickHeading">
+        <div class="ln-section-head"><div><p class="eyebrow blue">Daily log</p><h3 id="lnQuickHeading">Add food</h3></div><span id="lnLogDateLabel" class="ln-chip"></span></div>
+        <form id="lnQuickForm">
+          <div class="ln-quick-grid">
+            <label class="ln-food-name">Food or meal<input id="lnFoodName" name="foodName" required maxlength="120" placeholder="e.g. Chicken and rice" autocomplete="off"></label>
+            <label>Calories / serving<input id="lnFoodCalories" name="calories" required type="number" min="0" max="100000" step="any" inputmode="decimal" placeholder="kcal"></label>
+            <label>Protein / serving<input id="lnFoodProtein" name="protein" required type="number" min="0" max="10000" step="any" inputmode="decimal" placeholder="grams"></label>
+            <label>Servings<input id="lnFoodServings" name="servings" required type="number" min="0.01" max="1000" step="any" inputmode="decimal" value="1"></label>
+            <label>Meal<select id="lnFoodType" name="mealType">${TYPES.map(type => `<option>${type}</option>`).join('')}</select></label>
+          </div>
+          <div class="ln-form-footer"><label class="ln-check" id="lnSavePresetLabel"><input type="checkbox" id="lnSavePreset"> Also save as a regular meal</label><div class="ln-actions"><button type="button" id="lnCancelEdit" class="btn secondary" hidden>Cancel edit</button><button type="submit" class="btn blue" id="lnLogFood">Log food</button></div></div>
+          <p class="ln-hint">Enter the values from your labels or measured ingredients. Servings multiply both numbers.</p>
+        </form>
+        <div id="lnFoodLog" class="ln-food-log"></div>
+      </section>
+      <div class="ln-library-grid">
+        <section class="card ln-section" aria-labelledby="lnMealsHeading"><div class="ln-section-head"><div><p class="eyebrow blue">Your regulars</p><h3 id="lnMealsHeading">Saved meals</h3></div><button type="button" class="btn secondary" id="lnNewMeal">+ Save meal</button></div><p class="ln-hint">Save a meal once, then log it in one click. Use Prep for portions you have already made.</p><div id="lnSavedMeals" class="ln-card-list"></div></section>
+        <section class="card ln-section" aria-labelledby="lnPrepHeading"><div class="ln-section-head"><div><p class="eyebrow blue">Ready to eat</p><h3 id="lnPrepHeading">Meal prep</h3></div><span id="lnPrepCount" class="ln-chip">0 servings left</span></div><p class="ln-hint">Choose Prep on a saved meal to add a batch. Logging from a batch uses its servings.</p><div id="lnPrepBatches" class="ln-card-list"></div></section>
+      </div>
+      <dialog id="lnDialog" class="ln-dialog" aria-labelledby="lnDialogHeading"><div id="lnDialogContent"></div></dialog>`;
+    page.appendChild(panel);
+    mounted = true;
+    $('lnQuickForm').addEventListener('submit', event => { event.preventDefault(); safe(saveQuickFood); });
+    $('lnCancelEdit').onclick = resetQuickForm;
+    $('lnNewMeal').onclick = () => openMealEditor();
+    $('losNutritionUndo').onclick = () => safe(undoLast);
+    $('lnPrevDay').onclick = () => chooseDay(moveDay(selectedDay,-1));
+    $('lnNextDay').onclick = () => chooseDay(moveDay(selectedDay,1));
+    $('lnToday').onclick = () => chooseDay(currentDay());
+    $('lnDate').addEventListener('change', () => chooseDay($('lnDate').value));
+    panel.addEventListener('click', handleAction);
+    $('lnDialog').addEventListener('close', () => {
+      $('lnDialogContent').replaceChildren();
+      if (dialogReturnFocus?.isConnected) dialogReturnFocus.focus({preventScroll:true});
+    });
+    render(true);
+  }
+  function safe(action) {
+    try { action(); }
+    catch (error) { message(error.message || 'The change could not be saved. Please try again.', 'error'); }
+  }
+  function chooseDay(day) {
+    if (!validDay(day) || day > currentDay()) { $('lnDate').value = selectedDay; return; }
+    if (editingEntry) resetQuickForm();
+    selectedDay = day;
+    render(true);
+  }
+  function resetQuickForm() {
+    editingEntry = null;
+    $('lnQuickForm').reset();
+    $('lnQuickHeading').textContent = 'Add food';
+    $('lnLogFood').textContent = 'Log food';
+    $('lnCancelEdit').hidden = true;
+    $('lnSavePresetLabel').hidden = false;
+  }
+  function saveQuickFood() {
+    const name = requireName($('lnFoodName').value);
+    const calories = requireNumber($('lnFoodCalories').value,'Calories');
+    const protein = requireNumber($('lnFoodProtein').value,'Protein',0,10000);
+    const servings = requireNumber($('lnFoodServings').value,'Servings',0.01,1000);
+    requireLogDate(selectedDay);
+    const old = editingEntry && lookup(data().entries,editingEntry.id);
+    if (editingEntry && (!old || old.updatedAt !== editingEntry.updatedAt)) throw new Error('This entry changed elsewhere. Cancel this edit and reopen the latest entry.');
+    const meal = { id:old?.mealId || '', name, calories, protein };
+    const entry = old ? { ...old, date:selectedDay, name, calories, protein, servings, mealType:$('lnFoodType').value, updatedAt:now() }
+      : entryFrom(meal,servings,$('lnFoodType').value);
+    const savePreset = !old && $('lnSavePreset').checked;
+    commit(draft => {
+      if (old?.batchId) {
+        const batch = lookup(draft.batches,old.batchId);
+        if (batch && servings > remaining(batch,draft) + old.servings + 0.00001) throw new Error('That batch does not have enough servings left.');
+      }
+      if (savePreset) {
+        const preset = { id:id('meal'), name, calories, protein, mealType:entry.mealType, notes:'', inputMode:'serving', recipeServings:1, updatedAt:now() };
+        draft.meals[preset.id] = preset;
+        entry.mealId = preset.id;
+      }
+      draft.entries[entry.id] = entry;
+    }, old ? 'Food entry updated.' : `${name} logged for ${dayText(selectedDay)}.`);
+    resetQuickForm();
+  }
+  function editEntry(itemId) {
+    const entry = lookup(data().entries,itemId);
+    if (!entry) return;
+    editingEntry = copy(entry);
+    $('lnFoodName').value = entry.name;
+    $('lnFoodCalories').value = entry.calories;
+    $('lnFoodProtein').value = entry.protein;
+    $('lnFoodServings').value = entry.servings;
+    $('lnFoodType').value = entry.mealType;
+    $('lnQuickHeading').textContent = 'Edit food entry';
+    $('lnLogFood').textContent = 'Save changes';
+    $('lnCancelEdit').hidden = false;
+    $('lnSavePresetLabel').hidden = true;
+    $('lnFoodName').focus({preventScroll:true});
+    $('lnQuickForm').scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',block:'center'});
+  }
+  function logSaved(itemId, servings) {
+    const meal = lookup(data().meals,itemId);
+    if (!meal) throw new Error('That saved meal is no longer available.');
+    const entry = entryFrom(meal,servings,meal.mealType);
+    commit(draft => { draft.entries[entry.id] = entry; }, `${numberText(servings)} serving${servings === 1 ? '' : 's'} of ${meal.name} logged.`);
+  }
+  function logBatch(itemId, servings) {
+    const batch = lookup(data().batches,itemId);
+    if (!batch) throw new Error('That batch is no longer available.');
+    if (selectedDay < batch.preparedDate) throw new Error('Choose the preparation date or a later day to log this batch.');
+    const entry = entryFrom(batch,servings,batch.mealType,batch.id);
+    commit(draft => {
+      if (servings > remaining(batch,draft) + 0.00001) throw new Error('There are not enough servings left in this batch.');
+      draft.entries[entry.id] = entry;
+    }, `${batch.name} logged. Prep servings updated.`);
+  }
+  function handleAction(event) {
+    const button = event.target.closest('button[data-ln-action]');
+    if (!button) return;
+    const action = button.dataset.lnAction, itemId = button.dataset.id;
+    safe(() => {
+      if (action === 'edit-entry') editEntry(itemId);
+      if (action === 'remove-entry') removeItem('entries',itemId,'Food entry removed. Any prepped servings were restored.');
+      if (action === 'edit-meal') openMealEditor(itemId);
+      if (action === 'prep') openPrepEditor(itemId);
+      if (action === 'remove-meal' && window.confirm('Remove this saved meal? Existing food logs and prepared batches will stay.')) removeItem('meals',itemId,'Saved meal removed. Logs and batches are unchanged.');
+      if (action === 'remove-batch' && window.confirm('Remove this prepared batch from your list? Food already logged will stay.')) removeItem('batches',itemId,'Batch removed. Food already logged is unchanged.');
+      if (action === 'log-meal' || action === 'log-batch') {
+        const input = button.closest('[data-ln-card]').querySelector('[data-ln-servings]');
+        const servings = requireNumber(input.value,'Servings',0.01,1000);
+        if (action === 'log-meal') logSaved(itemId,servings); else logBatch(itemId,servings);
+      }
+    });
+  }
+
+  function showDialog(html, onSubmit) {
+    const dialog = $('lnDialog');
+    dialogReturnFocus = document.activeElement;
+    $('lnDialogContent').innerHTML = html;
+    $('lnDialogContent').querySelectorAll('[data-ln-close]').forEach(button => button.onclick = () => dialog.close());
+    const form = $('lnDialogContent').querySelector('form');
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      try { onSubmit(); dialog.close(); }
+      catch (error) { $('lnDialogError').textContent = error.message || 'Please check these values and try again.'; }
+    });
+    dialog.showModal();
+  }
+  function openMealEditor(itemId = '') {
+    const original = itemId ? lookup(data().meals,itemId) : null;
+    if (itemId && !original) return;
+    showDialog(`<form id="lnMealForm"><div class="ln-dialog-head"><div><p class="eyebrow blue">Saved meal</p><h3 id="lnDialogHeading">${original ? 'Edit meal' : 'Save a regular meal'}</h3></div><button type="button" class="ln-icon-btn" data-ln-close aria-label="Close meal editor">&times;</button></div>
+      <label>Meal name<input id="lnMealName" required maxlength="120" autocomplete="off" placeholder="e.g. Chicken, rice and vegetables" value="${escape(original?.name || '')}"></label>
+      <div class="ln-two-col"><label>Nutrition values are for<select id="lnMealMode"><option value="serving">One serving</option><option value="batch">The whole recipe</option></select></label><label>Usual meal<select id="lnMealType">${TYPES.map(type => `<option>${type}</option>`).join('')}</select></label></div>
+      <div class="ln-two-col"><label id="lnMealCalLabel">Calories<input id="lnMealCal" required type="number" min="0" max="100000" step="any" inputmode="decimal" placeholder="kcal"></label><label id="lnMealProteinLabel">Protein (g)<input id="lnMealProtein" required type="number" min="0" max="10000" step="any" inputmode="decimal" placeholder="grams"></label></div>
+      <label id="lnRecipeServingsLabel" hidden>Servings in the whole recipe<input id="lnRecipeServings" type="number" min="0.01" max="1000" step="any" inputmode="decimal" value="1"></label>
+      <p id="lnMealPreview" class="ln-preview" aria-live="polite">Enter nutrition values to calculate one serving.</p>
+      <label>Ingredients, portions or notes <span class="ln-optional">(optional)</span><textarea id="lnMealNotes" rows="3" maxlength="1500" placeholder="Ingredients and amounts you used, or how you portioned the recipe.">${escape(original?.notes || '')}</textarea></label>
+      <p class="ln-hint">For meal prep, enter the whole recipe's totals and the number of equal servings. Values are not looked up automatically.</p><p id="lnDialogError" class="ln-error" role="alert"></p>
+      <div class="ln-dialog-footer"><button type="button" class="btn secondary" data-ln-close>Cancel</button><button type="submit" class="btn blue">Save meal</button></div></form>`, () => {
+        const current = itemId && lookup(data().meals,itemId);
+        if (itemId && (!current || current.updatedAt !== original.updatedAt)) throw new Error('This meal changed elsewhere. Close and reopen it before editing.');
+        const name = requireName($('lnMealName').value);
+        const inputCalories = requireNumber($('lnMealCal').value,'Calories');
+        const inputProtein = requireNumber($('lnMealProtein').value,'Protein',0,10000);
+        const inputMode = $('lnMealMode').value;
+        const recipeServings = inputMode === 'batch' ? requireNumber($('lnRecipeServings').value,'Recipe servings',0.01,1000) : 1;
+        const meal = { id:itemId || id('meal'), name, calories:round(inputCalories / recipeServings), protein:round(inputProtein / recipeServings),
+          inputMode, inputCalories, inputProtein, recipeServings, mealType:$('lnMealType').value, notes:$('lnMealNotes').value.trim().slice(0,1500), updatedAt:now() };
+        commit(draft => { draft.meals[meal.id] = meal; }, original ? 'Saved meal updated. Earlier food logs and prepared batches are unchanged.' : 'Meal saved. Use Log meal to eat it or Prep to add a prepared batch.');
+      });
+    const recipeMode = original?.inputMode === 'batch';
+    $('lnMealMode').value = recipeMode ? 'batch' : 'serving';
+    $('lnRecipeServings').value = original?.recipeServings || 1;
+    $('lnMealCal').value = original ? (recipeMode ? original.inputCalories : original.calories) : '';
+    $('lnMealProtein').value = original ? (recipeMode ? original.inputProtein : original.protein) : '';
+    $('lnMealType').value = original?.mealType || 'Lunch';
+    const preview = () => {
+      const batch = $('lnMealMode').value === 'batch';
+      $('lnRecipeServingsLabel').hidden = !batch;
+      $('lnRecipeServings').required = batch;
+      $('lnRecipeServings').disabled = !batch;
+      const servings = batch ? Number($('lnRecipeServings').value) : 1;
+      const calories = Number($('lnMealCal').value), protein = Number($('lnMealProtein').value);
+      $('lnMealPreview').textContent = $('lnMealCal').value !== '' && $('lnMealProtein').value !== '' && servings > 0 && calories >= 0 && protein >= 0
+        ? `One serving: ${numberText(calories/servings)} kcal · ${numberText(protein/servings)} g protein`
+        : 'Enter nutrition values to calculate one serving.';
+    };
+    ['lnMealMode','lnRecipeServings','lnMealCal','lnMealProtein'].forEach(key => $(key).addEventListener('input',preview));
+    preview();
+  }
+  function openPrepEditor(mealId) {
+    const meal = lookup(data().meals,mealId);
+    if (!meal) return;
+    showDialog(`<form id="lnPrepForm"><div class="ln-dialog-head"><div><p class="eyebrow blue">Meal prep</p><h3 id="lnDialogHeading">Add a prepared batch</h3></div><button type="button" class="ln-icon-btn" data-ln-close aria-label="Close batch editor">&times;</button></div>
+      <div class="ln-preview"><strong>${escape(meal.name)}</strong><span>${numberText(meal.calories)} kcal · ${numberText(meal.protein)} g protein / serving</span></div>
+      <div class="ln-two-col"><label>Servings prepared<input id="lnBatchServings" required type="number" min="0.01" max="1000" step="any" inputmode="decimal" value="${meal.recipeServings || 1}"></label><label>Prepared on<input id="lnBatchDate" required type="date" max="${currentDay()}" value="${currentDay()}"></label></div>
+      <label>Stored in<select id="lnBatchStorage"><option value="Fridge">Fridge</option><option value="Freezer">Freezer</option><option value="Other">Other</option></select></label>
+      <label>Batch notes <span class="ln-optional">(optional)</span><textarea id="lnBatchNotes" rows="2" maxlength="600" placeholder="e.g. Four equal lunch containers"></textarea></label>
+      <p class="ln-hint">The count tracks portions only, not food safety or expiry. Adding a batch does not log any food as eaten.</p><p id="lnDialogError" class="ln-error" role="alert"></p>
+      <div class="ln-dialog-footer"><button type="button" class="btn secondary" data-ln-close>Cancel</button><button type="submit" class="btn blue">Add batch</button></div></form>`, () => {
+        const current = lookup(data().meals,mealId);
+        if (!current || current.updatedAt !== meal.updatedAt) throw new Error('The meal changed elsewhere. Close and reopen Prep to use its latest values.');
+        const servingsPrepared = requireNumber($('lnBatchServings').value,'Servings prepared',0.01,1000);
+        const preparedDate = $('lnBatchDate').value;
+        if (!validDay(preparedDate) || preparedDate > currentDay()) throw new Error('Choose today or an earlier preparation date.');
+        const batch = { id:id('prep'), mealId:meal.id, name:meal.name, calories:meal.calories, protein:meal.protein, mealType:meal.mealType,
+          servingsPrepared, preparedDate, storage:$('lnBatchStorage').value, notes:$('lnBatchNotes').value.trim().slice(0,600), createdAt:now(), updatedAt:now() };
+        commit(draft => { draft.batches[batch.id] = batch; }, `${numberText(servingsPrepared)} prepped servings added. Nothing has been logged as eaten yet.`);
+      });
+  }
+
+  function mealCard(meal) {
+    return `<article class="ln-meal-card" data-ln-card="meal" data-id="${escape(meal.id)}"><div class="ln-item-head"><h4>${escape(meal.name)}</h4><span class="ln-chip">${escape(meal.mealType || 'Meal')}</span></div><p class="ln-macros"><strong>${numberText(meal.calories)}</strong> kcal <span>·</span> <strong>${numberText(meal.protein)}</strong> g protein <small>/ serving</small></p>
+      ${meal.notes ? `<details class="ln-notes"><summary>Ingredients / notes</summary><p>${escape(meal.notes)}</p></details>` : ''}
+      <div class="ln-log-row"><label>Servings<input type="number" data-ln-servings min="0.01" max="1000" step="any" value="1" inputmode="decimal" aria-label="Servings of ${escape(meal.name)}"></label><button type="button" class="btn blue" data-ln-action="log-meal" data-id="${escape(meal.id)}">Log meal</button><button type="button" class="btn secondary" data-ln-action="prep" data-id="${escape(meal.id)}">Prep</button></div>
+      <div class="ln-small-actions"><button type="button" class="ln-text-btn" data-ln-action="edit-meal" data-id="${escape(meal.id)}">Edit</button><button type="button" class="ln-text-btn ln-muted" data-ln-action="remove-meal" data-id="${escape(meal.id)}">Remove</button></div></article>`;
+  }
+  function batchCard(batch, source) {
+    const left = remaining(batch,source), unavailable = left <= 0 || selectedDay < batch.preparedDate;
+    const shortfall = left < -0.00001;
+    return `<article class="ln-meal-card ${left <= 0 ? 'ln-finished' : ''}" data-ln-card="batch" data-id="${escape(batch.id)}"><div class="ln-item-head"><h4>${escape(batch.name)}</h4><span class="ln-chip ${shortfall ? 'ln-warning' : ''}">${shortfall ? 'Check portions' : left > 0 ? `${numberText(left)} left` : 'Finished'}</span></div>
+      <p class="ln-macros"><strong>${numberText(batch.calories)}</strong> kcal <span>·</span> <strong>${numberText(batch.protein)}</strong> g protein <small>/ serving</small></p><p class="ln-hint">${escape(batch.storage)} · Prepared ${escape(dayText(batch.preparedDate))} · ${numberText(batch.servingsPrepared)} servings made</p>
+      ${batch.notes ? `<p class="ln-batch-notes">${escape(batch.notes)}</p>` : ''}${shortfall ? '<p class="ln-error">More servings were logged than prepared. Review the linked food entries.</p>' : ''}
+      <div class="ln-log-row"><label>Servings<input type="number" data-ln-servings min="0.01" max="${Math.max(0,left)}" step="any" value="${left > 0 && left < 1 ? left : 1}" inputmode="decimal" aria-label="Prepped servings of ${escape(batch.name)}" ${unavailable ? 'disabled' : ''}></label><button type="button" class="btn blue" data-ln-action="log-batch" data-id="${escape(batch.id)}" ${unavailable ? 'disabled' : ''}>Log serving</button></div>
+      ${selectedDay < batch.preparedDate ? '<p class="ln-hint">This batch was prepared after the selected log date.</p>' : ''}<div class="ln-small-actions"><button type="button" class="ln-text-btn ln-muted" data-ln-action="remove-batch" data-id="${escape(batch.id)}">Remove batch</button></div></article>`;
+  }
+  function render(force = false) {
+    if (!mounted) return;
+    const today = currentDay();
+    if (today !== lastToday) {
+      if (selectedDay === lastToday && !editingEntry) selectedDay = today;
+      lastToday = today;
+    }
+    const source = data(), signature = JSON.stringify(source) + selectedDay;
+    if (!force && signature === lastSignature) return;
+    // Never rebuild a serving input while the user is typing in it.
+    if (!force && ($('lnDialog').open || document.activeElement?.closest('#losNutritionPanel input, #losNutritionPanel textarea, #losNutritionPanel select'))) return;
+    lastSignature = signature;
+    const entries = live(source.entries).filter(entry => entry.date === selectedDay).sort((a,b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    const sum = totals(entries);
+    $('lnDate').value = selectedDay;
+    $('lnDate').max = today;
+    $('lnNextDay').disabled = selectedDay >= today;
+    $('lnToday').disabled = selectedDay === today;
+    const label = selectedDay === today ? 'Today' : dayText(selectedDay);
+    $('lnLogDateLabel').textContent = label;
+    $('lnCalories').textContent = numberText(sum.calories);
+    $('lnProtein').textContent = numberText(sum.protein);
+    $('lnCalProgress').value = Math.min(sum.calories,TARGETS.calories);
+    $('lnProteinProgress').value = Math.min(sum.protein,TARGETS.protein);
+    $('lnCalProgress').setAttribute('aria-valuetext',`${numberText(sum.calories)} of ${TARGETS.calories} calories logged`);
+    $('lnProteinProgress').setAttribute('aria-valuetext',`${numberText(sum.protein)} of ${TARGETS.protein} grams protein logged`);
+    $('lnCalNote').textContent = `${entries.length} food ${entries.length === 1 ? 'entry' : 'entries'} · ${label}`;
+    $('lnProteinNote').textContent = `Logged for ${label.toLowerCase()}`;
+    $('lnFoodLog').innerHTML = entries.length ? `<div class="ln-log-heading"><strong>Food logged</strong><span>${numberText(sum.calories)} kcal · ${numberText(sum.protein)} g protein</span></div>${TYPES.map(type => {
+      const items = entries.filter(entry => entry.mealType === type || !TYPES.includes(entry.mealType) && type === 'Snack');
+      return items.length ? `<div class="ln-log-group"><h4>${type}</h4>${items.map(entry => `<article class="ln-log-item"><div><strong>${escape(entry.name)}</strong><small>${numberText(entry.servings)} serving${entry.servings === 1 ? '' : 's'}${entry.batchId ? ' · From meal prep' : ''}</small></div><div class="ln-entry-numbers">${numberText(entry.calories*entry.servings)} kcal<small>${numberText(entry.protein*entry.servings)} g protein</small></div><div class="ln-entry-actions"><button type="button" class="ln-text-btn" data-ln-action="edit-entry" data-id="${escape(entry.id)}" aria-label="Edit ${escape(entry.name)}">Edit</button><button type="button" class="ln-text-btn ln-muted" data-ln-action="remove-entry" data-id="${escape(entry.id)}" aria-label="Remove ${escape(entry.name)}">Remove</button></div></article>`).join('')}</div>` : '';
+    }).join('')}` : '<div class="ln-empty"><strong>No food logged for this day.</strong><p>Add something above, or log one of your saved meals below.</p></div>';
+    const meals = live(source.meals).sort((a,b) => a.name.localeCompare(b.name));
+    $('lnSavedMeals').innerHTML = meals.length ? meals.map(mealCard).join('') : '<div class="ln-empty"><strong>Your regular meals belong here.</strong><p>Save breakfast or lunch once, with its calories and protein.</p></div>';
+    const batches = live(source.batches).sort((a,b) => (remaining(a,source) <= 0) - (remaining(b,source) <= 0) || a.preparedDate.localeCompare(b.preparedDate));
+    const count = batches.reduce((total,batch) => total + Math.max(0,remaining(batch,source)),0);
+    $('lnPrepCount').textContent = `${numberText(count)} serving${count === 1 ? '' : 's'} left`;
+    $('lnPrepBatches').innerHTML = batches.length ? batches.map(batch => batchCard(batch,source)).join('') : '<div class="ln-empty"><strong>No prepared batches yet.</strong><p>Save a meal, choose Prep, then enter how many servings you made.</p></div>';
+  }
+  window.lockedOsOpenNutrition = () => {
+    mount();
+    if ($('losNutritionPanel')) $('losNutritionPanel').hidden = false;
+    render(true);
+  };
+  window.lockedOsRenderNutrition = () => { if (visible()) render(); };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && visible()) render(); });
+  document.addEventListener('focusout', event => {
+    if (event.target.closest?.('#losNutritionPanel')) setTimeout(() => { if (visible()) render(); },200);
+  });
+  // Only mounted, visible Nutrition is checked; no background rendering loop.
+  setInterval(() => { if (!document.hidden && visible()) render(); },60000);
 })();

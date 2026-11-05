@@ -728,3 +728,130 @@
 #losCjcPage .cjc-reference-note strong { color:#24543a; }
 @media(max-width:760px) {#losCjcPage .cjc-month-grid{grid-template-columns:1fr}#losCjcPage .cjc-detail-grid{grid-template-columns:1fr}#losCjcPage .cjc-hero-mark{display:none}#losCjcPage .cjc-hero{padding:27px 24px}#losCjcPage .cjc-section{padding:22px 20px}#losCjcPage .cjc-stats{grid-template-columns:repeat(3,minmax(0,1fr))}#losCjcPage .cjc-stat{padding:15px 13px}#losCjcPage .cjc-stat strong{font-size:1.34rem}}
 @media(max-width:500px) {#losCjcPage .cjc-stats{grid-template-columns:1fr}#losCjcPage .cjc-stat{padding:15px 18px}#losCjcPage .cjc-hero h2{font-size:2rem}#losCjcPage .cjc-facts>div{grid-template-columns:100px minmax(0,1fr)}}
+
+/* Gym > Nutrition. All new styles are scoped to the new panel. */
+#gymPage.los-show-nutrition > :not(#losGymSwitch):not(#losNutritionPanel) { display:none!important; }
+#losNutritionPanel[hidden], #losNutritionPanel [hidden] { display:none!important; }
+#losNutritionPanel { display:grid;gap:17px;min-width:0; }
+#losNutritionPanel .card { padding:23px;min-width:0; }
+#losNutritionPanel .ln-hero { display:flex;align-items:center;justify-content:space-between;gap:24px;background:radial-gradient(circle at top right,rgba(37,132,184,.12),transparent 66%),var(--card); }
+#losNutritionPanel .ln-hero h2 { margin:6px 0 9px;font-size:clamp(1.7rem,3.2vw,2.6rem);line-height:1.08;letter-spacing:-.045em; }
+#losNutritionPanel .ln-hero p:not(.eyebrow) { margin:0;color:var(--muted);font-size:.86rem;line-height:1.6;max-width:440px; }
+#losNutritionPanel .ln-date-nav { display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;flex-shrink:0; }
+#losNutritionPanel .ln-date-nav input { max-width:150px;min-height:42px;padding:8px;font-size:.8rem; }
+#losNutritionPanel .ln-icon-btn { min-width:38px;min-height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.6);color:var(--text);font-size:1.4rem; }
+#losNutritionPanel .ln-icon-btn:disabled, #losNutritionPanel button:disabled { cursor:default;opacity:.48; }
+#losNutritionPanel .ln-text-btn { background:transparent;color:var(--blue-dark);border:0;padding:7px 8px;min-height:36px;font-size:.77rem;font-weight:850;text-decoration:none; }
+#losNutritionPanel .ln-text-btn:hover:not(:disabled) { text-decoration:underline; }
+#losNutritionPanel .ln-muted { color:var(--muted); }
+#losNutritionPanel .ln-stats { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px; }
+#losNutritionPanel .ln-stat { position:relative;overflow:hidden; }
+#losNutritionPanel .ln-stat-top { display:flex;align-items:center;justify-content:space-between;gap:10px; }
+#losNutritionPanel .ln-stat-top h3 { margin:0;font-size:.91rem;font-weight:900; }
+#losNutritionPanel .ln-stat-top > span { color:var(--muted);font-size:.72rem; }
+#losNutritionPanel .ln-metric { margin:13px 0 17px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap; }
+#losNutritionPanel .ln-metric strong { font-size:clamp(1.8rem,3.6vw,2.8rem);line-height:1.1;letter-spacing:-.04em;font-variant-numeric:tabular-nums; }
+#losNutritionPanel .ln-metric span { color:var(--muted);font-size:.88rem;font-weight:700; }
+#losNutritionPanel progress { display:block;width:100%;height:9px;border:0;border-radius:20px;overflow:hidden;background:var(--blue-soft);accent-color:var(--blue); }
+#losNutritionPanel progress::-webkit-progress-bar { background:var(--blue-soft);border-radius:20px; }
+#losNutritionPanel progress::-webkit-progress-value { background:var(--blue);border-radius:20px; }
+#losNutritionPanel progress::-moz-progress-bar { background:var(--blue);border-radius:20px; }
+#losNutritionPanel .ln-protein progress { accent-color:var(--green);background:var(--green-soft); }
+#losNutritionPanel .ln-protein progress::-webkit-progress-bar { background:var(--green-soft); }
+#losNutritionPanel .ln-protein progress::-webkit-progress-value { background:var(--green); }
+#losNutritionPanel .ln-protein progress::-moz-progress-bar { background:var(--green); }
+#losNutritionPanel .ln-stat-note { margin:11px 0 0;font-size:.74rem;color:var(--muted); }
+#losNutritionPanel .ln-section-head { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px; }
+#losNutritionPanel .ln-section-head h3 { margin:5px 0 0;font-size:1.3rem;letter-spacing:-.025em; }
+#losNutritionPanel .ln-section-head .btn { min-height:38px;font-size:.78rem;padding:0 14px;white-space:nowrap; }
+#losNutritionPanel .ln-chip { display:inline-flex;align-items:center;justify-content:center;padding:6px 10px;min-height:28px;border-radius:100px;background:var(--blue-soft);color:var(--blue-dark);font-weight:800;font-size:.69rem;white-space:nowrap; }
+#losNutritionPanel .ln-warning { background:var(--gold-soft);color:var(--gold); }
+#losNutritionPanel label { display:grid;gap:7px;min-width:0;font-size:.74rem;font-weight:850;color:var(--text); }
+#losNutritionPanel input:not([type=checkbox]), #losNutritionPanel select, #losNutritionPanel textarea { display:block;width:100%;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,.65);color:var(--text);font:inherit;font-size:.86rem;font-weight:650; }
+#losNutritionPanel textarea { resize:vertical;line-height:1.5; }
+#losNutritionPanel input::placeholder, #losNutritionPanel textarea::placeholder { color:var(--muted);font-weight:500;opacity:.85; }
+#losNutritionPanel :is(input,select,textarea,button,summary):focus-visible { outline:3px solid rgba(37,132,184,.42);outline-offset:2px; }
+#losNutritionPanel .ln-quick-grid { display:grid;grid-template-columns:minmax(190px,2fr) minmax(105px,1fr) minmax(105px,1fr) minmax(75px,.7fr) minmax(110px,1fr);gap:12px; }
+#losNutritionPanel .ln-form-footer { display:flex;align-items:center;justify-content:space-between;gap:15px;margin-top:15px; }
+#losNutritionPanel .ln-check { display:flex;align-items:center;gap:8px;font-size:.77rem;font-weight:650;color:var(--muted); }
+#losNutritionPanel .ln-check input { width:17px;height:17px;margin:0;accent-color:var(--blue);flex-shrink:0; }
+#losNutritionPanel .ln-actions { display:flex;gap:8px;flex-shrink:0; }
+#losNutritionPanel .ln-actions .btn { min-width:110px;font-size:.8rem; }
+#losNutritionPanel .ln-hint { margin:10px 0;color:var(--muted);font-size:.75rem;line-height:1.55; }
+#losNutritionPanel .ln-food-log { border-top:1px solid var(--line);margin-top:20px;padding-top:15px; }
+#losNutritionPanel .ln-log-heading { display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:.84rem;margin-bottom:17px; }
+#losNutritionPanel .ln-log-heading span { font-size:.74rem;color:var(--muted); }
+#losNutritionPanel .ln-log-group + .ln-log-group { margin-top:15px; }
+#losNutritionPanel .ln-log-group h4 { margin:0 0 4px;color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.09em; }
+#losNutritionPanel .ln-log-item { display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--line); }
+#losNutritionPanel .ln-log-item:last-child { border-bottom:0; }
+#losNutritionPanel .ln-log-item strong { display:block;font-size:.83rem;overflow-wrap:anywhere; }
+#losNutritionPanel .ln-log-item small { display:block;margin-top:4px;color:var(--muted);font-size:.72rem; }
+#losNutritionPanel .ln-entry-numbers { text-align:right;font-size:.8rem;font-weight:850;font-variant-numeric:tabular-nums; }
+#losNutritionPanel .ln-entry-numbers small { font-weight:600; }
+#losNutritionPanel .ln-entry-actions { display:flex;gap:2px; }
+#losNutritionPanel .ln-library-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px;align-items:start; }
+#losNutritionPanel .ln-card-list { display:grid;gap:12px;margin-top:16px; }
+#losNutritionPanel .ln-meal-card { padding:17px;border:1px solid var(--line);border-radius:17px;background:rgba(255,255,255,.35);min-width:0; }
+#losNutritionPanel .ln-item-head { display:flex;align-items:flex-start;justify-content:space-between;gap:10px; }
+#losNutritionPanel .ln-item-head h4 { margin:3px 0 0;font-size:.91rem;line-height:1.4;overflow-wrap:anywhere; }
+#losNutritionPanel .ln-macros { margin:12px 0;color:var(--muted);font-size:.77rem;line-height:1.65; }
+#losNutritionPanel .ln-macros strong { color:var(--text); }
+#losNutritionPanel .ln-macros > span { padding:0 5px; }
+#losNutritionPanel .ln-macros > small { font-size:.69rem;margin-left:3px; }
+#losNutritionPanel .ln-log-row { display:flex;gap:8px;align-items:flex-end;margin-top:13px;flex-wrap:wrap; }
+#losNutritionPanel .ln-log-row label { flex:0 1 85px;font-size:.67rem;gap:5px; }
+#losNutritionPanel .ln-log-row .btn { padding:0 15px;font-size:.77rem;min-height:44px; }
+#losNutritionPanel .ln-log-row input { padding:9px 10px; }
+#losNutritionPanel .ln-small-actions { display:flex;gap:4px;margin:7px -8px -7px; }
+#losNutritionPanel .ln-notes { font-size:.75rem;line-height:1.5;color:var(--muted); }
+#losNutritionPanel .ln-notes summary { cursor:pointer;color:var(--blue-dark);font-weight:750; }
+#losNutritionPanel .ln-notes p, #losNutritionPanel .ln-batch-notes { white-space:pre-wrap;overflow-wrap:anywhere;font-size:.75rem;line-height:1.55;color:var(--muted); }
+#losNutritionPanel .ln-finished { background:rgba(42,30,18,.025); }
+#losNutritionPanel .ln-empty { display:grid;gap:7px;padding:24px 12px;text-align:center;border:1px dashed var(--line-strong);border-radius:15px; }
+#losNutritionPanel .ln-empty strong { color:var(--text);font-size:.83rem; }
+#losNutritionPanel .ln-empty p { margin:0;line-height:1.55;font-size:.75rem;color:var(--muted); }
+#losNutritionPanel .ln-message { display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.65);padding:12px 16px;font-size:.81rem;line-height:1.5; }
+#losNutritionPanel .ln-message[data-kind=error] { border-color:var(--red);color:var(--red); }
+#losNutritionPanel .ln-dialog { width:min(520px,calc(100vw - 28px));max-height:90dvh;margin:auto;padding:25px;border:1px solid var(--line-strong);border-radius:24px;background:var(--card);color:var(--text);box-shadow:var(--shadow);overflow:auto; }
+#losNutritionPanel .ln-dialog:not([open]) { display:none; }
+#losNutritionPanel .ln-dialog::backdrop { background:rgba(33,24,15,.46);backdrop-filter:blur(3px); }
+#losNutritionPanel .ln-dialog form { display:grid;gap:15px; }
+#losNutritionPanel .ln-dialog-head { display:flex;align-items:flex-start;justify-content:space-between;gap:12px; }
+#losNutritionPanel .ln-dialog-head h3 { margin:5px 0 4px;font-size:1.4rem;letter-spacing:-.035em; }
+#losNutritionPanel .ln-dialog-head .ln-icon-btn { min-height:35px;min-width:35px; }
+#losNutritionPanel .ln-two-col { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px; }
+#losNutritionPanel .ln-preview { display:grid;gap:5px;padding:13px 15px;margin:0;background:var(--blue-soft);border-radius:13px;font-size:.8rem;line-height:1.5;color:var(--blue-dark); }
+#losNutritionPanel .ln-preview span { font-size:.76rem; }
+#losNutritionPanel .ln-optional { color:var(--muted);font-weight:500;display:contents; }
+#losNutritionPanel .ln-dialog-footer { display:flex;justify-content:flex-end;gap:8px; }
+#losNutritionPanel .ln-dialog .ln-hint { margin:0; }
+#losNutritionPanel .ln-error { color:var(--red);font-size:.77rem;line-height:1.5;margin:0; }
+#losNutritionPanel .ln-error:empty { display:none; }
+#losNutritionPanel .ln-sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+@media(max-width:1000px) {
+  #losNutritionPanel .ln-hero { align-items:flex-start;flex-direction:column;gap:18px; }
+  #losNutritionPanel .ln-quick-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  #losNutritionPanel .ln-food-name { grid-column:1/-1; }
+}
+@media(max-width:720px) {
+  #losNutritionPanel .ln-library-grid { grid-template-columns:1fr; }
+  #losNutritionPanel .card { padding:17px; }
+  #losNutritionPanel .ln-stats { gap:12px; }
+  #losNutritionPanel .ln-stat-top { align-items:flex-start;flex-direction:column;gap:4px; }
+  #losNutritionPanel .ln-metric { gap:2px;flex-direction:column;margin:12px 0 14px; }
+  #losNutritionPanel .ln-quick-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #losNutritionPanel .ln-form-footer { align-items:stretch;flex-direction:column; }
+  #losNutritionPanel .ln-actions { justify-content:flex-end; }
+  #losNutritionPanel .ln-log-item { gap:10px;grid-template-columns:minmax(0,1fr) auto; }
+  #losNutritionPanel .ln-entry-actions { grid-column:1/-1;justify-content:flex-end;margin-top:-5px; }
+  #losNutritionPanel .ln-log-heading { align-items:flex-start;flex-direction:column;gap:5px; }
+  #losNutritionPanel .ln-date-nav { justify-content:flex-start;gap:4px; }
+  #losNutritionPanel .ln-date-nav input { max-width:140px; }
+  #losNutritionPanel input:not([type=checkbox]), #losNutritionPanel select, #losNutritionPanel textarea { font-size:16px; }
+  #losNutritionPanel .ln-dialog { padding:19px; }
+  #losNutritionPanel .ln-section-head { gap:8px; }
+  #losNutritionPanel .ln-section-head h3 { font-size:1.2rem; }
+  #losNutritionPanel .ln-section-head .btn { padding:0 11px; }
+}
+@media(prefers-reduced-motion:reduce) { #losNutritionPanel * { scroll-behavior:auto!important; } }
