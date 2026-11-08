@@ -21,7 +21,7 @@
     Pull: [
       "Lat Pulldown",
       "Chest-Supported Row",
-      "Seated Cable Row, both arms",
+      "Seated Row",
       "Reverse Pec Deck",
       "Cable Curl",
       "Incline Dumbbell Curl"
@@ -36,7 +36,7 @@
   };
   const GYM_DAY_PLAN = ["Legs + Abs", "Push", "Pull", "Rest", "Legs + Abs", "Push", "Pull"];
   const GYM_DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const GYM_EXERCISE_NAMES = Object.values(GYM_WORKOUTS).flat();
+  const GYM_EXERCISE_NAMES = [...Object.values(GYM_WORKOUTS).flat(), "Seated Cable Row, both arms"];
   let gymSelectedDate = "";
   let gymHistoryExercise = "";
 
@@ -1143,7 +1143,7 @@
     "Back + rear delts": [
       "Lat Pulldown",
       "Chest-Supported Row",
-      "Seated Cable Row, both arms",
+      "Seated Row",
       "Reverse Pec Deck"
     ],
     "Arms": [
@@ -3025,7 +3025,7 @@
     "Back + rear delts": [
       "Lat Pulldown",
       "Chest-Supported Row",
-      "Seated Cable Row, both arms",
+      "Seated Row",
       "Reverse Pec Deck"
     ],
     "Arms": [
@@ -3210,7 +3210,7 @@
     list.className = "clean-gym-exercises";
 
     for (const name of EXERCISES[workout] || []) {
-      const current = session?.exercises?.find(exercise => exercise?.name === name) || { sets: [] };
+      const current = session?.exercises?.find(exercise => exercise?.name === name || (name === "Seated Row" && exercise?.name === "Seated Cable Row, both arms")) || { sets: [] };
       const previous = previousExercise(name, selectedDate);
 
       const row = document.createElement("div");
@@ -3543,9 +3543,9 @@
     "Back + rear delts": [
       "Lat Pulldown",
       "Chest-Supported Row",
-      "Seated Cable Row, both arms",
+      "Seated Row",
       "Reverse Pec Deck",
-      "Shrugs"
+      "Cable Rear Delt Extensions"
     ],
     "Arms": [
       "Triceps Pressdown",
@@ -3742,7 +3742,7 @@
       if (/^(face pulls?|reverse pec deck)$/.test(normalized)) return 'reverse pec deck';
       if (/^(cable fly|cable flies|pec deck|cable fly pec deck)$/.test(normalized)) return 'cable fly pec deck';
       if (/^(cable crunch|ab machine|cable crunch ab machine)$/.test(normalized)) return 'cable crunch ab machine';
-      if (/^seated cable rows?( both arms)?$/.test(normalized)) return 'seated cable row';
+      if (/^seated (?:cable )?rows?(?: both arms)?$/.test(normalized)) return 'seated row';
       return normalized;
     };
     const desired = exerciseKey(name);
@@ -3913,7 +3913,7 @@
     list.className = "clean-gym-exercises";
 
     for (const name of orderedExerciseNames(workout, uiSelectedDate)) {
-      const current = session?.exercises?.find(exercise => exercise?.name === name) || { sets: [] };
+      const current = session?.exercises?.find(exercise => exercise?.name === name || (name === "Seated Row" && exercise?.name === "Seated Cable Row, both arms")) || { sets: [] };
       const previous = previousExercise(name, uiSelectedDate);
 
       const row = document.createElement("div");
@@ -6603,9 +6603,9 @@
     1) Back + rear delts:
        - Keep Lat Pulldown
        - Keep Chest-Supported Row
-       - Keep Seated Cable Row, both arms
+       - Use Seated Row
        - Rename Reverse Pec Deck -> Face Pulls, including saved workout history
-       - Add Shrugs as a new 2-working-set exercise
+       - Use Cable Rear Delt Extensions as a 2-working-set exercise
     2) Custom Looksmaxxing tasks:
        - Add an "Every other day" schedule option
        - Existing treadmill task is migrated to every other day starting 2026-09-17
@@ -7485,7 +7485,7 @@
   }
 
   /* -------------------------------------------------------------------- */
-  /* BACK WORKOUT: FACE PULLS + SHRUGS                                    */
+  /* BACK WORKOUT: FACE PULLS + CABLE REAR DELT EXTENSIONS                                    */
   /* -------------------------------------------------------------------- */
 
   function normalizeBackExerciseName(value) {
@@ -7648,17 +7648,17 @@
       }
     }
 
-    let shrugRow = [...gymPage.querySelectorAll(".clean-gym-exercise")].find(row => row.dataset.exercise === "Shrugs");
+    let shrugRow = [...gymPage.querySelectorAll(".clean-gym-exercise")].find(row => row.dataset.exercise === "Cable Rear Delt Extensions");
     if (!shrugRow) {
       const sourceRow = facePullRow || rows.at(-1);
       if (!sourceRow) return;
       shrugRow = sourceRow.cloneNode(true);
-      shrugRow.dataset.exercise = "Shrugs";
+      shrugRow.dataset.exercise = "Cable Rear Delt Extensions";
       const label = shrugRow.querySelector(".clean-gym-exercise-name strong");
-      if (label) label.textContent = "Shrugs";
+      if (label) label.textContent = "Cable Rear Delt Extensions";
 
       const dayKey = visibleGymDayKey();
-      fillExerciseRow(shrugRow, exerciseForDay(dayKey, "Shrugs"), previousExercise(dayKey, "Shrugs"));
+      fillExerciseRow(shrugRow, exerciseForDay(dayKey, "Cable Rear Delt Extensions"), previousExercise(dayKey, "Cable Rear Delt Extensions"));
       sourceRow.insertAdjacentElement("afterend", shrugRow);
     }
   }
@@ -9782,28 +9782,158 @@
 })();
 
 
-/* LOCKED OS | CJC-1295 information tab. No background processing or dose calculations. */
+/* LOCKED OS | CJC-1295 reference, reconstitution record, and MK-677 fasting glucose log.
+   Schedule values are user-provided notes, not verified prescribing instructions. */
 (() => {
   'use strict';
   const PAGE_ID = 'losCjcPage';
   const TAB_ID = 'losCjcTab';
   const $ = id => document.getElementById(id);
+  const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const validDay = day => typeof isDateKey === 'function' && isDateKey(day);
+  const today = () => typeof getTodayKey === 'function' ? getTodayKey() : new Date().toLocaleDateString('en-CA');
+  const isReady = () => typeof state !== 'undefined' && Boolean(state) && typeof saveState === 'function';
 
-  /* All values displayed here are transcribed from the user's source notes;
-     they are reference material, not verified prescribing instructions. */
-  const months = [
-    { label: 'Month 01', title: 'Weeks 1–4', rows: [['Week 1', '6 units'], ['Week 2', '8 units'], ['Week 3', '10 units'], ['Week 4', '12 units']] },
-    { label: 'Month 02', title: 'Weeks 5–8', rows: [['Week 5', '14 units'], ['Week 6', '16 units'], ['Week 7', '18 units'], ['Week 8', '20 units']] },
-    { label: 'Month 03', title: 'Weeks 9–12', rows: [['Weeks 9–12', '20 units']] },
+  const phases = [
+    { title: 'Weeks 1–2', rows: [['CJC-1295', '100 mcg'], ['Ipamorelin', '100 mcg']] },
+    { title: 'Weeks 3–6', rows: [['CJC-1295', '200 mcg'], ['Ipamorelin', '200 mcg']] },
+    { title: 'Weeks 7–10', rows: [['Amount stated', '300 mcg/week']] },
+    { title: 'Weeks 11–12', rows: [['CJC-1295', '200 mcg'], ['Ipamorelin', '200 mcg']] }
   ];
-  const renderMonth = (month, index) => `
+  const renderPhase = (phase, index) => `
     <article class="cjc-month-card">
-      <div class="cjc-month-heading"><span class="cjc-month-label">${month.label}</span><span class="cjc-month-count">0${index + 1} / 03</span></div>
-      <h3>${month.title}</h3>
-      <div class="cjc-month-rows">
-        ${month.rows.map(([name,value]) => `<div class="cjc-month-row"><span>${name}</span><strong>${value}</strong></div>`).join('')}
-      </div>
+      <div class="cjc-month-heading"><span>PHASE ${String(index+1).padStart(2,'0')}</span><span>${String(index+1).padStart(2,'0')} / 04</span></div>
+      <h3>${phase.title}</h3>
+      <div class="cjc-month-rows">${phase.rows.map(([label,amount]) => `
+        <div class="cjc-month-row"><span>${label}</span><strong>${amount}</strong></div>`).join('')}</div>
     </article>`;
+
+  function displayDay(day) {
+    if (!validDay(day)) return 'Not set';
+    const [year,month,date] = day.split('-').map(Number);
+    return new Date(year,month-1,date,12).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  }
+  function daysElapsed(day) {
+    if (!validDay(day)) return null;
+    const [year,month,date] = day.split('-').map(Number);
+    const [cy,cm,cd] = today().split('-').map(Number);
+    return Math.max(0,Math.floor((Date.UTC(cy,cm-1,cd)-Date.UTC(year,month-1,date))/86400000));
+  }
+  function showStatus(id, message, bad = false) {
+    const element = $(id);
+    if (!element) return;
+    element.textContent = message;
+    element.classList.toggle('bad',bad);
+    element.classList.toggle('good',Boolean(message) && !bad);
+  }
+  function currentVial() {
+    const record = isReady() ? state.meta?.cjcVial : null;
+    return record && typeof record === 'object' && !Array.isArray(record) ? record : {};
+  }
+  function renderVial() {
+    const record = currentVial();
+    const water = Number(record.bacWaterMl);
+    const amount = record.bacWaterMl !== '' && record.bacWaterMl !== undefined && Number.isFinite(water) && water > 0 ? `${water} mL` : 'Not set';
+    const date = validDay(record.reconstitutedDate) ? record.reconstitutedDate : '';
+    const waterInput = $('cjcWaterMl');
+    const dateInput = $('cjcReconstitutedDate');
+    if (waterInput && document.activeElement !== waterInput) waterInput.value = amount === 'Not set' ? '' : String(water);
+    if (dateInput && document.activeElement !== dateInput) dateInput.value = date;
+    if ($('cjcWaterSummary')) $('cjcWaterSummary').textContent = amount;
+    if ($('cjcDateSummary')) $('cjcDateSummary').textContent = displayDay(date);
+    const days = daysElapsed(date);
+    if ($('cjcDaysSummary')) $('cjcDaysSummary').textContent = days === null ? 'Not set' : `${days} day${days === 1 ? '' : 's'}`;
+  }
+  function saveVial(event) {
+    event.preventDefault();
+    if (!isReady()) { showStatus('cjcVialStatus','App data is not ready. Try again after unlocking.',true); return; }
+    const rawWater = String($('cjcWaterMl')?.value ?? '').trim();
+    const day = String($('cjcReconstitutedDate')?.value ?? '').trim();
+    const water = rawWater === '' ? '' : Number(rawWater);
+    if (rawWater !== '' && (!Number.isFinite(water) || water <= 0 || water > 100)) {
+      showStatus('cjcVialStatus','Enter a BAC-water amount greater than 0 and no more than 100 mL.',true);
+      $('cjcWaterMl')?.focus(); return;
+    }
+    if (day && (!validDay(day) || day > today())) {
+      showStatus('cjcVialStatus','Choose today or an earlier valid reconstitution date.',true);
+      $('cjcReconstitutedDate')?.focus(); return;
+    }
+    try {
+      state.meta = state.meta && typeof state.meta === 'object' ? state.meta : {};
+      state.meta.cjcVial = { bacWaterMl: water === '' ? '' : Math.round(water*100)/100, reconstitutedDate: day };
+      saveState();
+      renderVial();
+      showStatus('cjcVialStatus','Vial details saved.');
+    } catch (error) { showStatus('cjcVialStatus','Could not save vial details. Try again.',true); }
+  }
+
+  function glucoseEntries() {
+    const entries = isReady() && Array.isArray(state.mk677?.glucoseEntries) ? state.mk677.glucoseEntries : [];
+    return entries.filter(entry => validDay(entry?.dayKey) && Number.isFinite(Number(entry.glucose)) && /^fasting(?:\s+morning)?$/i.test(String(entry.context || '').trim()));
+  }
+  function renderGlucose() {
+    const dateInput = $('cjcGlucoseDay');
+    if (dateInput) {
+      dateInput.max = today();
+      if (!dateInput.value) dateInput.value = today();
+    }
+    const entries = [...glucoseEntries()].sort((a,b) => b.dayKey.localeCompare(a.dayKey) || String(b.time || '').localeCompare(String(a.time || '')));
+    if ($('cjcGlucoseCount')) $('cjcGlucoseCount').textContent = `${entries.length} fasting reading${entries.length === 1 ? '' : 's'} saved`;
+    const list = $('cjcGlucoseHistory');
+    if (!list) return;
+    list.innerHTML = entries.length ? entries.map(entry => `
+      <div class="cjc-glucose-row">
+        <div><strong>${escape(displayDay(entry.dayKey))}</strong><span>Fasting morning</span></div>
+        <div class="cjc-glucose-value"><strong>${Math.round(Number(entry.glucose))}</strong><span>mg/dL</span></div>
+        <button type="button" class="cjc-delete" data-cjc-glucose-delete="${escape(entry.id)}" aria-label="Delete fasting glucose entry for ${escape(entry.dayKey)}">Delete</button>
+      </div>`).join('') : '<p class="cjc-empty">No fasting glucose readings recorded yet.</p>';
+  }
+  function saveGlucose(event) {
+    event.preventDefault();
+    if (!isReady()) { showStatus('cjcGlucoseStatus','App data is not ready. Try again after unlocking.',true); return; }
+    const day = String($('cjcGlucoseDay')?.value || '');
+    const raw = String($('cjcGlucoseValue')?.value ?? '').trim();
+    const glucose = Number(raw);
+    if (!validDay(day) || day > today()) {
+      showStatus('cjcGlucoseStatus','Choose today or an earlier valid date.',true);
+      $('cjcGlucoseDay')?.focus(); return;
+    }
+    if (!raw || !Number.isFinite(glucose) || glucose < 40 || glucose > 600) {
+      showStatus('cjcGlucoseStatus','Enter a fasting glucose reading from 40 to 600 mg/dL.',true);
+      $('cjcGlucoseValue')?.focus(); return;
+    }
+    try {
+      state.mk677 = typeof normalizeMk677State === 'function' ? normalizeMk677State(state.mk677) : (state.mk677 || {});
+      state.mk677.glucoseEntries = Array.isArray(state.mk677.glucoseEntries) ? state.mk677.glucoseEntries : [];
+      const existing = state.mk677.glucoseEntries.find(entry => entry.dayKey === day && /^fasting(?:\s+morning)?$/i.test(String(entry.context || '').trim()));
+      if (existing) existing.glucose = Math.round(glucose);
+      else state.mk677.glucoseEntries.push({
+        id:`glucose-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,
+        dayKey:day, glucose:Math.round(glucose), time:'', context:'Fasting'
+      });
+      state.mk677.glucoseEntries.sort((a,b) => a.dayKey.localeCompare(b.dayKey) || String(a.time || '').localeCompare(String(b.time || '')));
+      saveState();
+      $('cjcGlucoseValue').value = '';
+      renderGlucose();
+      showStatus('cjcGlucoseStatus',`Saved ${Math.round(glucose)} mg/dL for ${displayDay(day)}.`);
+    } catch (error) { showStatus('cjcGlucoseStatus','Could not save the reading. Try again.',true); }
+  }
+  function deleteGlucose(event) {
+    const button = event.target.closest('button[data-cjc-glucose-delete]');
+    if (!button || !event.currentTarget.contains(button)) return;
+    if (!isReady() || !Array.isArray(state.mk677?.glucoseEntries)) {
+      showStatus('cjcGlucoseStatus','App data is not ready.',true); return;
+    }
+    const id = button.dataset.cjcGlucoseDelete;
+    const found = state.mk677.glucoseEntries.find(entry => entry.id === id && /^fasting(?:\s+morning)?$/i.test(String(entry.context || '').trim()));
+    if (!found) return;
+    try {
+      state.mk677.glucoseEntries = state.mk677.glucoseEntries.filter(entry => entry !== found);
+      saveState();
+      renderGlucose();
+      showStatus('cjcGlucoseStatus','Reading deleted.');
+    } catch (error) { showStatus('cjcGlucoseStatus','Could not delete the reading.',true); }
+  }
 
   function mount() {
     const nav = document.querySelector('#mainApp .tabs');
@@ -9820,7 +9950,7 @@
     const page = document.createElement('section');
     page.className = 'page';
     page.id = PAGE_ID;
-    page.setAttribute('aria-label', 'CJC-1295 and Ipamorelin reference');
+    page.setAttribute('aria-label','CJC-1295 and Ipamorelin reference with MK-677 fasting glucose log');
     page.innerHTML = `
       <div class="ghk-page cjc-shell">
         <header class="card ghk-hero-card">
@@ -9839,43 +9969,49 @@
 
         <section class="card cjc-section" aria-labelledby="cjc-schedule-heading">
           <div class="panel-title cjc-section-head">
-            <div><span class="eyebrow blue">01 / REFERENCE</span><h3 id="cjc-schedule-heading">3-month outline</h3></div>
+            <div><span class="eyebrow blue">01 / REFERENCE</span><h3 id="cjc-schedule-heading">12-week outline</h3></div>
             <span class="badge blue">12 weeks</span>
           </div>
-          <div class="cjc-month-grid">${months.map(renderMonth).join('')}</div>
-          <p class="cjc-footnote">Syringe units depend on the syringe scale and preparation.</p>
+          <div class="cjc-month-grid">${phases.map(renderPhase).join('')}</div>
+          <p class="cjc-footnote">These are your supplied notes, not medical dosing guidance. The 300 mcg/week entry for weeks 7–10 does not specify whether it is for each compound or their combined amount; confirm with a licensed clinician.</p>
         </section>
 
-        <div class="cjc-detail-grid">
-          <section class="card cjc-section cjc-details" aria-labelledby="cjc-routine-heading">
-            <div class="panel-title cjc-section-head"><div><span class="eyebrow blue">02 / DETAILS</span><h3 id="cjc-routine-heading">Protocol notes</h3></div></div>
-            <dl class="cjc-facts">
-              <div><dt>Frequency</dt><dd>Once a day, 5 days followed by 2 days off</dd></div>
-              <div><dt>Timing</dt><dd>Before bed; at least 2 hours after the last meal</dd></div>
-              <div><dt>Route stated</dt><dd>Subcutaneous</dd></div>
-              <div><dt>Cycle</dt><dd>20 injections per month, up to 3 months, then a 2-month break</dd></div>
-              <div><dt>Storage note</dt><dd>4–6 weeks refrigerated after reconstitution (not verified for your product)</dd></div>
-            </dl>
-          </section>
+        <section class="card cjc-section" aria-labelledby="cjc-vial-heading">
+          <div class="panel-title cjc-section-head"><div><span class="eyebrow blue">02 / VIAL DETAILS</span><h3 id="cjc-vial-heading">Current CJC-1295 vial</h3></div></div>
+          <form id="cjcVialForm" class="cjc-tracker-form">
+            <label class="feature-field"><span>BAC water in vial (mL)</span><input id="cjcWaterMl" inputmode="decimal" min="0.01" max="100" step="0.01" type="number" placeholder="e.g. 2"></label>
+            <label class="feature-field"><span>Reconstituted date</span><input id="cjcReconstitutedDate" type="date"></label>
+            <div class="cjc-form-actions"><button type="submit" class="btn blue">Save vial details</button><p id="cjcVialStatus" class="cjc-status" role="status" aria-live="polite"></p></div>
+          </form>
+          <div class="cjc-tracker-summary" aria-label="Saved vial details">
+            <div><span>BAC water</span><strong id="cjcWaterSummary">Not set</strong></div>
+            <div><span>Reconstituted</span><strong id="cjcDateSummary">Not set</strong></div>
+            <div><span>Days since reconstitution</span><strong id="cjcDaysSummary">Not set</strong></div>
+          </div>
+        </section>
 
-          <section class="card cjc-section cjc-observations" aria-labelledby="cjc-observations-heading">
-            <div class="panel-title cjc-section-head"><div><span class="eyebrow blue">03 / OBSERVATIONS</span><h3 id="cjc-observations-heading">Reported follow-up timeline</h3></div></div>
-            <div class="cjc-observation-list">
-              <div class="cjc-observation"><span class="cjc-observation-dot"></span><div><span>WEEKS 01–02</span><strong>Sleep</strong></div></div>
-              <div class="cjc-observation"><span class="cjc-observation-dot"></span><div><span>WEEKS 02–04</span><strong>Energy</strong></div></div>
-              <div class="cjc-observation"><span class="cjc-observation-dot"></span><div><span>WEEKS 06–12</span><strong>Body composition</strong></div></div>
-            </div>
-            <p class="cjc-footnote">Reported observations, not guaranteed results.</p>
-          </section>
-        </div>
-
-
+        <section class="card cjc-section" aria-labelledby="cjc-glucose-heading">
+          <div class="panel-title cjc-section-head"><div><span class="eyebrow blue">03 / MK-677</span><h3 id="cjc-glucose-heading">Fasting morning glucose</h3></div><span class="badge blue">mg/dL</span></div>
+          <form id="cjcGlucoseForm" class="cjc-tracker-form">
+            <label class="feature-field"><span>Date</span><input id="cjcGlucoseDay" type="date" required></label>
+            <label class="feature-field"><span>Fasting morning glucose (mg/dL)</span><input id="cjcGlucoseValue" type="number" inputmode="numeric" min="40" max="600" step="1" placeholder="Enter reading" required></label>
+            <div class="cjc-form-actions"><button type="submit" class="btn blue">Save reading</button><p id="cjcGlucoseStatus" class="cjc-status" role="status" aria-live="polite"></p></div>
+          </form>
+          <div class="cjc-history-head"><strong>Saved readings</strong><span id="cjcGlucoseCount">0 fasting readings saved</span></div>
+          <div class="cjc-glucose-list" id="cjcGlucoseHistory"><p class="cjc-empty">No fasting glucose readings recorded yet.</p></div>
+          <p class="cjc-footnote">This uses your existing MK-677 glucose history. Readings are for tracking and are not a substitute for clinical evaluation.</p>
+        </section>
       </div>`;
     anchor.parentNode.insertBefore(page, anchor);
 
+    $('cjcVialForm')?.addEventListener('submit',saveVial);
+    $('cjcGlucoseForm')?.addEventListener('submit',saveGlucose);
+    $('cjcGlucoseHistory')?.addEventListener('click',deleteGlucose);
+    const refresh = () => { renderVial(); renderGlucose(); };
     tab.addEventListener('click', () => {
-      document.querySelectorAll('#mainApp .tab').forEach(item => item.classList.toggle('active', item === tab));
-      document.querySelectorAll('#mainApp .page').forEach(item => item.classList.toggle('active', item === page));
+      document.querySelectorAll('#mainApp .tab').forEach(item => item.classList.toggle('active',item === tab));
+      document.querySelectorAll('#mainApp .page').forEach(item => item.classList.toggle('active',item === page));
+      refresh();
     });
     nav.addEventListener('click', event => {
       const clicked = event.target.closest('.tab');
@@ -9884,12 +10020,17 @@
         page.classList.remove('active');
       }
     });
+    document.addEventListener('visibilitychange',() => { if (!document.hidden && page.classList.contains('active')) refresh(); });
+    refresh();
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mount, { once: true });
-  } else {
-    mount();
+  if (typeof hasMeaningfulState === 'function' && !hasMeaningfulState.__cjcVialWrapped) {
+    const prior = hasMeaningfulState;
+    hasMeaningfulState = snapshot => prior(snapshot) ||
+      Boolean(snapshot?.meta?.cjcVial?.reconstitutedDate) || Number(snapshot?.meta?.cjcVial?.bacWaterMl) > 0;
+    hasMeaningfulState.__cjcVialWrapped = true;
   }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
+  else mount();
 })();
 
 /* LOCKED OS: Gym > Nutrition. Additive module, November 2026.

@@ -838,3 +838,34 @@
 }
 @media(prefers-reduced-motion:reduce) { #losNutritionPanel * { scroll-behavior:auto!important; } }
 
+
+/* LOCKED OS | CJC-1295 vial and MK-677 fasting glucose trackers. */
+#losCjcPage .cjc-month-grid {grid-template-columns:repeat(4,minmax(0,1fr));}
+#losCjcPage .cjc-month-row {flex-wrap:wrap;}
+#losCjcPage .cjc-month-row strong {white-space:normal;text-align:right;}
+#losCjcPage .cjc-tracker-form {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;}
+#losCjcPage .cjc-tracker-form .feature-field input {min-height:44px;}
+#losCjcPage .cjc-form-actions {grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:12px;}
+#losCjcPage .cjc-status {margin:0;min-height:18px;font-size:.8rem;font-weight:800;color:var(--muted);}
+#losCjcPage .cjc-status.good {color:var(--green-dark);}
+#losCjcPage .cjc-status.bad {color:var(--red);}
+#losCjcPage .cjc-tracker-summary {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:17px;}
+#losCjcPage .cjc-tracker-summary>div {min-width:0;border:1px solid var(--line);border-radius:14px;padding:14px;background:rgba(255,255,255,.42);}
+#losCjcPage .cjc-tracker-summary span {display:block;color:var(--muted);font-weight:850;font-size:.72rem;}
+#losCjcPage .cjc-tracker-summary strong {display:block;font-weight:900;font-size:.96rem;margin-top:7px;overflow-wrap:anywhere;}
+#losCjcPage .cjc-history-head {display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:baseline;margin-top:22px;margin-bottom:9px;}
+#losCjcPage .cjc-history-head>strong {font-size:.95rem;}
+#losCjcPage .cjc-history-head>span {font-size:.75rem;color:var(--muted);font-weight:800;}
+#losCjcPage .cjc-glucose-list {display:grid;gap:8px;}
+#losCjcPage .cjc-glucose-row {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.42);}
+#losCjcPage .cjc-glucose-row>div:first-child {display:grid;gap:3px;min-width:0;}
+#losCjcPage .cjc-glucose-row>div:first-child strong {font-size:.88rem;}
+#losCjcPage .cjc-glucose-row span {font-size:.72rem;font-weight:800;color:var(--muted);}
+#losCjcPage .cjc-glucose-value {display:flex;align-items:baseline;gap:4px;margin-left:auto;}
+#losCjcPage .cjc-glucose-value strong {font-size:1rem;font-variant-numeric:tabular-nums;}
+#losCjcPage .cjc-delete {border:0;padding:9px 10px;border-radius:10px;color:var(--red);background:rgba(190,40,40,.06);font:inherit;font-size:.75rem;font-weight:850;cursor:pointer;}
+#losCjcPage .cjc-delete:hover {background:rgba(190,40,40,.12);}
+#losCjcPage .cjc-empty {margin:0;border:1px dashed var(--line);border-radius:13px;padding:18px;color:var(--muted);text-align:center;font-weight:800;font-size:.83rem;}
+@media (max-width:1000px) and (min-width:761px) {#losCjcPage .cjc-month-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width:760px) {#losCjcPage .cjc-month-grid,#losCjcPage .cjc-tracker-form {grid-template-columns:1fr;}#losCjcPage .cjc-tracker-summary {grid-template-columns:1fr;}}
+@media (max-width:420px) {#losCjcPage .cjc-glucose-row {flex-wrap:wrap;}#losCjcPage .cjc-delete {margin-left:auto;}}
