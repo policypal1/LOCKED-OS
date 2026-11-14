@@ -1127,10 +1127,10 @@
   const GYM_WORKOUTS = ["Chest + side delts", "Back + rear delts", "Arms", "Legs + Abs"];
   const GYM_WORKOUT_SET = new Set(GYM_WORKOUTS);
   const DEFAULT_GYM_SCHEDULE = {
-    Monday: "Chest + side delts",
-    Wednesday: "Back + rear delts",
-    Friday: "Arms",
-    Saturday: "Legs + Abs"
+    Monday: "Arms",
+    Tuesday: "Legs + Abs",
+    Thursday: "Chest + side delts",
+    Friday: "Back + rear delts"
   };
   const EXERCISES = {
     "Chest + side delts": [
@@ -3529,10 +3529,10 @@
 
   const START = "2026-09-11";
   const SCHEDULE = {
-    Friday: "Chest + side delts",
-    Saturday: "Back + rear delts",
     Monday: "Arms",
-    Wednesday: "Legs + Abs"
+    Tuesday: "Legs + Abs",
+    Thursday: "Chest + side delts",
+    Friday: "Back + rear delts"
   };
   const EXERCISES = {
     "Chest + side delts": [
@@ -3682,16 +3682,25 @@
       });
   }
 
+  function isScheduledWorkoutDay(dayKey) {
+    ensureGym();
+    return validDateKey(dayKey) && Boolean(canonicalWorkout(
+      state.meta.gymClean.schedule[getRoutineDayName(dayKey)]
+    ));
+  }
+
   function workoutFor(dayKey) {
     ensureGym();
     if (!validDateKey(dayKey) || dayKey < START) return "";
     const schedule = state.meta.gymClean.schedule;
+    const today = getTodayKey();
+    const scheduled = isScheduledWorkoutDay;
+    // Today follows the same training-day rules as every other date. A stale
+    // off-day draft stays in history but must not create a scheduled workout.
+    if (dayKey >= today && !scheduled(dayKey)) return "";
     const savedWorkout = recordedWorkout(dayKey, sessionFor(dayKey));
     if (savedWorkout) return savedWorkout;
-    const today = getTodayKey();
-    const scheduled = key => Boolean(canonicalWorkout(schedule[getRoutineDayName(key)]));
     if (dayKey < today) return canonicalWorkout(schedule[getRoutineDayName(dayKey)]);
-    if (dayKey !== today && !scheduled(dayKey)) return "";
 
     const last = completedSessions(dayKey).at(-1);
     // A completely new rotation starts at Chest. A saved draft may select a
@@ -3703,7 +3712,7 @@
     let index = last ? (GYM_WORKOUTS.indexOf(last.workout) + 1) % GYM_WORKOUTS.length : GYM_WORKOUTS.indexOf(firstWorkout);
     const startKey = last?.date === today ? formatDateKey(addDays(keyToLocalDate(today), 1)) : today;
     // Only planned slots between now and the requested preview affect that
-    // preview. Missed days and an optional, unsaved rest-day workout do not.
+    // preview. Missed days and rest days never advance the rotation.
     const daysAhead = Math.max(0, keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(startKey));
     const slotsPerWeek = DAYS.filter(day => canonicalWorkout(schedule[day])).length;
     index += Math.floor(daysAhead / 7) * slotsPerWeek;
@@ -3738,17 +3747,17 @@
       cursor = addDays(cursor, direction);
       const key = formatDateKey(cursor);
       if (key < START) return null;
-      if (workoutFor(key)) return key;
+      if (isScheduledWorkoutDay(key) && workoutFor(key)) return key;
     }
     return null;
   }
 
   function firstWorkoutOnOrAfter(dayKey) {
-    if (validDateKey(dayKey) && workoutFor(dayKey)) return dayKey;
+    if (isScheduledWorkoutDay(dayKey) && workoutFor(dayKey)) return dayKey;
     let cursor = keyToLocalDate(validDateKey(dayKey) ? dayKey : getTodayKey());
     for (let step = 0; step < 30; step += 1) {
       const key = formatDateKey(cursor);
-      if (workoutFor(key)) return key;
+      if (isScheduledWorkoutDay(key) && workoutFor(key)) return key;
       cursor = addDays(cursor, 1);
     }
     return START;
@@ -4063,6 +4072,9 @@
   function renderGymUi({ scroll = false } = {}) {
     ensureGym();
     ensureSelectedVisible();
+    // A legacy installer can rebuild the Gym page on a rest-day startup.
+    // Reattach the current controls before rendering the next scheduled date.
+    if (document.querySelector("#gymPage .clean-gym-log-head") && !document.getElementById("cleanGymSessionControls")) installControls();
 
     const badge = document.getElementById("cleanGymTodayBadge");
     if (badge) badge.textContent = workoutFor(getTodayKey()) || "Rest day";
