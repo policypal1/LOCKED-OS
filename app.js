@@ -883,6 +883,7 @@ function ensureDay(dayKey = getTodayKey()) {
 }
 
 function hasMeaningfulState(snapshot) {
+  if (window.lockedOsKillListHasData?.(snapshot)) return true;
   if (!snapshot || typeof snapshot !== "object") return false;
   if (snapshot.weights && Object.keys(snapshot.weights).length > 0) return true;
   if (snapshot.mk677 && (
@@ -2799,7 +2800,7 @@ function setupTabs() {
   const nav = document.querySelector("#mainApp .tabs");
   if (!nav || nav.dataset.navigationBound) return;
   nav.dataset.navigationBound = "true";
-  const order = ["looksPage", "gymPage", "ghkCuPage", "losCjcPage", "losPlanPage", "adminPage"];
+  const order = ["looksPage", "gymPage", "ghkCuPage", "losPlanPage", "killListPage", "adminPage"];
   function orderTabs() {
     const tabs = [...nav.querySelectorAll(".tab")];
     const sorted = [...tabs].sort((a, b) => {

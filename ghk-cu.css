@@ -869,3 +869,13 @@
 @media (max-width:1000px) and (min-width:761px) {#losCjcPage .cjc-month-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media (max-width:760px) {#losCjcPage .cjc-month-grid,#losCjcPage .cjc-tracker-form {grid-template-columns:1fr;}#losCjcPage .cjc-tracker-summary {grid-template-columns:1fr;}}
 @media (max-width:420px) {#losCjcPage .cjc-glucose-row {flex-wrap:wrap;}#losCjcPage .cjc-delete {margin-left:auto;}}
+
+/* GHK-Cu and CJC share one main tab; each tracker keeps its existing markup. */
+#ghkCuPage > .peptide-subtabs {display:flex;width:fit-content;max-width:100%;gap:4px;padding:4px;margin:0 0 20px;border:1px solid var(--line);border-radius:12px;background:#eef0ed;}
+#ghkCuPage > .peptide-subtabs button {min-height:42px;padding:9px 18px;border:0;border-radius:9px;background:transparent;color:var(--muted);font:inherit;font-size:.88rem;font-weight:700;cursor:pointer;}
+#ghkCuPage > .peptide-subtabs button[aria-selected="true"] {background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(25,42,30,.09);}
+#ghkCuPage > .peptide-subtabs button:hover {color:var(--text);}
+#ghkCuPage > .peptide-subtabs button:focus-visible,#ghkCuPage > .peptide-panel:focus-visible {outline:3px solid var(--green);outline-offset:3px;}
+#ghkCuPage > .peptide-panel {min-width:0;}
+#ghkCuPage > .peptide-panel[hidden] {display:none!important;}
+@media (max-width:480px) {#ghkCuPage > .peptide-subtabs {width:100%;box-sizing:border-box;}#ghkCuPage > .peptide-subtabs button {flex:1;}}
