@@ -1,5 +1,12 @@
 "use strict";
 
+// Read this before legacy startup migrations can call saveState().
+const lockedOsSyncOpenedDirty = (() => {
+  try { return localStorage.getItem('locked_os_supabase_dirty_clean') === '1'; }
+  catch { return false; }
+})();
+const lockedOsSyncOpeningState = JSON.parse(JSON.stringify(state));
+
 (() => {
   const APPOINTMENT_SEED_VERSION = 1;
   const DEFAULT_APPOINTMENTS = [
@@ -1715,7 +1722,7 @@
   }
 
   function gymWorkout(dayKey) {
-    // All views use the same completion-based rotation once its controller loads.
+    // All schedule views use the same weekday lookup once its controller loads.
     if (window.lockedOsWorkoutForDate) return window.lockedOsWorkoutForDate(dayKey);
     ensureGymClean();
     if (dayKey < GYM_START) return "";
@@ -2084,6 +2091,7 @@
     const session = gymSessionForWrite(cleanGymSelectedDate);
     session.workout = workout;
     session.exercises = collected.exercises;
+    session.savedInGymEditor = true;
     if (markComplete) session.completed = true;
     session.updatedAt = new Date().toISOString();
 
@@ -2105,6 +2113,7 @@
 
     ensureGymClean();
     state.meta.gymClean.schedule = schedule;
+    state.meta.gymScheduleVersion = new Date().toISOString();
     saveState();
     modal.closest(".clean-modal-backdrop")?.remove();
 
@@ -2414,6 +2423,16 @@
 })();
 
 /* ===== FLATTENED: gym sequence / recovery ===== */
+// Explicit saves from the workout editor take precedence over older recovery
+// copies, even when the user corrected a workout or cleared one of its sets.
+function latestGymEditorSave(left, right) {
+  if (!left.savedInGymEditor && !right.savedInGymEditor) return null;
+  const leftTime = Date.parse(left.updatedAt) || 0;
+  const rightTime = Date.parse(right.updatedAt) || 0;
+  if (leftTime !== rightTime) return leftTime > rightTime ? left : right;
+  return left.savedInGymEditor ? left : right;
+}
+
 (() => {
   "use strict";
 
@@ -2432,10 +2451,10 @@
     "Legs + Abs"
   ];
   const DESIRED_SCHEDULE = {
-    Friday: "Chest + side delts",
-    Saturday: "Back + rear delts",
     Monday: "Arms",
-    Wednesday: "Legs + Abs"
+    Tuesday: "Legs + Abs",
+    Thursday: "Chest + side delts",
+    Friday: "Back + rear delts"
   };
 
   const CHEST_EXERCISES = new Set([
@@ -2523,6 +2542,8 @@
   function mergeTwoSessions(a, b) {
     if (!a) return b ? clone(b) : null;
     if (!b) return clone(a);
+    const edited = latestGymEditorSave(a, b);
+    if (edited) return clone(edited);
 
     const richer = sessionCompleteness(b) > sessionCompleteness(a) ? b : a;
     const latestUpdatedAt = [String(a.updatedAt || ""), String(b.updatedAt || "")]
@@ -2555,6 +2576,7 @@
       date,
       workout: normalizeWorkoutName(raw.workout || raw.workoutName || ""),
       completed: Boolean(raw.completed || raw.done),
+      ...(raw.savedInGymEditor ? { savedInGymEditor: true } : {}),
       exercises: safeArray(raw.exercises).map(exercise => ({
         name: String(exercise?.name || "").trim(),
         sets: mergeSets([], exercise?.sets)
@@ -2750,7 +2772,7 @@
       Object.entries(legacyDefault).every(([day, workout]) => current[day] === workout);
 
     let changed = false;
-    if (!Object.keys(current).length || sameAsLegacyDefault) {
+    if (!Object.keys(current).length || (sameAsLegacyDefault && !state.meta.gymScheduleVersion)) {
       state.meta.gymClean.schedule = clone(DESIRED_SCHEDULE);
       changed = true;
     }
@@ -2915,9 +2937,8 @@
   });
 
   /*
-    Replace the Gym schedule gear's initial mapping once so Friday starts on
-    Chest + side delts. After this one migration the user can edit the schedule
-    normally and it will not be forced again.
+    Migrate the original default to the current weekday split once. Later
+    changes made through the Gym schedule editor take precedence.
   */
   function installAnchorAndRecover() {
     if (typeof state === "undefined" || typeof saveState !== "function") return;
@@ -3011,10 +3032,10 @@
 
   const START = "2026-09-11";
   const SCHEDULE = {
-    Friday: "Chest + side delts",
-    Saturday: "Back + rear delts",
     Monday: "Arms",
-    Wednesday: "Legs + Abs"
+    Tuesday: "Legs + Abs",
+    Thursday: "Chest + side delts",
+    Friday: "Back + rear delts"
   };
   const EXERCISES = {
     "Chest + side delts": [
@@ -3334,6 +3355,7 @@
     const session = sessionForWrite(selectedDate);
     session.workout = workout;
     session.exercises = collected.exercises;
+    session.savedInGymEditor = true;
     if (markComplete) session.completed = true;
     session.updatedAt = new Date().toISOString();
 
@@ -3571,7 +3593,16 @@
   let workoutDrafts = {};
   try {
     const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "{}");
-    if (saved && typeof saved === "object" && !Array.isArray(saved)) workoutDrafts = saved;
+    if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+      // Older versions created an empty draft whenever a date was viewed.
+      // Keep actual edits, including half-entered sets and explicit selections.
+      for (const [dayKey, draft] of Object.entries(saved)) {
+        if (!isDateKey(dayKey) || !draft || !Array.isArray(draft.exercises)) continue;
+        const hasEntries = draft.exercises.some(exercise => Array.isArray(exercise?.sets) &&
+          exercise.sets.some(set => Number(set?.weight) > 0 || Number(set?.reps) > 0));
+        if (draft.edited || hasEntries) workoutDrafts[dayKey] = draft;
+      }
+    }
   } catch (_) {}
   function persistDrafts() {
     try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(workoutDrafts)); } catch (_) {}
@@ -3588,7 +3619,7 @@
         ])))
       });
     }
-    workoutDrafts[body.dataset.date] = { workout: body.dataset.workout, exercises: [...exercises.values()] };
+    workoutDrafts[body.dataset.date] = { edited: true, workout: body.dataset.workout, exercises: [...exercises.values()] };
     window.lockedOsGymDraftDirty = true;
     persistDrafts();
   }
@@ -3615,17 +3646,18 @@
     ) {
       state.meta.gymClean.schedule = { ...SCHEDULE };
     }
+    window.lockedOsMigrateGymWeekdays?.();
   }
 
-  // A workout moves forward only after explicit completion. Future cards are
-  // projections, not completed sessions, and reads never rewrite saved history.
+  // The weekly plan and the log for a particular date are independent.
   const GYM_WORKOUTS = Object.keys(EXERCISES);
   function canonicalWorkout(value) {
     const name = String(value || "").trim().toLowerCase().replace(/[+&]/g, " ").replace(/\s+/g, " ");
     const aliases = {
       "chest side delts": "Chest + side delts", "chest": "Chest + side delts", "push": "Chest + side delts",
       "back rear delts": "Back + rear delts", "back": "Back + rear delts", "pull": "Back + rear delts",
-      "arms": "Arms", "arms abs": "Arms", "legs": "Legs + Abs", "legs abs": "Legs + Abs"
+      "arms": "Arms", "arms abs": "Arms", "legs": "Legs + Abs", "legs abs": "Legs + Abs",
+      "legs core": "Legs + Abs", "legs and core": "Legs + Abs"
     };
     return aliases[name] || "";
   }
@@ -3664,63 +3696,10 @@
       canonicalWorkout(state.meta.gymClean.schedule[getRoutineDayName(dayKey)]);
   }
 
-  function completedSessions(beforeKey) {
-    const byDate = new Map();
-    for (const session of state.meta.gymClean.sessions) {
-      const date = sessionDate(session);
-      if (date && (!byDate.has(date) || compareSessions(session, byDate.get(date)) < 0)) byDate.set(date, session);
-    }
-    for (const dayKey of Object.keys(state.days || {})) {
-      if (validDateKey(dayKey) && checklistComplete(dayKey) && !byDate.has(dayKey)) byDate.set(dayKey, null);
-    }
-    const today = getTodayKey();
-    return [...byDate.keys()].filter(date => date < beforeKey && date <= today)
-      .sort().flatMap(date => {
-        const session = byDate.get(date);
-        const workout = recordedWorkout(date, session);
-        return sessionComplete(date, session) && workout ? [{ date, workout }] : [];
-      });
-  }
-
-  function isScheduledWorkoutDay(dayKey) {
-    ensureGym();
-    return validDateKey(dayKey) && Boolean(canonicalWorkout(
-      state.meta.gymClean.schedule[getRoutineDayName(dayKey)]
-    ));
-  }
-
   function workoutFor(dayKey) {
-    ensureGym();
     if (!validDateKey(dayKey) || dayKey < START) return "";
-    const schedule = state.meta.gymClean.schedule;
-    const today = getTodayKey();
-    const scheduled = isScheduledWorkoutDay;
-    // Today follows the same training-day rules as every other date. A stale
-    // off-day draft stays in history but must not create a scheduled workout.
-    if (dayKey >= today && !scheduled(dayKey)) return "";
-    const savedWorkout = recordedWorkout(dayKey, sessionFor(dayKey));
-    if (savedWorkout) return savedWorkout;
-    if (dayKey < today) return canonicalWorkout(schedule[getRoutineDayName(dayKey)]);
-
-    const last = completedSessions(dayKey).at(-1);
-    // A completely new rotation starts at Chest. A saved draft may select a
-    // different first workout, but merely viewing dates cannot move the seed.
-    const firstDraft = state.meta.gymClean.sessions
-      .filter(item => sessionDate(item) && sessionDate(item) <= today && canonicalWorkout(item.workout || item.workoutName))
-      .sort((a, b) => sessionDate(a).localeCompare(sessionDate(b)))[0];
-    const firstWorkout = canonicalWorkout(firstDraft?.workout || firstDraft?.workoutName) || GYM_WORKOUTS[0];
-    let index = last ? (GYM_WORKOUTS.indexOf(last.workout) + 1) % GYM_WORKOUTS.length : GYM_WORKOUTS.indexOf(firstWorkout);
-    const startKey = last?.date === today ? formatDateKey(addDays(keyToLocalDate(today), 1)) : today;
-    // Only planned slots between now and the requested preview affect that
-    // preview. Missed days and rest days never advance the rotation.
-    const daysAhead = Math.max(0, keyToUtcDayNumber(dayKey) - keyToUtcDayNumber(startKey));
-    const slotsPerWeek = DAYS.filter(day => canonicalWorkout(schedule[day])).length;
-    index += Math.floor(daysAhead / 7) * slotsPerWeek;
-    for (let offset = 0; offset < daysAhead % 7; offset++) {
-      if (scheduled(formatDateKey(addDays(keyToLocalDate(startKey), offset)))) index++;
-    }
-    index %= GYM_WORKOUTS.length;
-    return GYM_WORKOUTS[index];
+    ensureGym();
+    return canonicalWorkout(state.meta.gymClean.schedule[getRoutineDayName(dayKey)]);
   }
   window.lockedOsWorkoutForDate = workoutFor;
 
@@ -3747,17 +3726,17 @@
       cursor = addDays(cursor, direction);
       const key = formatDateKey(cursor);
       if (key < START) return null;
-      if (isScheduledWorkoutDay(key) && workoutFor(key)) return key;
+      if (workoutFor(key)) return key;
     }
     return null;
   }
 
   function firstWorkoutOnOrAfter(dayKey) {
-    if (isScheduledWorkoutDay(dayKey) && workoutFor(dayKey)) return dayKey;
+    if (workoutFor(dayKey)) return dayKey;
     let cursor = keyToLocalDate(validDateKey(dayKey) ? dayKey : getTodayKey());
     for (let step = 0; step < 30; step += 1) {
       const key = formatDateKey(cursor);
-      if (isScheduledWorkoutDay(key) && workoutFor(key)) return key;
+      if (workoutFor(key)) return key;
       cursor = addDays(cursor, 1);
     }
     return START;
@@ -3952,16 +3931,18 @@
     }
     const dateInput = document.getElementById("cleanGymDatePicker");
     if (dateInput) dateInput.value = uiSelectedDate;
+    const draft = workoutDrafts[uiSelectedDate];
+    const saved = sessionFor(uiSelectedDate);
+    const workout = canonicalWorkout(draft?.workout) ||
+      recordedWorkout(uiSelectedDate, saved) || workoutFor(uiSelectedDate);
     const workoutInput = document.getElementById("cleanGymActualWorkout");
     if (workoutInput) {
-      workoutInput.value = canonicalWorkout(workoutDrafts[uiSelectedDate]?.workout) || workoutFor(uiSelectedDate);
+      workoutInput.value = workout;
       workoutInput.disabled = uiSelectedDate > getTodayKey();
     }
     // A redraw or cloud refresh must not erase the set currently being typed.
-    if (body.dataset.date === uiSelectedDate && body.dataset.workout === workoutDrafts[uiSelectedDate]?.workout && body.querySelector("input")) return;
-    const draft = workoutDrafts[uiSelectedDate];
-    const workout = GYM_WORKOUTS.includes(draft?.workout) ? draft.workout : workoutFor(uiSelectedDate);
-    const session = draft || sessionFor(uiSelectedDate);
+    if (draft && body.dataset.date === uiSelectedDate && body.dataset.workout === workout && body.querySelector("input")) return;
+    const session = draft || saved;
     body.dataset.date = uiSelectedDate;
     body.dataset.workout = workout;
     window.lockedOsGymDraftDirty = Boolean(draft);
@@ -4089,7 +4070,6 @@
   window.lockedOsGymSelectedDate = () => uiSelectedDate;
   window.lockedOsSelectGymDate = dayKey => {
     if (!validDateKey(dayKey) || dayKey < START) return false;
-    captureDraft();
     selectDate(dayKey);
     stripAnchorDate = dayKey;
     renderGymUi();
@@ -4152,6 +4132,7 @@
     session.date = uiSelectedDate;
     session.workout = workout;
     session.exercises = collected.exercises;
+    session.savedInGymEditor = true;
     if (markComplete) session.completed = true;
     session.updatedAt = new Date().toISOString();
     if (state.days?.[uiSelectedDate] && sessionComplete(uiSelectedDate, session)) state.days[uiSelectedDate].gymWorkout = workout;
@@ -4176,8 +4157,8 @@
     persistDrafts();
     window.lockedOsGymDraftDirty = false;
     if (status) status.textContent = sessionComplete(uiSelectedDate, session)
-      ? "Workout completed. Your next workout now follows this session."
-      : "Draft saved. Press Complete workout after training to advance your rotation.";
+      ? "Workout marked complete for this date."
+      : "Draft saved. Press Complete workout when you finish training.";
     document.dispatchEvent(new CustomEvent("locked-os-workout-saved", { detail: { dayKey: uiSelectedDate } }));
     if (typeof toast === "function") toast(markComplete ? "Workout completed." : "Workout saved.");
     renderStableStrip({ scroll: false });
@@ -4286,7 +4267,7 @@
         <label><span>Workout you did</span><select id="cleanGymActualWorkout" class="gym-workout-select">
           <option value="">Choose workout</option>${GYM_WORKOUTS.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}
         </select></label>
-        <p>Complete workout advances the rotation. Set details are optional. Use the date and workout controls to correct an earlier log.</p>`;
+        <p>Choose the date you trained and the workout you did. Set details are optional.</p>`;
       heading.insertAdjacentElement("afterend", controls);
       document.getElementById("cleanGymDatePicker").addEventListener("change", event => {
         window.lockedOsSelectGymDate(event.target.value);
@@ -4297,9 +4278,8 @@
           event.target.value = document.getElementById("cleanGymWorkoutBody")?.dataset.workout || "";
           return;
         }
-        captureDraft();
         const current = workoutDrafts[uiSelectedDate] || sessionFor(uiSelectedDate);
-        workoutDrafts[uiSelectedDate] = { workout, exercises: current?.exercises || [] };
+        workoutDrafts[uiSelectedDate] = { edited: true, workout, exercises: current?.exercises || [] };
         persistDrafts();
         window.lockedOsGymDraftDirty = true;
         renderWorkoutForm();
@@ -6253,6 +6233,7 @@
       date,
       workout: normalizeWorkoutName(raw.workout || raw.workoutName),
       completed: Boolean(raw.completed || raw.done),
+      ...(raw.savedInGymEditor ? { savedInGymEditor: true } : {}),
       updatedAt: String(raw.updatedAt || raw.updated_at || raw.savedAt || ""),
       exercises: safeArray(raw.exercises)
         .map(exercise => ({
@@ -6283,6 +6264,8 @@
   function mergeSession(left, right) {
     if (!left) return clone(right);
     if (!right) return clone(left);
+    const edited = latestGymEditorSave(left, right);
+    if (edited) return clone(edited);
 
     const leftScore = sessionScore(left);
     const rightScore = sessionScore(right);
@@ -7226,11 +7209,20 @@
       ? state.meta.gymClean
       : { version: 1, sessions: [] };
 
-    if (state.meta[GYM_SCHEDULE_MIGRATION_KEY]) return false;
-    state.meta.gymClean.schedule = { ...DESIRED_GYM_SCHEDULE };
-    state.meta[GYM_SCHEDULE_MIGRATION_KEY] = true;
-    return true;
+    const current = state.meta.gymClean.schedule || {};
+    const days = Object.keys(current);
+    // Restored snapshots can contain the old Friday/Saturday default even
+    // after the September migration. Keep schedules saved in the editor.
+    const legacy = days.length === 4 &&
+      current.Friday === "Chest + side delts" && current.Saturday === "Back + rear delts" &&
+      current.Monday === "Arms" && current.Wednesday === "Legs + Abs";
+    const migrate = !days.length || (legacy && !state.meta.gymScheduleVersion);
+    const firstRun = !state.meta[GYM_SCHEDULE_MIGRATION_KEY];
+    if (migrate) state.meta.gymClean.schedule = { ...DESIRED_GYM_SCHEDULE };
+    if (firstRun) state.meta[GYM_SCHEDULE_MIGRATION_KEY] = true;
+    return firstRun || migrate;
   }
+  window.lockedOsMigrateGymWeekdays = applyRequestedGymSchedule;
 
   /* -------------------------------------------------------------------- */
   /* GLUCOSE HISTORY PROTECTION + RECOVERY                                */
@@ -7897,15 +7889,33 @@
   const BASE_KEY = 'locked_os_sync_base_v3';
   const DIRTY_KEY = 'locked_os_supabase_dirty_clean';
   const read = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
-  const recovery = read('locked_os_recovery_snapshots_clean');
+  const OFFLINE_KEY = 'locked_os_sync_offline_origin_v1';
+  const RECOVERY_KEY = 'locked_os_recovery_snapshots_clean';
+  const recovery = read(RECOVERY_KEY);
   const previousSave = (Array.isArray(recovery) ? recovery : []).find(entry => entry?.label === 'saved-to-supabase');
   let recoveredBase = null;
   try { recoveredBase = previousSave?.state || JSON.parse(previousSave?.serialized || 'null'); } catch {}
   const rawBase = read(BASE_KEY);
-  const storedBase = object(rawBase) ? rawBase : null;
-  let base = storedBase || (window.lockedOsInitiallyDirty ? recoveredBase || {} : copy(state));
-  let earlyUserEdit = false;
-  document.addEventListener('click', event => { if (!ready && event.target.closest('.task-main,.task-menu-action')) earlyUserEdit = true; }, true);
+  let confirmedBase = object(rawBase) ? rawBase : null;
+  if (!confirmedBase && lockedOsSyncOpenedDirty && object(recoveredBase)) confirmedBase = recoveredBase;
+  const offline = read(OFFLINE_KEY);
+  const offlineOrigin = object(offline?.origin) ? offline.origin : null;
+  let recoverLegacyGym = offlineOrigin ? Boolean(offline.recoverLegacyGym) : lockedOsSyncOpenedDirty && !confirmedBase;
+  let base = offlineOrigin || confirmedBase || copy(lockedOsSyncOpeningState);
+  let startupFinished = false;
+  function finishStartup() {
+    if (startupFinished) return;
+    startupFinished = true;
+    // Carry boot-only normalization into the local comparison point. Existing
+    // offline edits still differ from it, while boot defaults cannot replace
+    // values from a newer cloud snapshot.
+    base = merge(lockedOsSyncOpeningState, state, base);
+  }
+  for (const type of ['input', 'change', 'click']) {
+    document.addEventListener(type, event => {
+      if (!startupFinished && event.isTrusted && mainApp.contains(event.target)) finishStartup();
+    }, true);
+  }
   let diskSnapshot = read(STORAGE_KEY) || copy(state);
   let busy = false, refreshing = false, retry = null, deferredRender = false;
   let ready = false;
@@ -7934,6 +7944,17 @@
     if (equal(remote, before) || equal(local, remote)) return copy(local);
     if (Array.isArray(local) && Array.isArray(remote)) {
       const prior = Array.isArray(before) ? before : [];
+      if (path.at(-1) === 'sets' && path.at(-3) === 'exercises') {
+        // The gym editor identifies sets by position. Its blank slots are
+        // {weight: 0, reps: 0}, even on a newly created session.
+        const slots = [];
+        for (let index = 0; index < Math.max(local.length, remote.length); index++) {
+          const previous = prior[index] ?? (object(local[index]) && object(remote[index]) ? {weight: 0, reps: 0} : undefined);
+          const slot = merge(previous, local[index], remote[index], [...path, index]);
+          if (slot !== undefined) slots[index] = slot;
+        }
+        return slots;
+      }
       if ([...prior, ...local, ...remote].every(x => typeof x === 'string' || typeof x === 'number')) {
         const ordered = path.includes('looksTaskOrder') || path.includes('exerciseEntryOrderByDate') || path.includes('exerciseOrderByWorkout');
         if (ordered) {
@@ -7992,8 +8013,11 @@
       if (disk && !equal(disk, diskSnapshot)) state = merge(base, state, disk);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       diskSnapshot = copy(state);
-      try { localStorage.setItem(BASE_KEY, JSON.stringify(base)); }
-      catch (error) { console.warn('Sync checkpoint could not be stored', error); }
+      // An offline comparison point is never a confirmed cloud checkpoint.
+      // Keeping it separately makes repeated offline reloads recoverable.
+      if (startupFinished && (recoverLegacyGym || !equal(base, confirmedBase)) && pending()) {
+        localStorage.setItem(OFFLINE_KEY, JSON.stringify({origin: base, recoverLegacyGym}));
+      }
       return true;
     } catch (error) {
       console.error('Local save failed', error);
@@ -8001,7 +8025,46 @@
       return false;
     }
   }
-  function pending() { return !equal(state, base); }
+  function pending() { return recoverLegacyGym || !equal(state, base); }
+  function confirm(snapshot) {
+    base = confirmedBase = copy(snapshot);
+    recoverLegacyGym = false;
+    try {
+      localStorage.setItem(BASE_KEY, JSON.stringify(confirmedBase));
+      localStorage.removeItem(OFFLINE_KEY);
+    } catch (error) { console.warn('Sync checkpoint could not be stored', error); }
+  }
+
+  function recoverUncheckedGym(remote) {
+    // Without any recorded common ancestor, preserve the original local copy
+    // before reconciling. Only dated gym history can be safely combined.
+    const entries = read(RECOVERY_KEY);
+    const history = Array.isArray(entries) ? entries : [];
+    const serialized = JSON.stringify(state);
+    if (!history.some(entry => entry?.serialized === serialized)) {
+      localStorage.setItem(RECOVERY_KEY, JSON.stringify([
+        {savedAt: new Date().toISOString(), label: 'before-offline-workout-recovery', serialized},
+        ...history
+      ].slice(0, 20)));
+    }
+    const sessions = base?.meta?.gymClean?.sessions;
+    if (!Array.isArray(sessions) || !sessions.length) return remote;
+    const restored = copy(remote);
+    restored.meta ||= {};
+    restored.meta.gymClean ||= {};
+    const cloud = Array.isArray(restored.meta.gymClean.sessions) ? restored.meta.gymClean.sessions : [];
+    const byDate = new Map(cloud.map(s => [s.date, s]));
+    for (const saved of sessions) {
+      if (!saved?.date) continue;
+      const existing = byDate.get(saved.date);
+      const localNewer = Date.parse(saved.updatedAt) > Date.parse(existing?.updatedAt);
+      const preferred = existing && !localNewer ? existing : saved;
+      const other = preferred === saved ? existing : saved;
+      byDate.set(saved.date, merge(undefined, preferred, other, ['meta', 'gymClean', 'sessions', saved.date]));
+    }
+    restored.meta.gymClean.sessions = [...byDate.values()];
+    return restored;
+  }
   function editing() {
     return document.querySelector('dialog[open], .looks-task-modal-backdrop, .task-row.editing, .task-menu[open]') ||
       /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
@@ -8019,8 +8082,9 @@
     const before = copy(state);
     const disk = read(STORAGE_KEY);
     if (disk && !equal(disk, diskSnapshot)) { state = merge(base, state, disk); diskSnapshot = copy(disk); }
-    state = merge(base, state, remote);
-    base = copy(remote);
+    const incoming = recoverLegacyGym ? recoverUncheckedGym(remote) : remote;
+    state = merge(base, state, incoming);
+    confirm(remote);
     baseTimestamp = timestamp;
     normalizeState();
     persist();
@@ -8075,7 +8139,7 @@
           throw result.error;
         }
         if (!result.data?.length) continue;
-        base = snapshot;
+        confirm(snapshot);
         baseTimestamp = timestamp;
         latestSupabaseWriteAt = timestamp;
         syncedRevision = localRevision;
@@ -8118,7 +8182,7 @@
       if (row?.state && (row.updated_at !== baseTimestamp || pending())) {
         receive(row.state,row.updated_at);
       }
-      if (!row) { base = {}; persist(); }
+      if (!row) { confirm({}); persist(); }
       if (pending() || !row) { refreshing = false; return await save(); }
       if(syncStatus) syncStatus.textContent = 'Synced across devices.';
       return true;
@@ -8608,7 +8672,9 @@
   // Legacy layers finish their one-time installation at 225 ms.
   setTimeout(()=>{
     installSync(); installTasks(); installSchedules();
-    if (!storedBase && !window.lockedOsInitiallyDirty && !earlyUserEdit) base = copy(state);
+    finishStartup();
+    markDirty(pending());
+    persist();
     ready=true;
     const header = mainApp.querySelector("header") || mainApp.firstElementChild;
     if (header && syncStatus) {
