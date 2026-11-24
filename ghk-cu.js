@@ -1104,7 +1104,7 @@ const lockedOsSyncOpeningState = JSON.parse(JSON.stringify(state));
 
   window.addEventListener("DOMContentLoaded",()=>{
     if(typeof state==="undefined")return;
-    injectStyles();ensureFeatureState();installMeaningfulStateSupport();installMainTab();installGymTab();installAppointmentsPanel();installHandlers();installGymHandlers();installRotationCalendarDeletionFix();installRenderWrapper();highlightGhkToday();installGhkVialTracker();
+    injectStyles();ensureFeatureState();installMeaningfulStateSupport();installGymTab();installGymHandlers();installRotationCalendarDeletionFix();installRenderWrapper();highlightGhkToday();installGhkVialTracker();
     if(typeof saveLocalState==="function")saveLocalState(); // Admin and Gym panels render when opened.
   });
 })();
