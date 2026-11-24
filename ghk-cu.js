@@ -8007,25 +8007,33 @@ function latestGymEditorSave(left, right) {
       else localStorage.removeItem(DIRTY_KEY);
     } catch (_) { /* Cloud saves must still run when local storage is full. */ }
   }
-  function persist() {
+    function persist() {
     try {
       const disk = read(STORAGE_KEY);
       if (disk && !equal(disk, diskSnapshot)) state = merge(base, state, disk);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       diskSnapshot = copy(state);
-      // An offline comparison point is never a confirmed cloud checkpoint.
-      // Keeping it separately makes repeated offline reloads recoverable.
-      if (startupFinished && (recoverLegacyGym || !equal(base, confirmedBase)) && pending()) {
-        localStorage.setItem(OFFLINE_KEY, JSON.stringify({origin: base, recoverLegacyGym}));
-      }
-      return true;
     } catch (error) {
       console.error('Local save failed', error);
       if (syncStatus) syncStatus.textContent = 'Device storage is full. Keep this tab open until cloud sync finishes.';
       return false;
     }
+    // The workout is durable once the primary state write succeeds. A second,
+    // potentially large sync checkpoint can fail independently (e.g. iOS quota).
+    // Do not report that as a workout failure or roll back the in-memory session.
+    // Keep the existing checkpoint and dirty state; retry on subsequent saves.
+    try {
+      // An offline comparison point is never a confirmed cloud checkpoint.
+      if (startupFinished && (recoverLegacyGym || !equal(base, confirmedBase)) && pending()) {
+        localStorage.setItem(OFFLINE_KEY, JSON.stringify({origin: base, recoverLegacyGym}));
+      }
+    } catch (error) {
+      console.warn('Workout saved; offline sync checkpoint could not be stored', error);
+      if (syncStatus) syncStatus.textContent = 'Saved on this device. Sync checkpoint unavailable; waiting to sync…';
+    }
+    return true;
   }
-  function pending() { return recoverLegacyGym || !equal(state, base); }
+function pending() { return recoverLegacyGym || !equal(state, base); }
   function confirm(snapshot) {
     base = confirmedBase = copy(snapshot);
     recoverLegacyGym = false;
