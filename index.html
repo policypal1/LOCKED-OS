@@ -329,8 +329,8 @@
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="app.js?v=20261114killlist1"></script>
-<script defer src="ghk-cu.js?v=20261124gymsave1"></script>
-<script defer src="kill-list.js?v=20261114killlist1"></script>
+<script defer src="ghk-cu.js?v=20261124navcleanup1"></script>
+<script defer src="kill-list.js?v=20261124navcleanup1"></script>
 </head>
 <body>
 <main class="app">
@@ -443,15 +443,9 @@
 
 
 <section class="page" id="adminPage">
-<div aria-label="Admin sections" class="admin-subtabs" role="tablist"><button class="admin-subtab active" data-admin-panel="adminRoutinePanel" type="button">Routine settings</button><button class="admin-subtab" data-admin-panel="weeklyPage" type="button">Weekly review</button></div>
 <div class="admin-subpanel active" id="adminRoutinePanel"><div class="admin-grid routine-admin-grid">
 <section class="card admin-card tretinoin-admin-card"><p class="eyebrow blue">Admin</p><h2>Tretinoin frequency</h2><p>Change how many nights per week tretinoin appears in your Looksmaxxing routine. Your past days stay unchanged.</p><div class="tret-frequency-control"><button aria-label="Decrease tretinoin frequency" class="tret-frequency-btn" id="tretinoinFrequencyDown" type="button">−</button><div class="tret-frequency-value-wrap"><strong class="tret-frequency-value" id="tretinoinFrequencyValue">3×</strong><span class="tret-frequency-label" id="tretinoinFrequencyLabel">3 days per week</span></div><button aria-label="Increase tretinoin frequency" class="tret-frequency-btn" id="tretinoinFrequencyUp" type="button">+</button></div><div class="tret-schedule-preview"><span class="tret-schedule-title">Current tretinoin nights</span><div class="tret-days-list" id="tretinoinDaysList"></div></div><p class="tret-admin-note">Default is 3× per week: Monday, Wednesday, Saturday. At 7×, tretinoin appears every night.</p></section>
 <section class="card admin-card rotation-admin-card"><p class="eyebrow blue">Schedule preview</p><h2>Rotation calendar</h2><p>See the next 14 days of rotating Looksmaxxing tasks and your gym rotation. Daily tasks are left out so the schedule stays easy to scan.</p><div class="rotation-calendar" id="rotationCalendar"></div></section>
-</div></div>
-<div class="admin-subpanel" id="weeklyPage"><div class="weekly-review">
-<section class="card weekly-hero-card"><div><p class="eyebrow blue">This week</p><h2>Weekly review</h2><p class="weekly-date-range" id="weeklyDateRange">Loading…</p></div><p class="weekly-hero-copy">A clean view of your routine from Sunday through today.</p></section>
-<div class="weekly-stat-grid"><section class="card weekly-stat-card blue-accent"><span>Looksmaxxing</span><strong id="weeklyLooksCompletion">0%</strong><p id="weeklyLooksMeta">0 tasks completed</p></section><section class="card weekly-stat-card"><span>Average water</span><strong id="weeklyAverageWater">0 oz</strong><p id="weeklyWaterMeta">No water logged</p></section><section class="card weekly-stat-card"><span>Gym days</span><strong id="weeklyGymDays">0/7</strong><p id="weeklyGymMeta">No gym data yet</p></section><section class="card weekly-stat-card"><span>Weight change</span><strong id="weeklyWeightChange">No data</strong><p id="weeklyWeightMeta">Log weight to see change</p></section><section class="card weekly-stat-card skipped-card"><span>Key task to tighten up</span><strong class="weekly-skipped-name" id="weeklySkippedTask">None</strong><p id="weeklySkippedMeta">No skipped tasks</p></section></div>
-<section class="card weekly-days-card"><div class="panel-title weekly-days-heading"><div><p class="eyebrow blue">Breakdown</p><h2>Day by day</h2></div></div><div class="weekly-day-list" id="weeklyDayList"></div></section>
 </div></div>
 </section>
 </section>
